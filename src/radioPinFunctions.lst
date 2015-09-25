@@ -1,0 +1,226 @@
+   1               		.file	"radioPinFunctions.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	nrf24_setupPins
+  12               	nrf24_setupPins:
+  13               	.LFB0:
+  14               		.file 1 "radioPinFunctions.c"
+   1:radioPinFunctions.c **** /*
+   2:radioPinFunctions.c **** * ----------------------------------------------------------------------------
+   3:radioPinFunctions.c **** * “THE COFFEEWARE LICENSE” (Revision 1):
+   4:radioPinFunctions.c **** * <ihsan@kehribar.me> wrote this file. As long as you retain this notice you
+   5:radioPinFunctions.c **** * can do whatever you want with this stuff. If we meet some day, and you think
+   6:radioPinFunctions.c **** * this stuff is worth it, you can buy me a coffee in return.
+   7:radioPinFunctions.c **** * -----------------------------------------------------------------------------
+   8:radioPinFunctions.c **** * Please define your platform spesific functions in this file ...
+   9:radioPinFunctions.c **** * -----------------------------------------------------------------------------
+  10:radioPinFunctions.c **** */
+  11:radioPinFunctions.c **** 
+  12:radioPinFunctions.c **** #include <avr/io.h>
+  13:radioPinFunctions.c **** 
+  14:radioPinFunctions.c **** #define set_bit(reg,bit) reg |= (1<<bit)
+  15:radioPinFunctions.c **** #define clr_bit(reg,bit) reg &= ~(1<<bit)
+  16:radioPinFunctions.c **** #define check_bit(reg,bit) (reg&(1<<bit))
+  17:radioPinFunctions.c **** 
+  18:radioPinFunctions.c **** #define CE    0
+  19:radioPinFunctions.c **** #define CSN   1
+  20:radioPinFunctions.c **** #define SCK   4
+  21:radioPinFunctions.c **** #define MOSI  6
+  22:radioPinFunctions.c **** #define MISO  5
+  23:radioPinFunctions.c **** 
+  24:radioPinFunctions.c **** /* ------------------------------------------------------------------------- */
+  25:radioPinFunctions.c **** void nrf24_setupPins()
+  26:radioPinFunctions.c **** {
+  15               		.loc 1 26 0
+  16               		.cfi_startproc
+  17               	/* prologue: function */
+  18               	/* frame size = 0 */
+  19               	/* stack size = 0 */
+  20               	.L__stack_usage = 0
+  27:radioPinFunctions.c ****     set_bit(DDRA,CE); // CE output
+  21               		.loc 1 27 0
+  22 0000 D09A      		sbi 0x1a,0
+  28:radioPinFunctions.c ****     set_bit(DDRA,CSN); // CSN output
+  23               		.loc 1 28 0
+  24 0002 D19A      		sbi 0x1a,1
+  29:radioPinFunctions.c ****     set_bit(DDRA,SCK); // SCK output
+  25               		.loc 1 29 0
+  26 0004 D49A      		sbi 0x1a,4
+  30:radioPinFunctions.c ****     set_bit(DDRA,MOSI); // MOSI output
+  27               		.loc 1 30 0
+  28 0006 D69A      		sbi 0x1a,6
+  31:radioPinFunctions.c ****     clr_bit(DDRA,MISO); // MISO input
+  29               		.loc 1 31 0
+  30 0008 D598      		cbi 0x1a,5
+  31 000a 0895      		ret
+  32               		.cfi_endproc
+  33               	.LFE0:
+  35               	.global	nrf24_ce_digitalWrite
+  37               	nrf24_ce_digitalWrite:
+  38               	.LFB1:
+  32:radioPinFunctions.c **** }
+  33:radioPinFunctions.c **** /* ------------------------------------------------------------------------- */
+  34:radioPinFunctions.c **** void nrf24_ce_digitalWrite(uint8_t state)
+  35:radioPinFunctions.c **** {
+  39               		.loc 1 35 0
+  40               		.cfi_startproc
+  41               	.LVL0:
+  42               	/* prologue: function */
+  43               	/* frame size = 0 */
+  44               	/* stack size = 0 */
+  45               	.L__stack_usage = 0
+  36:radioPinFunctions.c ****     if (state) {
+  46               		.loc 1 36 0
+  47 000c 8823      		tst r24
+  48 000e 01F0      		breq .L3
+  37:radioPinFunctions.c ****         set_bit(PORTA,CE);
+  49               		.loc 1 37 0
+  50 0010 D89A      		sbi 0x1b,0
+  51 0012 0895      		ret
+  52               	.L3:
+  38:radioPinFunctions.c ****     } else {
+  39:radioPinFunctions.c ****         clr_bit(PORTA,CE);
+  53               		.loc 1 39 0
+  54 0014 D898      		cbi 0x1b,0
+  55 0016 0895      		ret
+  56               		.cfi_endproc
+  57               	.LFE1:
+  59               	.global	nrf24_csn_digitalWrite
+  61               	nrf24_csn_digitalWrite:
+  62               	.LFB2:
+  40:radioPinFunctions.c ****     }
+  41:radioPinFunctions.c **** }
+  42:radioPinFunctions.c **** /* ------------------------------------------------------------------------- */
+  43:radioPinFunctions.c **** void nrf24_csn_digitalWrite(uint8_t state)
+  44:radioPinFunctions.c **** {
+  63               		.loc 1 44 0
+  64               		.cfi_startproc
+  65               	.LVL1:
+  66               	/* prologue: function */
+  67               	/* frame size = 0 */
+  68               	/* stack size = 0 */
+  69               	.L__stack_usage = 0
+  45:radioPinFunctions.c ****     if (state) {
+  70               		.loc 1 45 0
+  71 0018 8823      		tst r24
+  72 001a 01F0      		breq .L7
+  46:radioPinFunctions.c ****         set_bit(PORTA,CSN);
+  73               		.loc 1 46 0
+  74 001c D99A      		sbi 0x1b,1
+  75 001e 0895      		ret
+  76               	.L7:
+  47:radioPinFunctions.c ****     } else {
+  48:radioPinFunctions.c ****         clr_bit(PORTA,CSN);
+  77               		.loc 1 48 0
+  78 0020 D998      		cbi 0x1b,1
+  79 0022 0895      		ret
+  80               		.cfi_endproc
+  81               	.LFE2:
+  83               	.global	nrf24_sck_digitalWrite
+  85               	nrf24_sck_digitalWrite:
+  86               	.LFB3:
+  49:radioPinFunctions.c ****     }
+  50:radioPinFunctions.c **** }
+  51:radioPinFunctions.c **** /* ------------------------------------------------------------------------- */
+  52:radioPinFunctions.c **** void nrf24_sck_digitalWrite(uint8_t state)
+  53:radioPinFunctions.c **** {
+  87               		.loc 1 53 0
+  88               		.cfi_startproc
+  89               	.LVL2:
+  90               	/* prologue: function */
+  91               	/* frame size = 0 */
+  92               	/* stack size = 0 */
+  93               	.L__stack_usage = 0
+  54:radioPinFunctions.c ****     if (state) {
+  94               		.loc 1 54 0
+  95 0024 8823      		tst r24
+  96 0026 01F0      		breq .L10
+  55:radioPinFunctions.c ****         set_bit(PORTA,SCK);
+  97               		.loc 1 55 0
+  98 0028 DC9A      		sbi 0x1b,4
+  99 002a 0895      		ret
+ 100               	.L10:
+  56:radioPinFunctions.c ****     } else {
+  57:radioPinFunctions.c ****         clr_bit(PORTA,SCK);
+ 101               		.loc 1 57 0
+ 102 002c DC98      		cbi 0x1b,4
+ 103 002e 0895      		ret
+ 104               		.cfi_endproc
+ 105               	.LFE3:
+ 107               	.global	nrf24_mosi_digitalWrite
+ 109               	nrf24_mosi_digitalWrite:
+ 110               	.LFB4:
+  58:radioPinFunctions.c ****     }
+  59:radioPinFunctions.c **** }
+  60:radioPinFunctions.c **** /* ------------------------------------------------------------------------- */
+  61:radioPinFunctions.c **** void nrf24_mosi_digitalWrite(uint8_t state)
+  62:radioPinFunctions.c **** {
+ 111               		.loc 1 62 0
+ 112               		.cfi_startproc
+ 113               	.LVL3:
+ 114               	/* prologue: function */
+ 115               	/* frame size = 0 */
+ 116               	/* stack size = 0 */
+ 117               	.L__stack_usage = 0
+  63:radioPinFunctions.c ****     if (state) {
+ 118               		.loc 1 63 0
+ 119 0030 8823      		tst r24
+ 120 0032 01F0      		breq .L13
+  64:radioPinFunctions.c ****         set_bit(PORTA,MOSI);
+ 121               		.loc 1 64 0
+ 122 0034 DE9A      		sbi 0x1b,6
+ 123 0036 0895      		ret
+ 124               	.L13:
+  65:radioPinFunctions.c ****     } else {
+  66:radioPinFunctions.c ****         clr_bit(PORTA,MOSI);
+ 125               		.loc 1 66 0
+ 126 0038 DE98      		cbi 0x1b,6
+ 127 003a 0895      		ret
+ 128               		.cfi_endproc
+ 129               	.LFE4:
+ 131               	.global	nrf24_miso_digitalRead
+ 133               	nrf24_miso_digitalRead:
+ 134               	.LFB5:
+  67:radioPinFunctions.c ****     }
+  68:radioPinFunctions.c **** }
+  69:radioPinFunctions.c **** /* ------------------------------------------------------------------------- */
+  70:radioPinFunctions.c **** uint8_t nrf24_miso_digitalRead()
+  71:radioPinFunctions.c **** {
+ 135               		.loc 1 71 0
+ 136               		.cfi_startproc
+ 137               	/* prologue: function */
+ 138               	/* frame size = 0 */
+ 139               	/* stack size = 0 */
+ 140               	.L__stack_usage = 0
+  72:radioPinFunctions.c ****     return check_bit(PINA,MISO);
+ 141               		.loc 1 72 0
+ 142 003c 89B3      		in r24,0x19
+  73:radioPinFunctions.c **** }
+ 143               		.loc 1 73 0
+ 144 003e 8072      		andi r24,lo8(32)
+ 145 0040 0895      		ret
+ 146               		.cfi_endproc
+ 147               	.LFE5:
+ 149               	.Letext0:
+ 150               		.file 2 "/usr/avr/include/stdint.h"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 radioPinFunctions.c
+     /tmp/ccdq9Yxl.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccdq9Yxl.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccdq9Yxl.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccdq9Yxl.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccdq9Yxl.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccdq9Yxl.s:12     .text:0000000000000000 nrf24_setupPins
+     /tmp/ccdq9Yxl.s:37     .text:000000000000000c nrf24_ce_digitalWrite
+     /tmp/ccdq9Yxl.s:61     .text:0000000000000018 nrf24_csn_digitalWrite
+     /tmp/ccdq9Yxl.s:85     .text:0000000000000024 nrf24_sck_digitalWrite
+     /tmp/ccdq9Yxl.s:109    .text:0000000000000030 nrf24_mosi_digitalWrite
+     /tmp/ccdq9Yxl.s:133    .text:000000000000003c nrf24_miso_digitalRead
+
+NO UNDEFINED SYMBOLS

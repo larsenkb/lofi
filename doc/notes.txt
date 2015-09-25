@@ -1,0 +1,14 @@
+https://github.com/fffaraz/awesome-avr
+
+https://mchr3k.github.io/arduino-libs-manchester/
+
+http://jeelabs.org/2011/01/16/poor-man%E2%80%99s-mesh-network/
+
+http://jeelabs.org/2012/05/04/measuring-vcc-via-the-bandgap/
+
+https://www.udacity.com/
+
+http://jeelabs.org/2012/03/09/serial-port-on-jeenode-micro/
+
+http://jeelabs.org/2012/01/10/browsing-the-arduino-run-time-code/
+
