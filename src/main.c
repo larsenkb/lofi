@@ -2,8 +2,8 @@
 #include <avr/sleep.h>
 #include <avr/wdt.h>
 #include <avr/interrupt.h>
-//#include "softuart.h"
 #include "nRF24L01.h"
+#include "uartbb.h"
 
 #undef F_CPU
 #define F_CPU 1000000UL
@@ -56,11 +56,6 @@ void nrf24_powerUpTx(void);
 void nrf24_transmitSync(uint8_t* dataout,uint8_t len);
 void nrf24_readRegister(uint8_t reg, uint8_t* value, uint8_t len);
 void nrf24_transferSync(uint8_t* dataout,uint8_t* datain,uint8_t len);
-
-void uartbb_init(void);
-void uartbb_puthex( uint8_t data );
-void uartbb_puts( const char *s );
-void uartbb_putchar(char val);
 
 //****************************************************************  
 // set system into the sleep state 
@@ -821,163 +816,3 @@ disable BOD to save power prior to sleep
 disable ADC prior to sleep
 first conversion after disable/enable will be an extended conversion
 #endif
-
-
-#define UARTBB_BAUD_RATE		9600
-
-#if 0
-#define UARTBB_TXPORT  PORTB
-#define UARTBB_TXDDR   DDRB
-#define UARTBB_TXBIT   PB2
-#define UARTBB_T_COMP_REG        OCR0A
-#define UARTBB_T_CONTR_REGA      TCCR0A
-#define UARTBB_T_CONTR_REGB      TCCR0B
-#define UARTBB_T_CNT_REG         TCNT0
-#define UARTBB_T_INTCTL_REG      TIMSK0
-
-#define UARTBB_CMPINT_EN_MASK    (1 << OCIE0A)
-
-#define UARTBB_CTC_MASKA         (1 << WGM01)
-#define UARTBB_CTC_MASKB         (0)
-
-    /* "A timer interrupt must be set to interrupt at three times 
-       the required baud rate." */
-#define UARTBB_PRESCALE (1)
-
-#if (UARTBB_PRESCALE == 8)
-    #define UARTBB_PRESC_MASKA         (0)
-    #define UARTBB_PRESC_MASKB         (1 << CS01)
-#elif (UARTBB_PRESCALE==1)
-    #define UARTBB_PRESC_MASKA         (0)
-    #define UARTBB_PRESC_MASKB         (1 << CS00)
-#else 
-    #error "prescale unsupported"
-#endif
-#endif
-#define UARTBB_TXPORT  PORTB
-#define UARTBB_TXDDR   DDRB
-#define UARTBB_TXBIT   PB2
-#define UARTBB_PRESCALE (1)
-#define UARTBB_TIMERTOP ( F_CPU/UARTBB_PRESCALE/UARTBB_BAUD_RATE - 1)
-
-#define CLR_TX()  (UARTBB_TXPORT &= ~(1<<UARTBB_TXBIT))
-#define SET_TX()  (UARTBB_TXPORT |= (1<<UARTBB_TXBIT))
-
-#define UARTBB_TX_PWR		5
-
-enum { UARTBB_STATE_IDLE = 0,
-	   UARTBB_STATE_START,
-	   UARTBB_STATE_CHAR,
-	   UARTBB_STATE_STOP,
-	   UARTBB_STATE_POST
-} uartbb_state_t;
-
-char uartbb_tx[1<<UARTBB_TX_PWR];
-uint8_t		uartbb_state;
-uint8_t		uartbb_cnt;
-uint8_t		uartbb_val;
-volatile uint8_t		uartbb_tx_ridx;
-volatile uint8_t		uartbb_tx_widx;
-
-void uartbb_init(void)
-{
-
-	// TX-Pin as output
-	UARTBB_TXDDR |=  (1<<UARTBB_TXBIT);
-	uartbb_state = UARTBB_STATE_IDLE;
-	uartbb_tx_ridx = uartbb_tx_widx = 0;
-    SET_TX();
-
-	/* initialize timer */
-    OCR0A = UARTBB_TIMERTOP;
-    TCNT0 = 0;
-
-    TCCR0A = 0x02;
-    TCCR0B = 0x00;
-
-    TIFR0 |= (1<<OCF0A);
-    TIMSK0 |= (1<<OCIE0A);
-}
-
-ISR( TIM0_COMPA_vect )
-{
-	switch (uartbb_state) {
-	case UARTBB_STATE_START:
-		CLR_TX();
-		uartbb_state = UARTBB_STATE_CHAR;
-		uartbb_cnt = 8;
-		uartbb_val = uartbb_tx[uartbb_tx_ridx];
-		uartbb_tx_ridx = (uartbb_tx_ridx + 1) & ((1<<UARTBB_TX_PWR) - 1);
-		break;
-	case UARTBB_STATE_CHAR:
-		if (uartbb_val & 0x01) {
-			SET_TX();
-		} else {
-			CLR_TX();
-		}
-		uartbb_val >>= 1;
-		if (--uartbb_cnt == 0) {
-			uartbb_state = UARTBB_STATE_STOP;
-		}
-		break;
-	case UARTBB_STATE_STOP:
-		SET_TX();
-		if (uartbb_tx_ridx != uartbb_tx_widx) {
-			uartbb_state = UARTBB_STATE_START;
-		} else {
-            uartbb_state = UARTBB_STATE_IDLE;
-		}
-        break;
-    case UARTBB_STATE_IDLE:
-		/* disable interrupt */
-//        TIMSK0 &= ~(1<<OCIE0A);
-//	    UARTBB_T_INTCTL_REG &= ~UARTBB_CMPINT_EN_MASK;
-		/* stop timer */
-        TCCR0B = 0x00;
-        break;
-	default:
-		break;
-	}
-}
-
-void uartbb_putchar(char val)
-{
-	uint8_t tidx;
-
-
-	tidx = (uartbb_tx_widx + 1) & ((1<<UARTBB_TX_PWR)-1);
-	if (tidx == uartbb_tx_ridx)
-		return;
-
-	uartbb_tx[uartbb_tx_widx] = val;
-	uartbb_tx_widx = tidx;
-
-    /* get the ball rolling if we are in idle state */
-	if (uartbb_state == UARTBB_STATE_IDLE) {
-		uartbb_state = UARTBB_STATE_START;
-		/* clear timer */
-        TCNT0 = 0;
-		/* start timer */
-        TCCR0B = 0x01;
-	}
-}
-
-
-void uartbb_puts( const char *s )
-{
-	while ( *s ) {
-		uartbb_putchar( *s++ );
-	}
-}
-
-
-const char hex[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
-void uartbb_puthex( uint8_t data )
-{
-	uint8_t val = data;
-
-	data >>= 4;
-	uartbb_putchar(hex[data]);
-	val &= 0xF;
-	uartbb_putchar(hex[val]);
-}
