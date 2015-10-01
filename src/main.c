@@ -2,6 +2,7 @@
 #include <avr/sleep.h>
 #include <avr/wdt.h>
 #include <avr/interrupt.h>
+#include <util/delay.h>
 //#include "nRF24L01.h"
 #include "nrf24.h"
 #include "uartbb.h"
@@ -9,7 +10,6 @@
 #undef F_CPU
 #define F_CPU 1000000UL
 
-#include <util/delay.h>
 
 #define EN_WD			1
 
@@ -85,6 +85,7 @@ ISR(WDT_vect)
 
 int main(void)
 {
+    uint8_t rv;
 
 
 	/* Perform system initialization */
@@ -104,7 +105,7 @@ int main(void)
 //	nrf24_tx_address(tx_address);
 //	nrf24_rx_address(rx_address);    
 
-	/* Channel 0x4c , payload length: 4 */
+	/* Channel 2 , payload length: 4 */
 	nrf24_config(2, 4);
 
 #if EN_WD
@@ -116,10 +117,44 @@ int main(void)
     sei();
 #endif
 
+    uartbb_puts("\r\nHello\r\n");
+    nrf24_readRegister(0,&rv,1);
+    uartbb_puts("00:");
+    uartbb_puthex(rv);
+    nrf24_readRegister(1,&rv,1);
+    uartbb_puts("\r\n01:");
+    uartbb_puthex(rv);
+    nrf24_readRegister(2,&rv,1);
+    uartbb_puts("\r\n02:");
+    uartbb_puthex(rv);
+//    uartbb_puts("\r\n");
+//    _delay_ms(100);
+    nrf24_readRegister(3,&rv,1);
+    uartbb_puts("\r\n03:");
+    uartbb_puthex(rv);
+    nrf24_readRegister(4,&rv,1);
+    uartbb_puts("\r\n04:");
+    uartbb_puthex(rv);
+    nrf24_readRegister(5,&rv,1);
+    uartbb_puts("\r\n05:");
+    uartbb_puthex(rv);
+    nrf24_readRegister(6,&rv,1);
+    uartbb_puts("\r\n06:");
+    uartbb_puthex(rv);
+    nrf24_readRegister(7,&rv,1);
+    uartbb_puts("\r\n07:");
+    uartbb_puthex(rv);
+//    _delay_ms(100);
+    nrf24_readRegister(8,&rv,1);
+    uartbb_puts("\r\n08:");
+    uartbb_puthex(rv);
+    nrf24_readRegister(9,&rv,1);
+    uartbb_puts("\r\n09:");
+    uartbb_puthex(rv);
     uartbb_puts("\r\n");
+    _delay_ms(100);
 
 	while (1) {
-        uint8_t rv;
   
 #if EN_WD
         system_sleep();
@@ -128,13 +163,9 @@ int main(void)
         if (wdInt) {
             wdInt = 0;
 #if 1
-            nrf24_readRegister(0,&rv,1);
+            nrf24_readRegister(8,&rv,1);
             uartbb_puthex(rv);
 //	        uartbb_puthex(nrf24_getStatus());
-#else
-		    uartbb_putchar('a');
-		    uartbb_putchar('b');
-		    uartbb_putchar('c');
 #endif
 
             /* Fill the data buffer */

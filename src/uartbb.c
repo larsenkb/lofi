@@ -1,11 +1,13 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <util/delay.h>
 
 #include "uartbb.h"
 
 
 static char                 uartbb_tx[1<<UARTBB_TX_PWR];
-uint8_t		                uartbb_state;
+static uint8_t              uartbb_state;
+volatile uint8_t            uartbb_next_state;
 static uint8_t		        uartbb_cnt;
 static uint8_t		        uartbb_val;
 static volatile uint8_t		uartbb_tx_ridx;
@@ -16,6 +18,7 @@ void uartbb_init(void)
 
 	// TX-Pin as output
 	UARTBB_TXDDR |=  (1<<UARTBB_TXBIT);
+	uartbb_next_state = UARTBB_STATE_IDLE;
 	uartbb_state = UARTBB_STATE_IDLE;
 	uartbb_tx_ridx = uartbb_tx_widx = 0;
     SET_TX();
@@ -33,10 +36,12 @@ void uartbb_init(void)
 
 ISR( TIM0_COMPA_vect )
 {
+    uartbb_state = uartbb_next_state;
+
 	switch (uartbb_state) {
 	case UARTBB_STATE_START:
 		CLR_TX();
-		uartbb_state = UARTBB_STATE_CHAR;
+		uartbb_next_state = UARTBB_STATE_CHAR;
 		uartbb_cnt = 8;
 		uartbb_val = uartbb_tx[uartbb_tx_ridx];
 		uartbb_tx_ridx = (uartbb_tx_ridx + 1) & ((1<<UARTBB_TX_PWR) - 1);
@@ -49,15 +54,15 @@ ISR( TIM0_COMPA_vect )
 		}
 		uartbb_val >>= 1;
 		if (--uartbb_cnt == 0) {
-			uartbb_state = UARTBB_STATE_STOP;
+			uartbb_next_state = UARTBB_STATE_STOP;
 		}
 		break;
 	case UARTBB_STATE_STOP:
 		SET_TX();
 		if (uartbb_tx_ridx != uartbb_tx_widx) {
-			uartbb_state = UARTBB_STATE_START;
+			uartbb_next_state = UARTBB_STATE_START;
 		} else {
-            uartbb_state = UARTBB_STATE_IDLE;
+            uartbb_next_state = UARTBB_STATE_IDLE;
 		}
         break;
     case UARTBB_STATE_IDLE:
@@ -78,15 +83,21 @@ void uartbb_putchar(char val)
 
 
 	tidx = (uartbb_tx_widx + 1) & ((1<<UARTBB_TX_PWR)-1);
-	if (tidx == uartbb_tx_ridx)
+#if 1
+    while (tidx == uartbb_tx_ridx) {
+        _delay_ms(1);
+    }
+#else
+    if (tidx == uartbb_tx_ridx)
 		return;
+#endif
 
 	uartbb_tx[uartbb_tx_widx] = val;
 	uartbb_tx_widx = tidx;
 
     /* get the ball rolling if we are in idle state */
-	if (uartbb_state == UARTBB_STATE_IDLE) {
-		uartbb_state = UARTBB_STATE_START;
+	if (uartbb_next_state == UARTBB_STATE_IDLE) {
+		uartbb_next_state = UARTBB_STATE_START;
 		/* clear timer */
         TCNT0 = 0;
 		/* start timer */
