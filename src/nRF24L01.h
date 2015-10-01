@@ -53,7 +53,7 @@
 
 /* Bit Mnemonics */
 
-/* configuratio nregister */
+/* configuration register */
 #define MASK_RX_DR  6
 #define MASK_TX_DS  5
 #define MASK_MAX_RT 4

@@ -80,7 +80,7 @@ OBJDIR = .
 
 
 # List C source files here. (C dependencies are automatically generated.)
-SRC = $(TARGET).c uartbb.c
+SRC = $(TARGET).c uartbb.c nrf24.c
 
 #radioPinFunctions.c nrf24.c
 

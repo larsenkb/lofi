@@ -14,8 +14,8 @@
 #ifndef NRF24
 #define NRF24
 
-#include "nRF24L01.h"
 #include <stdint.h>
+#include "nRF24L01.h"
 
 #define LOW 0
 #define HIGH 1
@@ -39,7 +39,7 @@ uint8_t nrf24_getStatus(void);
 uint8_t nrf24_rxFifoEmpty(void);
 
 /* core TX / RX functions */
-void    nrf24_send(uint8_t* value);
+void    nrf24_send(uint8_t* value, uint8_t pay_length);
 void    nrf24_getData(uint8_t* data);
 
 /* use in dynamic length mode */
@@ -58,6 +58,7 @@ void    nrf24_powerUpTx(void);
 void    nrf24_powerDown(void);
 
 /* low level interface ... */
+void    spi_init(void);
 uint8_t spi_transfer(uint8_t tx);
 void    nrf24_transmitSync(uint8_t* dataout,uint8_t len);
 void    nrf24_transferSync(uint8_t* dataout,uint8_t* datain,uint8_t len);

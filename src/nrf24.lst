@@ -7,1559 +7,899 @@
    7               		.text
    8               	.Ltext0:
    9               		.cfi_sections	.debug_frame
-  10               	.global	nrf24_init
-  12               	nrf24_init:
+  10               	.global	spi_init
+  12               	spi_init:
   13               	.LFB0:
   14               		.file 1 "nrf24.c"
-   1:nrf24.c       **** /*
-   2:nrf24.c       **** * ----------------------------------------------------------------------------
-   3:nrf24.c       **** * “THE COFFEEWARE LICENSE” (Revision 1):
-   4:nrf24.c       **** * <ihsan@kehribar.me> wrote this file. As long as you retain this notice you
-   5:nrf24.c       **** * can do whatever you want with this stuff. If we meet some day, and you think
-   6:nrf24.c       **** * this stuff is worth it, you can buy me a coffee in return.
-   7:nrf24.c       **** * -----------------------------------------------------------------------------
-   8:nrf24.c       **** * This library is based on this library: 
-   9:nrf24.c       **** *   https://github.com/aaronds/arduino-nrf24l01
-  10:nrf24.c       **** * Which is based on this library: 
-  11:nrf24.c       **** *   http://www.tinkerer.eu/AVRLib/nRF24L01
-  12:nrf24.c       **** * -----------------------------------------------------------------------------
-  13:nrf24.c       **** */
-  14:nrf24.c       **** #include "nrf24.h"
-  15:nrf24.c       **** 
-  16:nrf24.c       **** uint8_t payload_len;
-  17:nrf24.c       **** 
-  18:nrf24.c       **** /* init the hardware pins */
-  19:nrf24.c       **** void nrf24_init() 
-  20:nrf24.c       **** {
-  15               		.loc 1 20 0
+   1:nrf24.c       **** #include <avr/io.h>
+   2:nrf24.c       **** #include "nrf24.h"
+   3:nrf24.c       **** 
+   4:nrf24.c       **** #define CE				0		/* PORTA */
+   5:nrf24.c       **** #define CSN				1		/* PORTA */
+   6:nrf24.c       **** #define SCK				4		/* PORTA */
+   7:nrf24.c       **** #define MOSI			6		/* PORTA */
+   8:nrf24.c       **** #define MISO			5		/* PORTA */
+   9:nrf24.c       **** #define ASSERT_CE()     (PORTA |= (1<<CE))
+  10:nrf24.c       **** #define DEASSERT_CE()   (PORTA &= ~(1<<CE))
+  11:nrf24.c       **** #define DEASSERT_CSN()  (PORTA |= (1<<CSN))
+  12:nrf24.c       **** #define ASSERT_CSN()    (PORTA &= ~(1<<CSN))
+  13:nrf24.c       **** 
+  14:nrf24.c       **** 
+  15:nrf24.c       **** void spi_init(void)
+  16:nrf24.c       **** {
+  15               		.loc 1 16 0
   16               		.cfi_startproc
   17               	/* prologue: function */
   18               	/* frame size = 0 */
   19               	/* stack size = 0 */
   20               	.L__stack_usage = 0
-  21:nrf24.c       ****     nrf24_setupPins();
-  21               		.loc 1 21 0
-  22 0000 00D0      		rcall nrf24_setupPins
-  23               	.LVL0:
-  22:nrf24.c       ****     nrf24_ce_digitalWrite(LOW);
-  24               		.loc 1 22 0
-  25 0002 80E0      		ldi r24,0
-  26 0004 00D0      		rcall nrf24_ce_digitalWrite
-  27               	.LVL1:
-  23:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);    
-  28               		.loc 1 23 0
-  29 0006 81E0      		ldi r24,lo8(1)
-  30 0008 00C0      		rjmp nrf24_csn_digitalWrite
-  31               	.LVL2:
-  32               		.cfi_endproc
-  33               	.LFE0:
-  35               	.global	nrf24_payload_length
-  37               	nrf24_payload_length:
-  38               	.LFB3:
-  24:nrf24.c       **** }
+  17:nrf24.c       ****     DDRA |= (1<<CSN);	// OUTPUT
+  21               		.loc 1 17 0
+  22 0000 D19A      		sbi 0x1a,1
+  18:nrf24.c       ****     DDRA |= (1<<SCK);	// OUTPUT
+  23               		.loc 1 18 0
+  24 0002 D49A      		sbi 0x1a,4
+  19:nrf24.c       ****     DDRA |= (1<<MOSI);	// OUTPUT
+  25               		.loc 1 19 0
+  26 0004 D69A      		sbi 0x1a,6
+  20:nrf24.c       ****     DDRA &= ~(1<<MISO);	// INPUT
+  27               		.loc 1 20 0
+  28 0006 D598      		cbi 0x1a,5
+  21:nrf24.c       ****     DDRA |= (1<<CE);	// OUTPUT
+  29               		.loc 1 21 0
+  30 0008 D09A      		sbi 0x1a,0
+  22:nrf24.c       **** 	DEASSERT_CE();
+  31               		.loc 1 22 0
+  32 000a D898      		cbi 0x1b,0
+  23:nrf24.c       **** 	DEASSERT_CSN();
+  33               		.loc 1 23 0
+  34 000c D99A      		sbi 0x1b,1
+  24:nrf24.c       **** 	PORTA &= ~(1<<SCK);
+  35               		.loc 1 24 0
+  36 000e DC98      		cbi 0x1b,4
   25:nrf24.c       **** 
-  26:nrf24.c       **** /* configure the module */
-  27:nrf24.c       **** void nrf24_config(uint8_t channel, uint8_t pay_length)
-  28:nrf24.c       **** {
-  29:nrf24.c       ****     /* Use static payload length ... */
-  30:nrf24.c       ****     payload_len = pay_length;
-  31:nrf24.c       **** 
-  32:nrf24.c       ****     // Set RF channel
-  33:nrf24.c       ****     nrf24_configRegister(RF_CH, channel);
-  34:nrf24.c       **** 
-  35:nrf24.c       ****     // Set length of incoming payload 
-  36:nrf24.c       **** #if 0
-  37:nrf24.c       **** 	nrf24_configRegister(RX_PW_P0, 0x00); // Auto-ACK pipe ...
-  38:nrf24.c       ****     nrf24_configRegister(RX_PW_P1, payload_len); // Data payload pipe
-  39:nrf24.c       ****     nrf24_configRegister(RX_PW_P2, 0x00); // Pipe not used 
-  40:nrf24.c       ****     nrf24_configRegister(RX_PW_P3, 0x00); // Pipe not used 
-  41:nrf24.c       ****     nrf24_configRegister(RX_PW_P4, 0x00); // Pipe not used 
-  42:nrf24.c       ****     nrf24_configRegister(RX_PW_P5, 0x00); // Pipe not used 
-  43:nrf24.c       **** #else
-  44:nrf24.c       **** 	nrf24_configRegister(RX_PW_P0, payload_len); // Auto-ACK pipe ...
-  45:nrf24.c       ****     nrf24_configRegister(RX_PW_P1, payload_len); // Data payload pipe
-  46:nrf24.c       ****     nrf24_configRegister(RX_PW_P2, 0x00); // Pipe not used 
-  47:nrf24.c       ****     nrf24_configRegister(RX_PW_P3, 0x00); // Pipe not used 
-  48:nrf24.c       ****     nrf24_configRegister(RX_PW_P4, 0x00); // Pipe not used 
-  49:nrf24.c       ****     nrf24_configRegister(RX_PW_P5, 0x00); // Pipe not used 
-  50:nrf24.c       **** #endif
-  51:nrf24.c       **** 
-  52:nrf24.c       ****     // 250Kbps, TX gain: 0dbm
-  53:nrf24.c       **** //    nrf24_configRegister(RF_SETUP, (2<<RF_DR) | ((0x03)<<RF_PWR));
-  54:nrf24.c       **** 
-  55:nrf24.c       ****     // CRC enable, 1 byte CRC length
-  56:nrf24.c       **** //    nrf24_configRegister(CONFIG, nrf24_CONFIG);
-  57:nrf24.c       **** 
-  58:nrf24.c       ****     // Auto Acknowledgment
-  59:nrf24.c       **** //    nrf24_configRegister(EN_AA,(1<<ENAA_P0)|(1<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(
-  60:nrf24.c       **** 
-  61:nrf24.c       ****     // Enable RX addresses
-  62:nrf24.c       **** //    nrf24_configRegister(EN_RXADDR,(1<<ERX_P0)|(1<<ERX_P1)|(0<<ERX_P2)|(0<<ERX_P3)|(0<<ERX_P4)|(0
+  26:nrf24.c       **** 	USICR = _BV(USIWM0) | _BV(USICS1) | _BV(USICLK);
+  37               		.loc 1 26 0
+  38 0010 8AE1      		ldi r24,lo8(26)
+  39 0012 8DB9      		out 0xd,r24
+  40 0014 0895      		ret
+  41               		.cfi_endproc
+  42               	.LFE0:
+  44               	.global	spi_transfer
+  46               	spi_transfer:
+  47               	.LFB1:
+  27:nrf24.c       **** }
+  28:nrf24.c       **** 
+  29:nrf24.c       **** #if 0
+  30:nrf24.c       **** #if 1
+  31:nrf24.c       **** uint8_t spi_transfer(uint8_t _data)
+  32:nrf24.c       **** {
+  33:nrf24.c       ****   USIDR = _data;
+  34:nrf24.c       ****   uint8_t i;
+  35:nrf24.c       ****   
+  36:nrf24.c       ****   for (i=0; i<16; i++) {
+  37:nrf24.c       ****     USICR = _BV(USIWM0) | _BV(USICS1) | _BV(USICLK) | _BV(USITC);
+  38:nrf24.c       ****   }
+  39:nrf24.c       ****   return USIDR;
+  40:nrf24.c       **** }
+  41:nrf24.c       **** #else
+  42:nrf24.c       **** uint8_t spi_transfer(uint8_t _data)
+  43:nrf24.c       **** {
+  44:nrf24.c       ****   USIDR = _data;
+  45:nrf24.c       ****   USISR = _BV(USIOIF);
+  46:nrf24.c       ****   
+  47:nrf24.c       ****   while((USISR & _BV(USIOIF)) == 0){
+  48:nrf24.c       ****     USICR = _BV(USIWM0) | _BV(USICS1) | _BV(USICLK) | _BV(USITC);
+  49:nrf24.c       ****   }
+  50:nrf24.c       ****   return USIDR;
+  51:nrf24.c       **** }
+  52:nrf24.c       **** #endif
+  53:nrf24.c       **** #else
+  54:nrf24.c       **** /* software spi routine */
+  55:nrf24.c       **** uint8_t spi_transfer(uint8_t tx)
+  56:nrf24.c       **** {
+  48               		.loc 1 56 0
+  49               		.cfi_startproc
+  50               	.LVL0:
+  51               	/* prologue: function */
+  52               	/* frame size = 0 */
+  53               	/* stack size = 0 */
+  54               	.L__stack_usage = 0
+  57:nrf24.c       ****     uint8_t i = 0;
+  58:nrf24.c       ****     uint8_t rx = 0;    
+  59:nrf24.c       **** 
+  60:nrf24.c       **** 	PORTA &= ~(1<<SCK);
+  55               		.loc 1 60 0
+  56 0016 DC98      		cbi 0x1b,4
+  57 0018 27E0      		ldi r18,lo8(7)
+  58 001a 30E0      		ldi r19,0
+  58:nrf24.c       **** 
+  59               		.loc 1 58 0
+  60 001c 90E0      		ldi r25,0
+  61:nrf24.c       **** 
+  62:nrf24.c       ****     for (i=0; i<8; i++) {
   63:nrf24.c       **** 
-  64:nrf24.c       ****     // Auto retransmit delay: 1000 us and Up to 15 retransmit trials
-  65:nrf24.c       ****     nrf24_configRegister(SETUP_RETR,(0x04<<ARD)|(0x0F<<ARC));
-  66:nrf24.c       **** 
-  67:nrf24.c       ****     // Dynamic length configurations: No dynamic length
-  68:nrf24.c       **** //    nrf24_configRegister(DYNPD,(0<<DPL_P0)|(0<<DPL_P1)|(0<<DPL_P2)|(0<<DPL_P3)|(0<<DPL_P4)|(0<<DP
+  64:nrf24.c       ****         if (tx & (1<<(7-i))) {
+  61               		.loc 1 64 0
+  62 001e 482F      		mov r20,r24
+  63 0020 50E0      		ldi r21,0
+  64               	.LVL1:
+  65               	.L6:
+  66 0022 BA01      		movw r22,r20
+  67 0024 022E      		mov r0,r18
+  68 0026 00C0      		rjmp 2f
+  69               		1:
+  70 0028 7595      		asr r23
+  71 002a 6795      		ror r22
+  72               		2:
+  73 002c 0A94      		dec r0
+  74 002e 02F4      		brpl 1b
+  75 0030 60FF      		sbrs r22,0
+  76 0032 00C0      		rjmp .L3
+  65:nrf24.c       **** 			PORTA |= (1<<MOSI);
+  77               		.loc 1 65 0
+  78 0034 DE9A      		sbi 0x1b,6
+  79 0036 00C0      		rjmp .L4
+  80               	.L3:
+  66:nrf24.c       ****         } else {
+  67:nrf24.c       **** 			PORTA &= ~(1<<MOSI);
+  81               		.loc 1 67 0
+  82 0038 DE98      		cbi 0x1b,6
+  83               	.L4:
+  68:nrf24.c       ****         }
   69:nrf24.c       **** 
-  70:nrf24.c       ****     // Start listening
-  71:nrf24.c       ****     nrf24_powerUpRx();
-  72:nrf24.c       **** }
-  73:nrf24.c       **** 
-  74:nrf24.c       **** /* Set the RX address */
-  75:nrf24.c       **** void nrf24_rx_address(uint8_t * adr) 
-  76:nrf24.c       **** {
-  77:nrf24.c       ****     nrf24_ce_digitalWrite(LOW);
-  78:nrf24.c       ****     nrf24_writeRegister(RX_ADDR_P1,adr,nrf24_ADDR_LEN);
-  79:nrf24.c       ****     nrf24_ce_digitalWrite(HIGH);
-  80:nrf24.c       **** }
-  81:nrf24.c       **** 
-  82:nrf24.c       **** /* Returns the payload length */
-  83:nrf24.c       **** uint8_t nrf24_payload_length()
-  84:nrf24.c       **** {
-  39               		.loc 1 84 0
-  40               		.cfi_startproc
-  41               	/* prologue: function */
-  42               	/* frame size = 0 */
-  43               	/* stack size = 0 */
-  44               	.L__stack_usage = 0
-  85:nrf24.c       ****     return payload_len;
-  86:nrf24.c       **** }
-  45               		.loc 1 86 0
-  46 000a 8091 0000 		lds r24,payload_len
-  47 000e 0895      		ret
-  48               		.cfi_endproc
-  49               	.LFE3:
-  51               	.global	spi_transfer
-  53               	spi_transfer:
-  54               	.LFB17:
-  87:nrf24.c       **** 
-  88:nrf24.c       **** /* Set the TX address */
-  89:nrf24.c       **** void nrf24_tx_address(uint8_t* adr)
-  90:nrf24.c       **** {
-  91:nrf24.c       ****     /* RX_ADDR_P0 must be set to the sending addr for auto ack to work. */
-  92:nrf24.c       ****     nrf24_writeRegister(RX_ADDR_P0,adr,nrf24_ADDR_LEN);
-  93:nrf24.c       ****     nrf24_writeRegister(TX_ADDR,adr,nrf24_ADDR_LEN);
-  94:nrf24.c       **** }
-  95:nrf24.c       **** 
-  96:nrf24.c       **** /* Checks if data is available for reading */
-  97:nrf24.c       **** /* Returns 1 if data is ready ... */
-  98:nrf24.c       **** uint8_t nrf24_dataReady() 
-  99:nrf24.c       **** {
- 100:nrf24.c       ****     // See note in getData() function - just checking RX_DR isn't good enough
- 101:nrf24.c       ****     uint8_t status = nrf24_getStatus();
- 102:nrf24.c       **** 
- 103:nrf24.c       ****     // We can short circuit on RX_DR, but if it's not set, we still need
- 104:nrf24.c       ****     // to check the FIFO for any pending packets
- 105:nrf24.c       ****     if ( status & (1 << RX_DR) ) 
- 106:nrf24.c       ****     {
- 107:nrf24.c       ****         return 1;
- 108:nrf24.c       ****     }
- 109:nrf24.c       **** 
- 110:nrf24.c       ****     return !nrf24_rxFifoEmpty();;
- 111:nrf24.c       **** }
- 112:nrf24.c       **** 
- 113:nrf24.c       **** /* Checks if receive FIFO is empty or not */
- 114:nrf24.c       **** uint8_t nrf24_rxFifoEmpty()
- 115:nrf24.c       **** {
- 116:nrf24.c       ****     uint8_t fifoStatus;
- 117:nrf24.c       **** 
- 118:nrf24.c       ****     nrf24_readRegister(FIFO_STATUS,&fifoStatus,1);
- 119:nrf24.c       ****     
- 120:nrf24.c       ****     return (fifoStatus & (1 << RX_EMPTY));
- 121:nrf24.c       **** }
- 122:nrf24.c       **** 
- 123:nrf24.c       **** /* Returns the length of data waiting in the RX fifo */
- 124:nrf24.c       **** uint8_t nrf24_payloadLength()
- 125:nrf24.c       **** {
- 126:nrf24.c       ****     uint8_t status;
- 127:nrf24.c       ****     nrf24_csn_digitalWrite(LOW);
- 128:nrf24.c       ****     spi_transfer(R_RX_PL_WID);
- 129:nrf24.c       ****     status = spi_transfer(0x00);
- 130:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);
- 131:nrf24.c       ****     return status;
- 132:nrf24.c       **** }
- 133:nrf24.c       **** 
- 134:nrf24.c       **** /* Reads payload bytes into data array */
- 135:nrf24.c       **** void nrf24_getData(uint8_t* data) 
- 136:nrf24.c       **** {
- 137:nrf24.c       ****     /* Pull down chip select */
- 138:nrf24.c       ****     nrf24_csn_digitalWrite(LOW);                               
- 139:nrf24.c       **** 
- 140:nrf24.c       ****     /* Send cmd to read rx payload */
- 141:nrf24.c       ****     spi_transfer( R_RX_PAYLOAD );
- 142:nrf24.c       ****     
- 143:nrf24.c       ****     /* Read payload */
- 144:nrf24.c       ****     nrf24_transferSync(data,data,payload_len);
- 145:nrf24.c       ****     
- 146:nrf24.c       ****     /* Pull up chip select */
- 147:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);
- 148:nrf24.c       **** 
- 149:nrf24.c       ****     /* Reset status register */
- 150:nrf24.c       ****     nrf24_configRegister(STATUS,(1<<RX_DR));   
- 151:nrf24.c       **** }
- 152:nrf24.c       **** 
- 153:nrf24.c       **** /* Returns the number of retransmissions occured for the last message */
- 154:nrf24.c       **** uint8_t nrf24_retransmissionCount()
- 155:nrf24.c       **** {
- 156:nrf24.c       ****     uint8_t rv;
- 157:nrf24.c       ****     nrf24_readRegister(OBSERVE_TX,&rv,1);
- 158:nrf24.c       ****     rv = rv & 0x0F;
- 159:nrf24.c       ****     return rv;
- 160:nrf24.c       **** }
- 161:nrf24.c       **** 
- 162:nrf24.c       **** // Sends a data package to the default address. Be sure to send the correct
- 163:nrf24.c       **** // amount of bytes as configured as payload on the receiver.
- 164:nrf24.c       **** void nrf24_send(uint8_t* value) 
- 165:nrf24.c       **** {    
- 166:nrf24.c       ****     /* Go to Standby-I first */
- 167:nrf24.c       ****     nrf24_ce_digitalWrite(LOW);
- 168:nrf24.c       ****      
- 169:nrf24.c       ****     /* Set to transmitter mode , Power up if needed */
- 170:nrf24.c       ****     nrf24_powerUpTx();
- 171:nrf24.c       **** 
- 172:nrf24.c       ****     /* Do we really need to flush TX fifo each time ? */
- 173:nrf24.c       ****     #if 0
- 174:nrf24.c       ****         /* Pull down chip select */
- 175:nrf24.c       ****         nrf24_csn_digitalWrite(LOW);           
- 176:nrf24.c       **** 
- 177:nrf24.c       ****         /* Write cmd to flush transmit FIFO */
- 178:nrf24.c       ****         spi_transfer(FLUSH_TX);     
- 179:nrf24.c       **** 
- 180:nrf24.c       ****         /* Pull up chip select */
- 181:nrf24.c       ****         nrf24_csn_digitalWrite(HIGH);                    
- 182:nrf24.c       ****     #endif 
- 183:nrf24.c       **** 
- 184:nrf24.c       ****     /* Pull down chip select */
- 185:nrf24.c       ****     nrf24_csn_digitalWrite(LOW);
- 186:nrf24.c       **** 
- 187:nrf24.c       ****     /* Write cmd to write payload */
- 188:nrf24.c       ****     spi_transfer(W_TX_PAYLOAD);
- 189:nrf24.c       **** 
- 190:nrf24.c       ****     /* Write payload */
- 191:nrf24.c       ****     nrf24_transmitSync(value,payload_len);   
- 192:nrf24.c       **** 
- 193:nrf24.c       ****     /* Pull up chip select */
- 194:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);
- 195:nrf24.c       **** 
- 196:nrf24.c       ****     /* Start the transmission */
- 197:nrf24.c       ****     nrf24_ce_digitalWrite(HIGH);    
- 198:nrf24.c       **** }
- 199:nrf24.c       **** 
- 200:nrf24.c       **** uint8_t nrf24_isSending()
- 201:nrf24.c       **** {
- 202:nrf24.c       ****     uint8_t status;
- 203:nrf24.c       **** 
- 204:nrf24.c       ****     /* read the current status */
- 205:nrf24.c       ****     status = nrf24_getStatus();
- 206:nrf24.c       ****                 
- 207:nrf24.c       ****     /* if sending successful (TX_DS) or max retries exceded (MAX_RT). */
- 208:nrf24.c       ****     if((status & ((1 << TX_DS)  | (1 << MAX_RT))))
- 209:nrf24.c       ****     {        
- 210:nrf24.c       ****         return 0; /* false */
- 211:nrf24.c       ****     }
- 212:nrf24.c       **** 
- 213:nrf24.c       ****     return 1; /* true */
- 214:nrf24.c       **** 
- 215:nrf24.c       **** }
- 216:nrf24.c       **** 
- 217:nrf24.c       **** uint8_t nrf24_getStatus()
- 218:nrf24.c       **** {
- 219:nrf24.c       ****     uint8_t rv;
- 220:nrf24.c       ****     nrf24_csn_digitalWrite(LOW);
- 221:nrf24.c       ****     rv = spi_transfer(NOP);
- 222:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);
- 223:nrf24.c       ****     return rv;
- 224:nrf24.c       **** }
- 225:nrf24.c       **** 
- 226:nrf24.c       **** uint8_t nrf24_lastMessageStatus()
- 227:nrf24.c       **** {
- 228:nrf24.c       ****     uint8_t rv;
- 229:nrf24.c       **** 
- 230:nrf24.c       ****     rv = nrf24_getStatus();
- 231:nrf24.c       **** 
- 232:nrf24.c       ****     /* Transmission went OK */
- 233:nrf24.c       ****     if((rv & ((1 << TX_DS))))
- 234:nrf24.c       ****     {
- 235:nrf24.c       ****         return NRF24_TRANSMISSON_OK;
- 236:nrf24.c       ****     }
- 237:nrf24.c       ****     /* Maximum retransmission count is reached */
- 238:nrf24.c       ****     /* Last message probably went missing ... */
- 239:nrf24.c       ****     else if((rv & ((1 << MAX_RT))))
- 240:nrf24.c       ****     {
- 241:nrf24.c       ****         return NRF24_MESSAGE_LOST;
- 242:nrf24.c       ****     }  
- 243:nrf24.c       ****     /* Probably still sending ... */
- 244:nrf24.c       ****     else
- 245:nrf24.c       ****     {
- 246:nrf24.c       ****         return 0xFF;
- 247:nrf24.c       ****     }
- 248:nrf24.c       **** }
- 249:nrf24.c       **** 
- 250:nrf24.c       **** void nrf24_powerUpRx()
- 251:nrf24.c       **** {     
- 252:nrf24.c       ****     nrf24_csn_digitalWrite(LOW);
- 253:nrf24.c       ****     spi_transfer(FLUSH_RX);
- 254:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);
- 255:nrf24.c       **** 
- 256:nrf24.c       ****     nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
- 257:nrf24.c       **** 
- 258:nrf24.c       ****     nrf24_ce_digitalWrite(LOW);    
- 259:nrf24.c       ****     nrf24_configRegister(CONFIG,nrf24_CONFIG|((1<<PWR_UP)|(1<<PRIM_RX)));    
- 260:nrf24.c       ****     nrf24_ce_digitalWrite(HIGH);
- 261:nrf24.c       **** }
- 262:nrf24.c       **** 
- 263:nrf24.c       **** void nrf24_powerUpTx()
- 264:nrf24.c       **** {
- 265:nrf24.c       ****     nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
- 266:nrf24.c       **** 
- 267:nrf24.c       ****     nrf24_configRegister(CONFIG,nrf24_CONFIG|((1<<PWR_UP)|(0<<PRIM_RX)));
- 268:nrf24.c       **** }
- 269:nrf24.c       **** 
- 270:nrf24.c       **** void nrf24_powerDown()
- 271:nrf24.c       **** {
- 272:nrf24.c       ****     nrf24_ce_digitalWrite(LOW);
- 273:nrf24.c       ****     nrf24_configRegister(CONFIG,nrf24_CONFIG);
- 274:nrf24.c       **** }
- 275:nrf24.c       **** 
- 276:nrf24.c       **** /* software spi routine */
- 277:nrf24.c       **** uint8_t spi_transfer(uint8_t tx)
- 278:nrf24.c       **** {
-  55               		.loc 1 278 0
-  56               		.cfi_startproc
-  57               	.LVL3:
-  58 0010 EF92      		push r14
-  59               	.LCFI0:
-  60               		.cfi_def_cfa_offset 3
-  61               		.cfi_offset 14, -2
-  62 0012 FF92      		push r15
-  63               	.LCFI1:
-  64               		.cfi_def_cfa_offset 4
-  65               		.cfi_offset 15, -3
-  66 0014 0F93      		push r16
-  67               	.LCFI2:
-  68               		.cfi_def_cfa_offset 5
-  69               		.cfi_offset 16, -4
-  70 0016 1F93      		push r17
-  71               	.LCFI3:
-  72               		.cfi_def_cfa_offset 6
-  73               		.cfi_offset 17, -5
-  74 0018 CF93      		push r28
-  75               	.LCFI4:
-  76               		.cfi_def_cfa_offset 7
-  77               		.cfi_offset 28, -6
-  78               	/* prologue: function */
-  79               	/* frame size = 0 */
-  80               	/* stack size = 5 */
-  81               	.L__stack_usage = 5
-  82 001a E82E      		mov r14,r24
-  83               	.LVL4:
- 279:nrf24.c       ****     uint8_t i = 0;
- 280:nrf24.c       ****     uint8_t rx = 0;    
- 281:nrf24.c       **** 
- 282:nrf24.c       ****     nrf24_sck_digitalWrite(LOW);
-  84               		.loc 1 282 0
-  85 001c 80E0      		ldi r24,0
-  86               	.LVL5:
-  87 001e 00D0      		rcall nrf24_sck_digitalWrite
-  88               	.LVL6:
-  89 0020 07E0      		ldi r16,lo8(7)
-  90 0022 10E0      		ldi r17,0
- 280:nrf24.c       **** 
-  91               		.loc 1 280 0
-  92 0024 C0E0      		ldi r28,0
- 283:nrf24.c       **** 
- 284:nrf24.c       ****     for(i=0;i<8;i++)
- 285:nrf24.c       ****     {
- 286:nrf24.c       **** 
- 287:nrf24.c       ****         if(tx & (1<<(7-i)))
-  93               		.loc 1 287 0
-  94 0026 F12C      		mov r15,__zero_reg__
-  95               	.LVL7:
-  96               	.L7:
-  97 0028 C701      		movw r24,r14
-  98 002a 002E      		mov r0,r16
-  99 002c 00C0      		rjmp 2f
- 100               		1:
- 101 002e 9595      		asr r25
- 102 0030 8795      		ror r24
- 103               		2:
- 104 0032 0A94      		dec r0
- 105 0034 02F4      		brpl 1b
- 106 0036 80FF      		sbrs r24,0
- 107 0038 00C0      		rjmp .L4
- 288:nrf24.c       ****         {
- 289:nrf24.c       ****             nrf24_mosi_digitalWrite(HIGH);            
- 108               		.loc 1 289 0
- 109 003a 81E0      		ldi r24,lo8(1)
- 110 003c 00C0      		rjmp .L12
- 111               	.L4:
- 290:nrf24.c       ****         }
- 291:nrf24.c       ****         else
- 292:nrf24.c       ****         {
- 293:nrf24.c       ****             nrf24_mosi_digitalWrite(LOW);
- 112               		.loc 1 293 0
- 113 003e 80E0      		ldi r24,0
- 114               	.L12:
- 115 0040 00D0      		rcall nrf24_mosi_digitalWrite
- 116               	.LVL8:
- 294:nrf24.c       ****         }
- 295:nrf24.c       **** 
- 296:nrf24.c       ****         nrf24_sck_digitalWrite(HIGH);        
- 117               		.loc 1 296 0
- 118 0042 81E0      		ldi r24,lo8(1)
- 119 0044 00D0      		rcall nrf24_sck_digitalWrite
- 120               	.LVL9:
- 297:nrf24.c       **** 
- 298:nrf24.c       ****         rx = rx << 1;
- 121               		.loc 1 298 0
- 122 0046 CC0F      		lsl r28
- 123               	.LVL10:
- 299:nrf24.c       ****         if(nrf24_miso_digitalRead())
- 124               		.loc 1 299 0
- 125 0048 00D0      		rcall nrf24_miso_digitalRead
- 126               	.LVL11:
- 127 004a 8111      		cpse r24,__zero_reg__
- 300:nrf24.c       ****         {
- 301:nrf24.c       ****             rx |= 0x01;
- 128               		.loc 1 301 0
- 129 004c C160      		ori r28,lo8(1)
- 130               	.LVL12:
- 131               	.L6:
- 302:nrf24.c       ****         }
- 303:nrf24.c       **** 
- 304:nrf24.c       ****         nrf24_sck_digitalWrite(LOW);                
- 132               		.loc 1 304 0 discriminator 2
- 133 004e 80E0      		ldi r24,0
- 134 0050 00D0      		rcall nrf24_sck_digitalWrite
- 135               	.LVL13:
- 136               	.LVL14:
- 137 0052 0150      		subi r16,1
- 138 0054 1109      		sbc r17,__zero_reg__
- 139 0056 00F4      		brcc .L7
- 305:nrf24.c       **** 
- 306:nrf24.c       ****     }
- 307:nrf24.c       **** 
- 308:nrf24.c       ****     return rx;
- 309:nrf24.c       **** }
- 140               		.loc 1 309 0
- 141 0058 8C2F      		mov r24,r28
- 142               	/* epilogue start */
- 143 005a CF91      		pop r28
- 144               	.LVL15:
- 145 005c 1F91      		pop r17
- 146 005e 0F91      		pop r16
- 147               	.LVL16:
- 148 0060 FF90      		pop r15
- 149 0062 EF90      		pop r14
- 150               	.LVL17:
- 151 0064 0895      		ret
- 152               		.cfi_endproc
- 153               	.LFE17:
- 155               	.global	nrf24_payloadLength
- 157               	nrf24_payloadLength:
- 158               	.LFB7:
- 125:nrf24.c       ****     uint8_t status;
- 159               		.loc 1 125 0
- 160               		.cfi_startproc
- 161 0066 CF93      		push r28
- 162               	.LCFI5:
- 163               		.cfi_def_cfa_offset 3
- 164               		.cfi_offset 28, -2
- 165               	/* prologue: function */
- 166               	/* frame size = 0 */
- 167               	/* stack size = 1 */
- 168               	.L__stack_usage = 1
- 127:nrf24.c       ****     spi_transfer(R_RX_PL_WID);
- 169               		.loc 1 127 0
- 170 0068 80E0      		ldi r24,0
- 171 006a 00D0      		rcall nrf24_csn_digitalWrite
- 172               	.LVL18:
- 128:nrf24.c       ****     status = spi_transfer(0x00);
- 173               		.loc 1 128 0
- 174 006c 80E6      		ldi r24,lo8(96)
- 175 006e 00D0      		rcall spi_transfer
- 176               	.LVL19:
- 129:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);
- 177               		.loc 1 129 0
- 178 0070 80E0      		ldi r24,0
- 179 0072 00D0      		rcall spi_transfer
- 180               	.LVL20:
- 181 0074 C82F      		mov r28,r24
- 182               	.LVL21:
- 130:nrf24.c       ****     return status;
- 183               		.loc 1 130 0
- 184 0076 81E0      		ldi r24,lo8(1)
- 185               	.LVL22:
- 186 0078 00D0      		rcall nrf24_csn_digitalWrite
- 187               	.LVL23:
- 132:nrf24.c       **** 
- 188               		.loc 1 132 0
- 189 007a 8C2F      		mov r24,r28
- 190               	/* epilogue start */
- 191 007c CF91      		pop r28
- 192               	.LVL24:
- 193 007e 0895      		ret
- 194               		.cfi_endproc
- 195               	.LFE7:
- 197               	.global	nrf24_getStatus
- 199               	nrf24_getStatus:
- 200               	.LFB12:
- 218:nrf24.c       ****     uint8_t rv;
- 201               		.loc 1 218 0
- 202               		.cfi_startproc
- 203 0080 CF93      		push r28
- 204               	.LCFI6:
- 205               		.cfi_def_cfa_offset 3
- 206               		.cfi_offset 28, -2
- 207               	/* prologue: function */
- 208               	/* frame size = 0 */
- 209               	/* stack size = 1 */
- 210               	.L__stack_usage = 1
- 220:nrf24.c       ****     rv = spi_transfer(NOP);
- 211               		.loc 1 220 0
- 212 0082 80E0      		ldi r24,0
- 213 0084 00D0      		rcall nrf24_csn_digitalWrite
- 214               	.LVL25:
- 221:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);
- 215               		.loc 1 221 0
- 216 0086 8FEF      		ldi r24,lo8(-1)
- 217 0088 00D0      		rcall spi_transfer
- 218               	.LVL26:
- 219 008a C82F      		mov r28,r24
- 220               	.LVL27:
- 222:nrf24.c       ****     return rv;
- 221               		.loc 1 222 0
- 222 008c 81E0      		ldi r24,lo8(1)
- 223               	.LVL28:
- 224 008e 00D0      		rcall nrf24_csn_digitalWrite
- 225               	.LVL29:
- 224:nrf24.c       **** 
- 226               		.loc 1 224 0
- 227 0090 8C2F      		mov r24,r28
- 228               	/* epilogue start */
- 229 0092 CF91      		pop r28
- 230               	.LVL30:
- 231 0094 0895      		ret
- 232               		.cfi_endproc
- 233               	.LFE12:
- 235               	.global	nrf24_isSending
- 237               	nrf24_isSending:
- 238               	.LFB11:
- 201:nrf24.c       ****     uint8_t status;
- 239               		.loc 1 201 0
- 240               		.cfi_startproc
- 241               	/* prologue: function */
- 242               	/* frame size = 0 */
- 243               	/* stack size = 0 */
- 244               	.L__stack_usage = 0
- 205:nrf24.c       ****                 
- 245               		.loc 1 205 0
- 246 0096 00D0      		rcall nrf24_getStatus
- 247               	.LVL31:
- 248 0098 982F      		mov r25,r24
- 249 009a 9073      		andi r25,lo8(48)
- 250 009c 81E0      		ldi r24,lo8(1)
- 251               	.LVL32:
- 252 009e 01F0      		breq .L17
- 253 00a0 80E0      		ldi r24,0
- 254               	.L17:
- 215:nrf24.c       **** 
- 255               		.loc 1 215 0
- 256 00a2 0895      		ret
- 257               		.cfi_endproc
- 258               	.LFE11:
- 260               	.global	nrf24_lastMessageStatus
- 262               	nrf24_lastMessageStatus:
- 263               	.LFB13:
- 227:nrf24.c       ****     uint8_t rv;
- 264               		.loc 1 227 0
- 265               		.cfi_startproc
- 266               	/* prologue: function */
- 267               	/* frame size = 0 */
- 268               	/* stack size = 0 */
- 269               	.L__stack_usage = 0
- 230:nrf24.c       **** 
- 270               		.loc 1 230 0
- 271 00a4 00D0      		rcall nrf24_getStatus
- 272               	.LVL33:
- 233:nrf24.c       ****     {
- 273               		.loc 1 233 0
- 274 00a6 85FD      		sbrc r24,5
- 275 00a8 00C0      		rjmp .L23
- 239:nrf24.c       ****     {
- 276               		.loc 1 239 0
- 277 00aa 84FD      		sbrc r24,4
- 278 00ac 00C0      		rjmp .L24
- 246:nrf24.c       ****     }
- 279               		.loc 1 246 0
- 280 00ae 8FEF      		ldi r24,lo8(-1)
- 281               	.LVL34:
- 282 00b0 0895      		ret
- 283               	.LVL35:
- 284               	.L23:
- 235:nrf24.c       ****     }
- 285               		.loc 1 235 0
- 286 00b2 80E0      		ldi r24,0
- 287               	.LVL36:
- 288 00b4 0895      		ret
- 289               	.LVL37:
- 290               	.L24:
- 241:nrf24.c       ****     }  
- 291               		.loc 1 241 0
- 292 00b6 81E0      		ldi r24,lo8(1)
- 293               	.LVL38:
- 248:nrf24.c       **** 
- 294               		.loc 1 248 0
- 295 00b8 0895      		ret
- 296               		.cfi_endproc
- 297               	.LFE13:
- 299               	.global	nrf24_transferSync
- 301               	nrf24_transferSync:
- 302               	.LFB18:
- 310:nrf24.c       **** 
- 311:nrf24.c       **** /* send and receive multiple bytes over SPI */
- 312:nrf24.c       **** void nrf24_transferSync(uint8_t* dataout,uint8_t* datain,uint8_t len)
- 313:nrf24.c       **** {
- 303               		.loc 1 313 0
- 304               		.cfi_startproc
- 305               	.LVL39:
- 306 00ba EF92      		push r14
- 307               	.LCFI7:
- 308               		.cfi_def_cfa_offset 3
- 309               		.cfi_offset 14, -2
- 310 00bc FF92      		push r15
- 311               	.LCFI8:
- 312               		.cfi_def_cfa_offset 4
- 313               		.cfi_offset 15, -3
- 314 00be 0F93      		push r16
- 315               	.LCFI9:
- 316               		.cfi_def_cfa_offset 5
- 317               		.cfi_offset 16, -4
- 318 00c0 1F93      		push r17
- 319               	.LCFI10:
- 320               		.cfi_def_cfa_offset 6
- 321               		.cfi_offset 17, -5
- 322 00c2 CF93      		push r28
- 323               	.LCFI11:
- 324               		.cfi_def_cfa_offset 7
- 325               		.cfi_offset 28, -6
- 326 00c4 DF93      		push r29
- 327               	.LCFI12:
- 328               		.cfi_def_cfa_offset 8
- 329               		.cfi_offset 29, -7
- 330               	/* prologue: function */
- 331               	/* frame size = 0 */
- 332               	/* stack size = 6 */
- 333               	.L__stack_usage = 6
- 334               	.LVL40:
- 335 00c6 EC01      		movw r28,r24
- 336 00c8 8B01      		movw r16,r22
- 337 00ca 7C01      		movw r14,r24
- 338 00cc E40E      		add r14,r20
- 339 00ce F11C      		adc r15,__zero_reg__
- 340               	.LVL41:
- 341               	.L26:
- 314:nrf24.c       ****     uint8_t i;
- 315:nrf24.c       **** 
- 316:nrf24.c       ****     for(i=0;i<len;i++)
- 342               		.loc 1 316 0 discriminator 1
- 343 00d0 CE15      		cp r28,r14
- 344 00d2 DF05      		cpc r29,r15
- 345 00d4 01F0      		breq .L28
- 317:nrf24.c       ****     {
- 318:nrf24.c       ****         datain[i] = spi_transfer(dataout[i]);
- 346               		.loc 1 318 0 discriminator 3
- 347 00d6 8991      		ld r24,Y+
- 348               	.LVL42:
- 349 00d8 00D0      		rcall spi_transfer
- 350               	.LVL43:
- 351 00da F801      		movw r30,r16
- 352 00dc 8193      		st Z+,r24
- 353 00de 8F01      		movw r16,r30
- 354               	.LVL44:
- 355 00e0 00C0      		rjmp .L26
- 356               	.L28:
- 357               	/* epilogue start */
- 319:nrf24.c       ****     }
- 320:nrf24.c       **** 
- 321:nrf24.c       **** }
- 358               		.loc 1 321 0
- 359 00e2 DF91      		pop r29
- 360 00e4 CF91      		pop r28
- 361               	.LVL45:
- 362 00e6 1F91      		pop r17
- 363 00e8 0F91      		pop r16
- 364 00ea FF90      		pop r15
- 365 00ec EF90      		pop r14
- 366 00ee 0895      		ret
- 367               		.cfi_endproc
- 368               	.LFE18:
- 370               	.global	nrf24_transmitSync
- 372               	nrf24_transmitSync:
- 373               	.LFB19:
- 322:nrf24.c       **** 
- 323:nrf24.c       **** /* send multiple bytes over SPI */
- 324:nrf24.c       **** void nrf24_transmitSync(uint8_t* dataout,uint8_t len)
- 325:nrf24.c       **** {
- 374               		.loc 1 325 0
- 375               		.cfi_startproc
- 376               	.LVL46:
- 377 00f0 0F93      		push r16
- 378               	.LCFI13:
- 379               		.cfi_def_cfa_offset 3
- 380               		.cfi_offset 16, -2
- 381 00f2 1F93      		push r17
- 382               	.LCFI14:
- 383               		.cfi_def_cfa_offset 4
- 384               		.cfi_offset 17, -3
- 385 00f4 CF93      		push r28
- 386               	.LCFI15:
- 387               		.cfi_def_cfa_offset 5
- 388               		.cfi_offset 28, -4
- 389 00f6 DF93      		push r29
- 390               	.LCFI16:
- 391               		.cfi_def_cfa_offset 6
- 392               		.cfi_offset 29, -5
- 393               	/* prologue: function */
- 394               	/* frame size = 0 */
- 395               	/* stack size = 4 */
- 396               	.L__stack_usage = 4
- 397               	.LVL47:
- 398 00f8 EC01      		movw r28,r24
- 399 00fa 8C01      		movw r16,r24
- 400 00fc 060F      		add r16,r22
- 401 00fe 111D      		adc r17,__zero_reg__
- 402               	.LVL48:
- 403               	.L30:
- 326:nrf24.c       ****     uint8_t i;
- 327:nrf24.c       ****     
- 328:nrf24.c       ****     for(i=0;i<len;i++)
- 404               		.loc 1 328 0 discriminator 1
- 405 0100 C017      		cp r28,r16
- 406 0102 D107      		cpc r29,r17
- 407 0104 01F0      		breq .L32
- 329:nrf24.c       ****     {
- 330:nrf24.c       ****         spi_transfer(dataout[i]);
- 408               		.loc 1 330 0 discriminator 3
- 409 0106 8991      		ld r24,Y+
- 410               	.LVL49:
- 411 0108 00D0      		rcall spi_transfer
- 412               	.LVL50:
- 413 010a 00C0      		rjmp .L30
- 414               	.L32:
- 415               	/* epilogue start */
- 331:nrf24.c       ****     }
- 332:nrf24.c       **** 
- 333:nrf24.c       **** }
- 416               		.loc 1 333 0
- 417 010c DF91      		pop r29
- 418 010e CF91      		pop r28
- 419               	.LVL51:
- 420 0110 1F91      		pop r17
- 421 0112 0F91      		pop r16
- 422 0114 0895      		ret
- 423               		.cfi_endproc
- 424               	.LFE19:
- 426               	.global	nrf24_configRegister
- 428               	nrf24_configRegister:
- 429               	.LFB20:
- 334:nrf24.c       **** 
- 335:nrf24.c       **** /* Clocks only one byte into the given nrf24 register */
- 336:nrf24.c       **** void nrf24_configRegister(uint8_t reg, uint8_t value)
- 337:nrf24.c       **** {
- 430               		.loc 1 337 0
- 431               		.cfi_startproc
- 432               	.LVL52:
- 433 0116 1F93      		push r17
- 434               	.LCFI17:
- 435               		.cfi_def_cfa_offset 3
- 436               		.cfi_offset 17, -2
- 437 0118 CF93      		push r28
- 438               	.LCFI18:
- 439               		.cfi_def_cfa_offset 4
- 440               		.cfi_offset 28, -3
- 441 011a DF93      		push r29
- 442               	.LCFI19:
- 443               		.cfi_def_cfa_offset 5
- 444               		.cfi_offset 29, -4
- 445 011c 1F92      		push __zero_reg__
- 446               	.LCFI20:
- 447               		.cfi_def_cfa_offset 6
- 448 011e CDB7      		in r28,__SP_L__
- 449 0120 DEB7      		in r29,__SP_H__
- 450               	.LCFI21:
- 451               		.cfi_def_cfa_register 28
- 452               	/* prologue: function */
- 453               	/* frame size = 1 */
- 454               	/* stack size = 4 */
- 455               	.L__stack_usage = 4
- 456 0122 182F      		mov r17,r24
- 338:nrf24.c       ****     nrf24_csn_digitalWrite(LOW);
- 457               		.loc 1 338 0
- 458 0124 80E0      		ldi r24,0
- 459               	.LVL53:
- 460 0126 6983      		std Y+1,r22
- 461 0128 00D0      		rcall nrf24_csn_digitalWrite
- 462               	.LVL54:
- 339:nrf24.c       ****     spi_transfer(W_REGISTER | (REGISTER_MASK & reg));
- 463               		.loc 1 339 0
- 464 012a 812F      		mov r24,r17
- 465 012c 8F71      		andi r24,lo8(31)
- 466 012e 8062      		ori r24,lo8(32)
- 467 0130 00D0      		rcall spi_transfer
- 468               	.LVL55:
- 340:nrf24.c       ****     spi_transfer(value);
- 469               		.loc 1 340 0
- 470 0132 6981      		ldd r22,Y+1
- 471 0134 862F      		mov r24,r22
- 472 0136 00D0      		rcall spi_transfer
- 473               	.LVL56:
- 341:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);
- 474               		.loc 1 341 0
- 475 0138 81E0      		ldi r24,lo8(1)
- 476               	/* epilogue start */
- 342:nrf24.c       **** }
- 477               		.loc 1 342 0
- 478 013a 0F90      		pop __tmp_reg__
- 479 013c DF91      		pop r29
- 480 013e CF91      		pop r28
- 481 0140 1F91      		pop r17
- 482               	.LVL57:
- 341:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);
- 483               		.loc 1 341 0
- 484 0142 00C0      		rjmp nrf24_csn_digitalWrite
- 485               	.LVL58:
- 486               		.cfi_endproc
- 487               	.LFE20:
- 489               	.global	nrf24_getData
- 491               	nrf24_getData:
- 492               	.LFB8:
- 136:nrf24.c       ****     /* Pull down chip select */
- 493               		.loc 1 136 0
- 494               		.cfi_startproc
- 495               	.LVL59:
- 496 0144 CF93      		push r28
- 497               	.LCFI22:
- 498               		.cfi_def_cfa_offset 3
- 499               		.cfi_offset 28, -2
- 500 0146 DF93      		push r29
- 501               	.LCFI23:
- 502               		.cfi_def_cfa_offset 4
- 503               		.cfi_offset 29, -3
- 504               	/* prologue: function */
- 505               	/* frame size = 0 */
- 506               	/* stack size = 2 */
- 507               	.L__stack_usage = 2
- 508 0148 EC01      		movw r28,r24
- 138:nrf24.c       **** 
- 509               		.loc 1 138 0
- 510 014a 80E0      		ldi r24,0
- 511               	.LVL60:
- 512 014c 00D0      		rcall nrf24_csn_digitalWrite
- 513               	.LVL61:
- 141:nrf24.c       ****     
- 514               		.loc 1 141 0
- 515 014e 81E6      		ldi r24,lo8(97)
- 516 0150 00D0      		rcall spi_transfer
- 517               	.LVL62:
- 144:nrf24.c       ****     
- 518               		.loc 1 144 0
- 519 0152 4091 0000 		lds r20,payload_len
- 520 0156 BE01      		movw r22,r28
- 521 0158 CE01      		movw r24,r28
- 522 015a 00D0      		rcall nrf24_transferSync
- 523               	.LVL63:
- 147:nrf24.c       **** 
- 524               		.loc 1 147 0
- 525 015c 81E0      		ldi r24,lo8(1)
- 526 015e 00D0      		rcall nrf24_csn_digitalWrite
- 527               	.LVL64:
- 150:nrf24.c       **** }
- 528               		.loc 1 150 0
- 529 0160 60E4      		ldi r22,lo8(64)
- 530 0162 87E0      		ldi r24,lo8(7)
- 531               	/* epilogue start */
- 151:nrf24.c       **** 
- 532               		.loc 1 151 0
- 533 0164 DF91      		pop r29
- 534 0166 CF91      		pop r28
- 535               	.LVL65:
- 150:nrf24.c       **** }
- 536               		.loc 1 150 0
- 537 0168 00C0      		rjmp nrf24_configRegister
- 538               	.LVL66:
- 539               		.cfi_endproc
- 540               	.LFE8:
- 542               	.global	nrf24_powerUpRx
- 544               	nrf24_powerUpRx:
- 545               	.LFB14:
- 251:nrf24.c       ****     nrf24_csn_digitalWrite(LOW);
- 546               		.loc 1 251 0
- 547               		.cfi_startproc
- 548               	/* prologue: function */
- 549               	/* frame size = 0 */
- 550               	/* stack size = 0 */
- 551               	.L__stack_usage = 0
- 252:nrf24.c       ****     spi_transfer(FLUSH_RX);
- 552               		.loc 1 252 0
- 553 016a 80E0      		ldi r24,0
- 554 016c 00D0      		rcall nrf24_csn_digitalWrite
- 555               	.LVL67:
- 253:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);
- 556               		.loc 1 253 0
- 557 016e 82EE      		ldi r24,lo8(-30)
- 558 0170 00D0      		rcall spi_transfer
- 559               	.LVL68:
- 254:nrf24.c       **** 
- 560               		.loc 1 254 0
- 561 0172 81E0      		ldi r24,lo8(1)
- 562 0174 00D0      		rcall nrf24_csn_digitalWrite
- 563               	.LVL69:
- 256:nrf24.c       **** 
- 564               		.loc 1 256 0
- 565 0176 60E7      		ldi r22,lo8(112)
- 566 0178 87E0      		ldi r24,lo8(7)
- 567 017a 00D0      		rcall nrf24_configRegister
- 568               	.LVL70:
- 258:nrf24.c       ****     nrf24_configRegister(CONFIG,nrf24_CONFIG|((1<<PWR_UP)|(1<<PRIM_RX)));    
- 569               		.loc 1 258 0
- 570 017c 80E0      		ldi r24,0
- 571 017e 00D0      		rcall nrf24_ce_digitalWrite
- 572               	.LVL71:
- 259:nrf24.c       ****     nrf24_ce_digitalWrite(HIGH);
- 573               		.loc 1 259 0
- 574 0180 6BE0      		ldi r22,lo8(11)
- 575 0182 80E0      		ldi r24,0
- 576 0184 00D0      		rcall nrf24_configRegister
- 577               	.LVL72:
- 260:nrf24.c       **** }
- 578               		.loc 1 260 0
- 579 0186 81E0      		ldi r24,lo8(1)
- 580 0188 00C0      		rjmp nrf24_ce_digitalWrite
- 581               	.LVL73:
- 582               		.cfi_endproc
- 583               	.LFE14:
- 585               	.global	nrf24_config
- 587               	nrf24_config:
- 588               	.LFB1:
-  28:nrf24.c       ****     /* Use static payload length ... */
- 589               		.loc 1 28 0
- 590               		.cfi_startproc
- 591               	.LVL74:
- 592               	/* prologue: function */
- 593               	/* frame size = 0 */
- 594               	/* stack size = 0 */
- 595               	.L__stack_usage = 0
-  30:nrf24.c       **** 
- 596               		.loc 1 30 0
- 597 018a 6093 0000 		sts payload_len,r22
-  33:nrf24.c       **** 
- 598               		.loc 1 33 0
- 599 018e 682F      		mov r22,r24
- 600               	.LVL75:
- 601 0190 85E0      		ldi r24,lo8(5)
- 602               	.LVL76:
- 603 0192 00D0      		rcall nrf24_configRegister
- 604               	.LVL77:
-  44:nrf24.c       ****     nrf24_configRegister(RX_PW_P1, payload_len); // Data payload pipe
- 605               		.loc 1 44 0
- 606 0194 6091 0000 		lds r22,payload_len
- 607 0198 81E1      		ldi r24,lo8(17)
- 608 019a 00D0      		rcall nrf24_configRegister
- 609               	.LVL78:
-  45:nrf24.c       ****     nrf24_configRegister(RX_PW_P2, 0x00); // Pipe not used 
- 610               		.loc 1 45 0
- 611 019c 6091 0000 		lds r22,payload_len
- 612 01a0 82E1      		ldi r24,lo8(18)
- 613 01a2 00D0      		rcall nrf24_configRegister
- 614               	.LVL79:
-  46:nrf24.c       ****     nrf24_configRegister(RX_PW_P3, 0x00); // Pipe not used 
- 615               		.loc 1 46 0
- 616 01a4 60E0      		ldi r22,0
- 617 01a6 83E1      		ldi r24,lo8(19)
- 618 01a8 00D0      		rcall nrf24_configRegister
- 619               	.LVL80:
-  47:nrf24.c       ****     nrf24_configRegister(RX_PW_P4, 0x00); // Pipe not used 
- 620               		.loc 1 47 0
- 621 01aa 60E0      		ldi r22,0
- 622 01ac 84E1      		ldi r24,lo8(20)
- 623 01ae 00D0      		rcall nrf24_configRegister
- 624               	.LVL81:
-  48:nrf24.c       ****     nrf24_configRegister(RX_PW_P5, 0x00); // Pipe not used 
- 625               		.loc 1 48 0
- 626 01b0 60E0      		ldi r22,0
- 627 01b2 85E1      		ldi r24,lo8(21)
- 628 01b4 00D0      		rcall nrf24_configRegister
- 629               	.LVL82:
-  49:nrf24.c       **** #endif
- 630               		.loc 1 49 0
- 631 01b6 60E0      		ldi r22,0
- 632 01b8 86E1      		ldi r24,lo8(22)
- 633 01ba 00D0      		rcall nrf24_configRegister
- 634               	.LVL83:
-  65:nrf24.c       **** 
- 635               		.loc 1 65 0
- 636 01bc 6FE4      		ldi r22,lo8(79)
- 637 01be 84E0      		ldi r24,lo8(4)
- 638 01c0 00D0      		rcall nrf24_configRegister
- 639               	.LVL84:
-  71:nrf24.c       **** }
- 640               		.loc 1 71 0
- 641 01c2 00C0      		rjmp nrf24_powerUpRx
- 642               	.LVL85:
- 643               		.cfi_endproc
- 644               	.LFE1:
- 646               	.global	nrf24_powerUpTx
- 648               	nrf24_powerUpTx:
- 649               	.LFB15:
- 264:nrf24.c       ****     nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
- 650               		.loc 1 264 0
- 651               		.cfi_startproc
- 652               	/* prologue: function */
- 653               	/* frame size = 0 */
- 654               	/* stack size = 0 */
- 655               	.L__stack_usage = 0
- 265:nrf24.c       **** 
- 656               		.loc 1 265 0
- 657 01c4 60E7      		ldi r22,lo8(112)
- 658 01c6 87E0      		ldi r24,lo8(7)
- 659 01c8 00D0      		rcall nrf24_configRegister
- 660               	.LVL86:
- 267:nrf24.c       **** }
- 661               		.loc 1 267 0
- 662 01ca 6AE0      		ldi r22,lo8(10)
- 663 01cc 80E0      		ldi r24,0
- 664 01ce 00C0      		rjmp nrf24_configRegister
- 665               	.LVL87:
- 666               		.cfi_endproc
- 667               	.LFE15:
- 669               	.global	nrf24_send
- 671               	nrf24_send:
- 672               	.LFB10:
- 165:nrf24.c       ****     /* Go to Standby-I first */
- 673               		.loc 1 165 0
- 674               		.cfi_startproc
- 675               	.LVL88:
- 676 01d0 CF93      		push r28
- 677               	.LCFI24:
- 678               		.cfi_def_cfa_offset 3
- 679               		.cfi_offset 28, -2
- 680 01d2 DF93      		push r29
- 681               	.LCFI25:
- 682               		.cfi_def_cfa_offset 4
- 683               		.cfi_offset 29, -3
- 684               	/* prologue: function */
- 685               	/* frame size = 0 */
- 686               	/* stack size = 2 */
- 687               	.L__stack_usage = 2
- 688 01d4 EC01      		movw r28,r24
- 167:nrf24.c       ****      
- 689               		.loc 1 167 0
- 690 01d6 80E0      		ldi r24,0
- 691               	.LVL89:
- 692 01d8 00D0      		rcall nrf24_ce_digitalWrite
- 693               	.LVL90:
- 170:nrf24.c       **** 
- 694               		.loc 1 170 0
- 695 01da 00D0      		rcall nrf24_powerUpTx
- 696               	.LVL91:
- 185:nrf24.c       **** 
- 697               		.loc 1 185 0
- 698 01dc 80E0      		ldi r24,0
- 699 01de 00D0      		rcall nrf24_csn_digitalWrite
- 700               	.LVL92:
- 188:nrf24.c       **** 
- 701               		.loc 1 188 0
- 702 01e0 80EA      		ldi r24,lo8(-96)
- 703 01e2 00D0      		rcall spi_transfer
- 704               	.LVL93:
- 191:nrf24.c       **** 
- 705               		.loc 1 191 0
- 706 01e4 6091 0000 		lds r22,payload_len
- 707 01e8 CE01      		movw r24,r28
- 708 01ea 00D0      		rcall nrf24_transmitSync
- 709               	.LVL94:
- 194:nrf24.c       **** 
- 710               		.loc 1 194 0
- 711 01ec 81E0      		ldi r24,lo8(1)
- 712 01ee 00D0      		rcall nrf24_csn_digitalWrite
- 713               	.LVL95:
- 197:nrf24.c       **** }
- 714               		.loc 1 197 0
- 715 01f0 81E0      		ldi r24,lo8(1)
- 716               	/* epilogue start */
- 198:nrf24.c       **** 
- 717               		.loc 1 198 0
- 718 01f2 DF91      		pop r29
- 719 01f4 CF91      		pop r28
- 720               	.LVL96:
- 197:nrf24.c       **** }
- 721               		.loc 1 197 0
- 722 01f6 00C0      		rjmp nrf24_ce_digitalWrite
- 723               	.LVL97:
- 724               		.cfi_endproc
- 725               	.LFE10:
- 727               	.global	nrf24_powerDown
- 729               	nrf24_powerDown:
- 730               	.LFB16:
- 271:nrf24.c       ****     nrf24_ce_digitalWrite(LOW);
- 731               		.loc 1 271 0
- 732               		.cfi_startproc
- 733               	/* prologue: function */
- 734               	/* frame size = 0 */
- 735               	/* stack size = 0 */
- 736               	.L__stack_usage = 0
- 272:nrf24.c       ****     nrf24_configRegister(CONFIG,nrf24_CONFIG);
- 737               		.loc 1 272 0
- 738 01f8 80E0      		ldi r24,0
- 739 01fa 00D0      		rcall nrf24_ce_digitalWrite
- 740               	.LVL98:
- 273:nrf24.c       **** }
- 741               		.loc 1 273 0
- 742 01fc 68E0      		ldi r22,lo8(8)
- 743 01fe 80E0      		ldi r24,0
- 744 0200 00C0      		rjmp nrf24_configRegister
- 745               	.LVL99:
- 746               		.cfi_endproc
- 747               	.LFE16:
- 749               	.global	nrf24_readRegister
- 751               	nrf24_readRegister:
- 752               	.LFB21:
- 343:nrf24.c       **** 
- 344:nrf24.c       **** /* Read single register from nrf24 */
- 345:nrf24.c       **** void nrf24_readRegister(uint8_t reg, uint8_t* value, uint8_t len)
- 346:nrf24.c       **** {
- 753               		.loc 1 346 0
- 754               		.cfi_startproc
- 755               	.LVL100:
- 756 0202 EF92      		push r14
- 757               	.LCFI26:
- 758               		.cfi_def_cfa_offset 3
- 759               		.cfi_offset 14, -2
- 760 0204 FF92      		push r15
- 761               	.LCFI27:
- 762               		.cfi_def_cfa_offset 4
- 763               		.cfi_offset 15, -3
- 764 0206 1F93      		push r17
- 765               	.LCFI28:
- 766               		.cfi_def_cfa_offset 5
- 767               		.cfi_offset 17, -4
- 768 0208 CF93      		push r28
- 769               	.LCFI29:
- 770               		.cfi_def_cfa_offset 6
- 771               		.cfi_offset 28, -5
- 772 020a DF93      		push r29
- 773               	.LCFI30:
- 774               		.cfi_def_cfa_offset 7
- 775               		.cfi_offset 29, -6
- 776 020c 1F92      		push __zero_reg__
- 777               	.LCFI31:
- 778               		.cfi_def_cfa_offset 8
- 779 020e CDB7      		in r28,__SP_L__
- 780 0210 DEB7      		in r29,__SP_H__
- 781               	.LCFI32:
- 782               		.cfi_def_cfa_register 28
- 783               	/* prologue: function */
- 784               	/* frame size = 1 */
- 785               	/* stack size = 6 */
- 786               	.L__stack_usage = 6
- 787 0212 182F      		mov r17,r24
- 788 0214 7B01      		movw r14,r22
- 347:nrf24.c       ****     nrf24_csn_digitalWrite(LOW);
- 789               		.loc 1 347 0
- 790 0216 80E0      		ldi r24,0
- 791               	.LVL101:
- 792 0218 4983      		std Y+1,r20
- 793 021a 00D0      		rcall nrf24_csn_digitalWrite
- 794               	.LVL102:
- 348:nrf24.c       ****     spi_transfer(R_REGISTER | (REGISTER_MASK & reg));
- 795               		.loc 1 348 0
- 796 021c 812F      		mov r24,r17
- 797 021e 8F71      		andi r24,lo8(31)
- 798 0220 00D0      		rcall spi_transfer
- 799               	.LVL103:
- 349:nrf24.c       ****     nrf24_transferSync(value,value,len);
- 800               		.loc 1 349 0
- 801 0222 4981      		ldd r20,Y+1
- 802 0224 B701      		movw r22,r14
- 803 0226 C701      		movw r24,r14
- 804 0228 00D0      		rcall nrf24_transferSync
- 805               	.LVL104:
- 350:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);
- 806               		.loc 1 350 0
- 807 022a 81E0      		ldi r24,lo8(1)
- 808               	/* epilogue start */
- 351:nrf24.c       **** }
- 809               		.loc 1 351 0
- 810 022c 0F90      		pop __tmp_reg__
- 811 022e DF91      		pop r29
- 812 0230 CF91      		pop r28
- 813 0232 1F91      		pop r17
- 814               	.LVL105:
- 815 0234 FF90      		pop r15
- 816 0236 EF90      		pop r14
- 817               	.LVL106:
- 350:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);
- 818               		.loc 1 350 0
- 819 0238 00C0      		rjmp nrf24_csn_digitalWrite
- 820               	.LVL107:
- 821               		.cfi_endproc
- 822               	.LFE21:
- 824               	.global	nrf24_rxFifoEmpty
- 826               	nrf24_rxFifoEmpty:
- 827               	.LFB6:
- 115:nrf24.c       ****     uint8_t fifoStatus;
- 828               		.loc 1 115 0
- 829               		.cfi_startproc
- 830 023a CF93      		push r28
- 831               	.LCFI33:
- 832               		.cfi_def_cfa_offset 3
- 833               		.cfi_offset 28, -2
- 834 023c DF93      		push r29
- 835               	.LCFI34:
- 836               		.cfi_def_cfa_offset 4
- 837               		.cfi_offset 29, -3
- 838 023e 1F92      		push __zero_reg__
- 839               	.LCFI35:
- 840               		.cfi_def_cfa_offset 5
- 841 0240 CDB7      		in r28,__SP_L__
- 842 0242 DEB7      		in r29,__SP_H__
- 843               	.LCFI36:
- 844               		.cfi_def_cfa_register 28
- 845               	/* prologue: function */
- 846               	/* frame size = 1 */
- 847               	/* stack size = 3 */
- 848               	.L__stack_usage = 3
- 118:nrf24.c       ****     
- 849               		.loc 1 118 0
- 850 0244 41E0      		ldi r20,lo8(1)
- 851 0246 BE01      		movw r22,r28
- 852 0248 6F5F      		subi r22,-1
- 853 024a 7F4F      		sbci r23,-1
- 854 024c 87E1      		ldi r24,lo8(23)
- 855 024e 00D0      		rcall nrf24_readRegister
- 856               	.LVL108:
- 120:nrf24.c       **** }
- 857               		.loc 1 120 0
- 858 0250 8981      		ldd r24,Y+1
- 121:nrf24.c       **** 
- 859               		.loc 1 121 0
- 860 0252 8170      		andi r24,lo8(1)
- 861               	/* epilogue start */
- 862 0254 0F90      		pop __tmp_reg__
- 863 0256 DF91      		pop r29
- 864 0258 CF91      		pop r28
- 865 025a 0895      		ret
- 866               		.cfi_endproc
- 867               	.LFE6:
- 869               	.global	nrf24_dataReady
- 871               	nrf24_dataReady:
- 872               	.LFB5:
-  99:nrf24.c       ****     // See note in getData() function - just checking RX_DR isn't good enough
- 873               		.loc 1 99 0
- 874               		.cfi_startproc
- 875               	/* prologue: function */
- 876               	/* frame size = 0 */
- 877               	/* stack size = 0 */
- 878               	.L__stack_usage = 0
+  70:nrf24.c       **** 	    PORTA |= (1<<SCK);
+  84               		.loc 1 70 0
+  85 003a DC9A      		sbi 0x1b,4
+  71:nrf24.c       **** 
+  72:nrf24.c       ****         rx = rx << 1;
+  86               		.loc 1 72 0
+  87 003c 990F      		lsl r25
+  88               	.LVL2:
+  73:nrf24.c       ****         if (PINA & (1<<MISO)) {
+  89               		.loc 1 73 0
+  90 003e CD99      		sbic 0x19,5
+  74:nrf24.c       ****             rx |= 0x01;
+  91               		.loc 1 74 0
+  92 0040 9160      		ori r25,lo8(1)
+  93               	.LVL3:
+  94               	.L5:
+  75:nrf24.c       ****         }
+  76:nrf24.c       **** 
+  77:nrf24.c       **** 	    PORTA &= ~(1<<SCK);
+  95               		.loc 1 77 0 discriminator 2
+  96 0042 DC98      		cbi 0x1b,4
+  97               	.LVL4:
+  98               	.LVL5:
+  99 0044 2150      		subi r18,1
+ 100 0046 3109      		sbc r19,__zero_reg__
+ 101 0048 00F4      		brcc .L6
+  78:nrf24.c       **** 
+  79:nrf24.c       ****     }
+  80:nrf24.c       ****     return rx;
+  81:nrf24.c       **** }
+ 102               		.loc 1 81 0
+ 103 004a 892F      		mov r24,r25
+ 104 004c 0895      		ret
+ 105               		.cfi_endproc
+ 106               	.LFE1:
+ 108               	.global	nrf24_init
+ 110               	nrf24_init:
+ 111               	.LFB2:
+  82:nrf24.c       **** #endif
+  83:nrf24.c       **** 
+  84:nrf24.c       **** 
+  85:nrf24.c       **** void nrf24_init(void) 
+  86:nrf24.c       **** {
+ 112               		.loc 1 86 0
+ 113               		.cfi_startproc
+ 114               	/* prologue: function */
+ 115               	/* frame size = 0 */
+ 116               	/* stack size = 0 */
+ 117               	.L__stack_usage = 0
+ 118 004e 0895      		ret
+ 119               		.cfi_endproc
+ 120               	.LFE2:
+ 122               	.global	nrf24_configRegister
+ 124               	nrf24_configRegister:
+ 125               	.LFB4:
+  87:nrf24.c       **** //    nrf24_setupPins();
+  88:nrf24.c       **** //    nrf24_ce_digitalWrite(LOW);
+  89:nrf24.c       **** //    nrf24_csn_digitalWrite(HIGH);    
+  90:nrf24.c       **** }
+  91:nrf24.c       **** 
+  92:nrf24.c       **** 
+  93:nrf24.c       **** /* configure the module */
+  94:nrf24.c       **** void nrf24_config(uint8_t channel, uint8_t pay_length)
+  95:nrf24.c       **** {
+  96:nrf24.c       ****     /* Use static payload length ... */
+  97:nrf24.c       **** //    payload_len = pay_length;
+  98:nrf24.c       **** 
+  99:nrf24.c       ****     // Set RF channel
+ 100:nrf24.c       **** //    nrf24_configRegister(RF_CH, channel);
  101:nrf24.c       **** 
- 879               		.loc 1 101 0
- 880 025c 00D0      		rcall nrf24_getStatus
- 881               	.LVL109:
- 105:nrf24.c       ****     {
- 882               		.loc 1 105 0
- 883 025e 86FD      		sbrc r24,6
- 884 0260 00C0      		rjmp .L45
- 110:nrf24.c       **** }
- 885               		.loc 1 110 0
- 886 0262 00D0      		rcall nrf24_rxFifoEmpty
- 887               	.LVL110:
- 888 0264 91E0      		ldi r25,lo8(1)
- 889 0266 8823      		tst r24
- 890 0268 01F0      		breq .L43
- 891 026a 90E0      		ldi r25,0
- 892 026c 00C0      		rjmp .L43
- 893               	.LVL111:
- 894               	.L45:
- 107:nrf24.c       ****     }
- 895               		.loc 1 107 0
- 896 026e 91E0      		ldi r25,lo8(1)
- 897               	.LVL112:
- 898               	.L43:
- 111:nrf24.c       **** 
- 899               		.loc 1 111 0
- 900 0270 892F      		mov r24,r25
- 901 0272 0895      		ret
- 902               		.cfi_endproc
- 903               	.LFE5:
- 905               	.global	nrf24_retransmissionCount
- 907               	nrf24_retransmissionCount:
- 908               	.LFB9:
- 155:nrf24.c       ****     uint8_t rv;
- 909               		.loc 1 155 0
- 910               		.cfi_startproc
- 911 0274 CF93      		push r28
- 912               	.LCFI37:
- 913               		.cfi_def_cfa_offset 3
- 914               		.cfi_offset 28, -2
- 915 0276 DF93      		push r29
- 916               	.LCFI38:
- 917               		.cfi_def_cfa_offset 4
- 918               		.cfi_offset 29, -3
- 919 0278 1F92      		push __zero_reg__
- 920               	.LCFI39:
- 921               		.cfi_def_cfa_offset 5
- 922 027a CDB7      		in r28,__SP_L__
- 923 027c DEB7      		in r29,__SP_H__
- 924               	.LCFI40:
- 925               		.cfi_def_cfa_register 28
- 926               	/* prologue: function */
- 927               	/* frame size = 1 */
- 928               	/* stack size = 3 */
- 929               	.L__stack_usage = 3
- 157:nrf24.c       ****     rv = rv & 0x0F;
- 930               		.loc 1 157 0
- 931 027e 41E0      		ldi r20,lo8(1)
- 932 0280 BE01      		movw r22,r28
- 933 0282 6F5F      		subi r22,-1
- 934 0284 7F4F      		sbci r23,-1
- 935 0286 88E0      		ldi r24,lo8(8)
- 936 0288 00D0      		rcall nrf24_readRegister
- 937               	.LVL113:
- 158:nrf24.c       ****     return rv;
- 938               		.loc 1 158 0
- 939 028a 8981      		ldd r24,Y+1
- 940               	.LVL114:
- 160:nrf24.c       **** 
- 941               		.loc 1 160 0
- 942 028c 8F70      		andi r24,lo8(15)
- 943               	.LVL115:
- 944               	/* epilogue start */
- 945 028e 0F90      		pop __tmp_reg__
- 946 0290 DF91      		pop r29
- 947 0292 CF91      		pop r28
- 948 0294 0895      		ret
- 949               		.cfi_endproc
- 950               	.LFE9:
- 952               	.global	nrf24_writeRegister
- 954               	nrf24_writeRegister:
- 955               	.LFB22:
- 352:nrf24.c       **** 
- 353:nrf24.c       **** /* Write to a single register of nrf24 */
- 354:nrf24.c       **** void nrf24_writeRegister(uint8_t reg, uint8_t* value, uint8_t len) 
- 355:nrf24.c       **** {
- 956               		.loc 1 355 0
- 957               		.cfi_startproc
- 958               	.LVL116:
- 959 0296 FF92      		push r15
- 960               	.LCFI41:
- 961               		.cfi_def_cfa_offset 3
- 962               		.cfi_offset 15, -2
- 963 0298 0F93      		push r16
- 964               	.LCFI42:
- 965               		.cfi_def_cfa_offset 4
- 966               		.cfi_offset 16, -3
- 967 029a 1F93      		push r17
- 968               	.LCFI43:
- 969               		.cfi_def_cfa_offset 5
- 970               		.cfi_offset 17, -4
- 971 029c CF93      		push r28
- 972               	.LCFI44:
- 973               		.cfi_def_cfa_offset 6
- 974               		.cfi_offset 28, -5
- 975 029e DF93      		push r29
- 976               	.LCFI45:
- 977               		.cfi_def_cfa_offset 7
- 978               		.cfi_offset 29, -6
- 979 02a0 1F92      		push __zero_reg__
- 980               	.LCFI46:
- 981               		.cfi_def_cfa_offset 8
- 982 02a2 CDB7      		in r28,__SP_L__
- 983 02a4 DEB7      		in r29,__SP_H__
- 984               	.LCFI47:
- 985               		.cfi_def_cfa_register 28
- 986               	/* prologue: function */
- 987               	/* frame size = 1 */
- 988               	/* stack size = 6 */
- 989               	.L__stack_usage = 6
- 990 02a6 F82E      		mov r15,r24
- 991 02a8 8B01      		movw r16,r22
- 356:nrf24.c       ****     nrf24_csn_digitalWrite(LOW);
- 992               		.loc 1 356 0
- 993 02aa 80E0      		ldi r24,0
- 994               	.LVL117:
- 995 02ac 4983      		std Y+1,r20
- 996 02ae 00D0      		rcall nrf24_csn_digitalWrite
- 997               	.LVL118:
- 357:nrf24.c       ****     spi_transfer(W_REGISTER | (REGISTER_MASK & reg));
- 998               		.loc 1 357 0
- 999 02b0 8F2D      		mov r24,r15
- 1000 02b2 8F71      		andi r24,lo8(31)
- 1001 02b4 8062      		ori r24,lo8(32)
- 1002 02b6 00D0      		rcall spi_transfer
- 1003               	.LVL119:
- 358:nrf24.c       ****     nrf24_transmitSync(value,len);
- 1004               		.loc 1 358 0
- 1005 02b8 4981      		ldd r20,Y+1
- 1006 02ba 642F      		mov r22,r20
- 1007 02bc C801      		movw r24,r16
- 1008 02be 00D0      		rcall nrf24_transmitSync
- 1009               	.LVL120:
- 359:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);
- 1010               		.loc 1 359 0
- 1011 02c0 81E0      		ldi r24,lo8(1)
- 1012               	/* epilogue start */
- 360:nrf24.c       **** }
- 1013               		.loc 1 360 0
- 1014 02c2 0F90      		pop __tmp_reg__
- 1015 02c4 DF91      		pop r29
- 1016 02c6 CF91      		pop r28
- 1017 02c8 1F91      		pop r17
- 1018 02ca 0F91      		pop r16
- 1019               	.LVL121:
- 1020 02cc FF90      		pop r15
- 1021               	.LVL122:
- 359:nrf24.c       ****     nrf24_csn_digitalWrite(HIGH);
- 1022               		.loc 1 359 0
- 1023 02ce 00C0      		rjmp nrf24_csn_digitalWrite
- 1024               	.LVL123:
- 1025               		.cfi_endproc
- 1026               	.LFE22:
- 1028               	.global	nrf24_rx_address
- 1030               	nrf24_rx_address:
- 1031               	.LFB2:
-  76:nrf24.c       ****     nrf24_ce_digitalWrite(LOW);
- 1032               		.loc 1 76 0
- 1033               		.cfi_startproc
- 1034               	.LVL124:
- 1035 02d0 CF93      		push r28
- 1036               	.LCFI48:
- 1037               		.cfi_def_cfa_offset 3
- 1038               		.cfi_offset 28, -2
- 1039 02d2 DF93      		push r29
- 1040               	.LCFI49:
- 1041               		.cfi_def_cfa_offset 4
- 1042               		.cfi_offset 29, -3
- 1043               	/* prologue: function */
- 1044               	/* frame size = 0 */
- 1045               	/* stack size = 2 */
- 1046               	.L__stack_usage = 2
- 1047 02d4 EC01      		movw r28,r24
-  77:nrf24.c       ****     nrf24_writeRegister(RX_ADDR_P1,adr,nrf24_ADDR_LEN);
- 1048               		.loc 1 77 0
- 1049 02d6 80E0      		ldi r24,0
- 1050               	.LVL125:
- 1051 02d8 00D0      		rcall nrf24_ce_digitalWrite
- 1052               	.LVL126:
-  78:nrf24.c       ****     nrf24_ce_digitalWrite(HIGH);
- 1053               		.loc 1 78 0
- 1054 02da 45E0      		ldi r20,lo8(5)
- 1055 02dc BE01      		movw r22,r28
- 1056 02de 8BE0      		ldi r24,lo8(11)
- 1057 02e0 00D0      		rcall nrf24_writeRegister
- 1058               	.LVL127:
-  79:nrf24.c       **** }
- 1059               		.loc 1 79 0
- 1060 02e2 81E0      		ldi r24,lo8(1)
- 1061               	/* epilogue start */
-  80:nrf24.c       **** 
- 1062               		.loc 1 80 0
- 1063 02e4 DF91      		pop r29
- 1064 02e6 CF91      		pop r28
- 1065               	.LVL128:
-  79:nrf24.c       **** }
- 1066               		.loc 1 79 0
- 1067 02e8 00C0      		rjmp nrf24_ce_digitalWrite
- 1068               	.LVL129:
- 1069               		.cfi_endproc
- 1070               	.LFE2:
- 1072               	.global	nrf24_tx_address
- 1074               	nrf24_tx_address:
- 1075               	.LFB4:
-  90:nrf24.c       ****     /* RX_ADDR_P0 must be set to the sending addr for auto ack to work. */
- 1076               		.loc 1 90 0
- 1077               		.cfi_startproc
- 1078               	.LVL130:
- 1079 02ea CF93      		push r28
- 1080               	.LCFI50:
- 1081               		.cfi_def_cfa_offset 3
- 1082               		.cfi_offset 28, -2
- 1083 02ec DF93      		push r29
- 1084               	.LCFI51:
- 1085               		.cfi_def_cfa_offset 4
- 1086               		.cfi_offset 29, -3
- 1087               	/* prologue: function */
- 1088               	/* frame size = 0 */
- 1089               	/* stack size = 2 */
- 1090               	.L__stack_usage = 2
- 1091 02ee EC01      		movw r28,r24
-  92:nrf24.c       ****     nrf24_writeRegister(TX_ADDR,adr,nrf24_ADDR_LEN);
- 1092               		.loc 1 92 0
- 1093 02f0 45E0      		ldi r20,lo8(5)
- 1094 02f2 BC01      		movw r22,r24
- 1095 02f4 8AE0      		ldi r24,lo8(10)
- 1096               	.LVL131:
- 1097 02f6 00D0      		rcall nrf24_writeRegister
- 1098               	.LVL132:
-  93:nrf24.c       **** }
- 1099               		.loc 1 93 0
- 1100 02f8 45E0      		ldi r20,lo8(5)
- 1101 02fa BE01      		movw r22,r28
- 1102 02fc 80E1      		ldi r24,lo8(16)
- 1103               	/* epilogue start */
-  94:nrf24.c       **** 
- 1104               		.loc 1 94 0
- 1105 02fe DF91      		pop r29
- 1106 0300 CF91      		pop r28
- 1107               	.LVL133:
-  93:nrf24.c       **** }
- 1108               		.loc 1 93 0
- 1109 0302 00C0      		rjmp nrf24_writeRegister
- 1110               	.LVL134:
- 1111               		.cfi_endproc
- 1112               	.LFE4:
- 1114               		.comm	payload_len,1,1
- 1115               	.Letext0:
- 1116               		.file 2 "nrf24.h"
- 1117               		.file 3 "/usr/avr/include/stdint.h"
+ 102:nrf24.c       ****     // Set length of incoming payload 
+ 103:nrf24.c       **** #if 0
+ 104:nrf24.c       **** 	nrf24_configRegister(RX_PW_P0, 0x00); // Auto-ACK pipe ...
+ 105:nrf24.c       ****     nrf24_configRegister(RX_PW_P1, payload_len); // Data payload pipe
+ 106:nrf24.c       ****     nrf24_configRegister(RX_PW_P2, 0x00); // Pipe not used 
+ 107:nrf24.c       ****     nrf24_configRegister(RX_PW_P3, 0x00); // Pipe not used 
+ 108:nrf24.c       ****     nrf24_configRegister(RX_PW_P4, 0x00); // Pipe not used 
+ 109:nrf24.c       ****     nrf24_configRegister(RX_PW_P5, 0x00); // Pipe not used 
+ 110:nrf24.c       **** #else
+ 111:nrf24.c       **** 	nrf24_configRegister(RX_PW_P0, pay_length); // Auto-ACK pipe ...
+ 112:nrf24.c       ****     nrf24_configRegister(RX_PW_P1, pay_length); // Data payload pipe
+ 113:nrf24.c       ****     nrf24_configRegister(RX_PW_P2, 0x00); // Pipe not used 
+ 114:nrf24.c       ****     nrf24_configRegister(RX_PW_P3, 0x00); // Pipe not used 
+ 115:nrf24.c       ****     nrf24_configRegister(RX_PW_P4, 0x00); // Pipe not used 
+ 116:nrf24.c       ****     nrf24_configRegister(RX_PW_P5, 0x00); // Pipe not used 
+ 117:nrf24.c       **** #endif
+ 118:nrf24.c       **** 
+ 119:nrf24.c       ****     // 250Kbps, TX gain: 0dbm
+ 120:nrf24.c       **** //    nrf24_configRegister(RF_SETUP, (2<<RF_DR) | ((0x03)<<RF_PWR));
+ 121:nrf24.c       **** 
+ 122:nrf24.c       ****     // CRC enable, 1 byte CRC length
+ 123:nrf24.c       **** //    nrf24_configRegister(CONFIG, nrf24_CONFIG);
+ 124:nrf24.c       **** 
+ 125:nrf24.c       ****     // Auto Acknowledgment
+ 126:nrf24.c       **** //    nrf24_configRegister(EN_AA,(1<<ENAA_P0)|(1<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(
+ 127:nrf24.c       **** 
+ 128:nrf24.c       ****     // Enable RX addresses
+ 129:nrf24.c       **** //    nrf24_configRegister(EN_RXADDR,(1<<ERX_P0)|(1<<ERX_P1)|(0<<ERX_P2)|(0<<ERX_P3)|(0<<ERX_P4)|(0
+ 130:nrf24.c       **** 
+ 131:nrf24.c       ****     // Auto retransmit delay: 1000 us and Up to 15 retransmit trials
+ 132:nrf24.c       ****     nrf24_configRegister(SETUP_RETR,(0x04<<ARD)|(0x0F<<ARC));
+ 133:nrf24.c       **** 
+ 134:nrf24.c       ****     // Dynamic length configurations: No dynamic length
+ 135:nrf24.c       **** //    nrf24_configRegister(DYNPD,(0<<DPL_P0)|(0<<DPL_P1)|(0<<DPL_P2)|(0<<DPL_P3)|(0<<DPL_P4)|(0<<DP
+ 136:nrf24.c       **** 
+ 137:nrf24.c       ****     // Start listening
+ 138:nrf24.c       **** //    nrf24_powerUpRx();
+ 139:nrf24.c       **** }
+ 140:nrf24.c       **** 
+ 141:nrf24.c       **** 
+ 142:nrf24.c       **** /* Clocks only one byte into the given nrf24 register */
+ 143:nrf24.c       **** void nrf24_configRegister(uint8_t reg, uint8_t value)
+ 144:nrf24.c       **** {
+ 126               		.loc 1 144 0
+ 127               		.cfi_startproc
+ 128               	.LVL6:
+ 129               		.loc 1 144 0
+ 130 0050 CF93      		push r28
+ 131               	.LCFI0:
+ 132               		.cfi_def_cfa_offset 3
+ 133               		.cfi_offset 28, -2
+ 134 0052 DF93      		push r29
+ 135               	.LCFI1:
+ 136               		.cfi_def_cfa_offset 4
+ 137               		.cfi_offset 29, -3
+ 138 0054 1F92      		push __zero_reg__
+ 139               	.LCFI2:
+ 140               		.cfi_def_cfa_offset 5
+ 141 0056 CDB7      		in r28,__SP_L__
+ 142 0058 DEB7      		in r29,__SP_H__
+ 143               	.LCFI3:
+ 144               		.cfi_def_cfa_register 28
+ 145               	/* prologue: function */
+ 146               	/* frame size = 1 */
+ 147               	/* stack size = 3 */
+ 148               	.L__stack_usage = 3
+ 145:nrf24.c       ****     ASSERT_CSN();
+ 149               		.loc 1 145 0
+ 150 005a D998      		cbi 0x1b,1
+ 146:nrf24.c       ****     spi_transfer(W_REGISTER | (REGISTER_MASK & reg));
+ 151               		.loc 1 146 0
+ 152 005c 8F71      		andi r24,lo8(31)
+ 153               	.LVL7:
+ 154 005e 8062      		ori r24,lo8(32)
+ 155 0060 6983      		std Y+1,r22
+ 156 0062 00D0      		rcall spi_transfer
+ 157               	.LVL8:
+ 147:nrf24.c       ****     spi_transfer(value);
+ 158               		.loc 1 147 0
+ 159 0064 6981      		ldd r22,Y+1
+ 160 0066 862F      		mov r24,r22
+ 161 0068 00D0      		rcall spi_transfer
+ 162               	.LVL9:
+ 148:nrf24.c       **** 	DEASSERT_CSN();
+ 163               		.loc 1 148 0
+ 164 006a D99A      		sbi 0x1b,1
+ 165               	/* epilogue start */
+ 149:nrf24.c       **** }
+ 166               		.loc 1 149 0
+ 167 006c 0F90      		pop __tmp_reg__
+ 168 006e DF91      		pop r29
+ 169 0070 CF91      		pop r28
+ 170 0072 0895      		ret
+ 171               		.cfi_endproc
+ 172               	.LFE4:
+ 174               	.global	nrf24_config
+ 176               	nrf24_config:
+ 177               	.LFB3:
+  95:nrf24.c       ****     /* Use static payload length ... */
+ 178               		.loc 1 95 0
+ 179               		.cfi_startproc
+ 180               	.LVL10:
+ 181 0074 CF93      		push r28
+ 182               	.LCFI4:
+ 183               		.cfi_def_cfa_offset 3
+ 184               		.cfi_offset 28, -2
+ 185               	/* prologue: function */
+ 186               	/* frame size = 0 */
+ 187               	/* stack size = 1 */
+ 188               	.L__stack_usage = 1
+ 189 0076 C62F      		mov r28,r22
+ 111:nrf24.c       ****     nrf24_configRegister(RX_PW_P1, pay_length); // Data payload pipe
+ 190               		.loc 1 111 0
+ 191 0078 81E1      		ldi r24,lo8(17)
+ 192               	.LVL11:
+ 193 007a 00D0      		rcall nrf24_configRegister
+ 194               	.LVL12:
+ 112:nrf24.c       ****     nrf24_configRegister(RX_PW_P2, 0x00); // Pipe not used 
+ 195               		.loc 1 112 0
+ 196 007c 6C2F      		mov r22,r28
+ 197 007e 82E1      		ldi r24,lo8(18)
+ 198 0080 00D0      		rcall nrf24_configRegister
+ 199               	.LVL13:
+ 113:nrf24.c       ****     nrf24_configRegister(RX_PW_P3, 0x00); // Pipe not used 
+ 200               		.loc 1 113 0
+ 201 0082 60E0      		ldi r22,0
+ 202 0084 83E1      		ldi r24,lo8(19)
+ 203 0086 00D0      		rcall nrf24_configRegister
+ 204               	.LVL14:
+ 114:nrf24.c       ****     nrf24_configRegister(RX_PW_P4, 0x00); // Pipe not used 
+ 205               		.loc 1 114 0
+ 206 0088 60E0      		ldi r22,0
+ 207 008a 84E1      		ldi r24,lo8(20)
+ 208 008c 00D0      		rcall nrf24_configRegister
+ 209               	.LVL15:
+ 115:nrf24.c       ****     nrf24_configRegister(RX_PW_P5, 0x00); // Pipe not used 
+ 210               		.loc 1 115 0
+ 211 008e 60E0      		ldi r22,0
+ 212 0090 85E1      		ldi r24,lo8(21)
+ 213 0092 00D0      		rcall nrf24_configRegister
+ 214               	.LVL16:
+ 116:nrf24.c       **** #endif
+ 215               		.loc 1 116 0
+ 216 0094 60E0      		ldi r22,0
+ 217 0096 86E1      		ldi r24,lo8(22)
+ 218 0098 00D0      		rcall nrf24_configRegister
+ 219               	.LVL17:
+ 132:nrf24.c       **** 
+ 220               		.loc 1 132 0
+ 221 009a 6FE4      		ldi r22,lo8(79)
+ 222 009c 84E0      		ldi r24,lo8(4)
+ 223               	/* epilogue start */
+ 139:nrf24.c       **** 
+ 224               		.loc 1 139 0
+ 225 009e CF91      		pop r28
+ 226               	.LVL18:
+ 132:nrf24.c       **** 
+ 227               		.loc 1 132 0
+ 228 00a0 00C0      		rjmp nrf24_configRegister
+ 229               	.LVL19:
+ 230               		.cfi_endproc
+ 231               	.LFE3:
+ 233               	.global	nrf24_powerUpRx
+ 235               	nrf24_powerUpRx:
+ 236               	.LFB5:
+ 150:nrf24.c       **** 
+ 151:nrf24.c       **** 
+ 152:nrf24.c       **** void nrf24_powerUpRx()
+ 153:nrf24.c       **** {     
+ 237               		.loc 1 153 0
+ 238               		.cfi_startproc
+ 239               	/* prologue: function */
+ 240               	/* frame size = 0 */
+ 241               	/* stack size = 0 */
+ 242               	.L__stack_usage = 0
+ 154:nrf24.c       **** 	ASSERT_CSN();
+ 243               		.loc 1 154 0
+ 244 00a2 D998      		cbi 0x1b,1
+ 155:nrf24.c       ****     spi_transfer(FLUSH_RX);
+ 245               		.loc 1 155 0
+ 246 00a4 82EE      		ldi r24,lo8(-30)
+ 247 00a6 00D0      		rcall spi_transfer
+ 248               	.LVL20:
+ 156:nrf24.c       **** 	DEASSERT_CSN();
+ 249               		.loc 1 156 0
+ 250 00a8 D99A      		sbi 0x1b,1
+ 157:nrf24.c       **** 
+ 158:nrf24.c       ****     nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
+ 251               		.loc 1 158 0
+ 252 00aa 60E7      		ldi r22,lo8(112)
+ 253 00ac 87E0      		ldi r24,lo8(7)
+ 254 00ae 00D0      		rcall nrf24_configRegister
+ 255               	.LVL21:
+ 159:nrf24.c       **** 
+ 160:nrf24.c       ****     DEASSERT_CE();
+ 256               		.loc 1 160 0
+ 257 00b0 D898      		cbi 0x1b,0
+ 161:nrf24.c       ****     nrf24_configRegister(CONFIG,nrf24_CONFIG|((1<<PWR_UP)|(1<<PRIM_RX)));    
+ 258               		.loc 1 161 0
+ 259 00b2 6BE0      		ldi r22,lo8(11)
+ 260 00b4 80E0      		ldi r24,0
+ 261 00b6 00D0      		rcall nrf24_configRegister
+ 262               	.LVL22:
+ 162:nrf24.c       ****     ASSERT_CE();
+ 263               		.loc 1 162 0
+ 264 00b8 D89A      		sbi 0x1b,0
+ 265 00ba 0895      		ret
+ 266               		.cfi_endproc
+ 267               	.LFE5:
+ 269               	.global	nrf24_getStatus
+ 271               	nrf24_getStatus:
+ 272               	.LFB8:
+ 163:nrf24.c       **** }
+ 164:nrf24.c       **** 
+ 165:nrf24.c       **** 
+ 166:nrf24.c       **** // Sends a data package to the default address. Be sure to send the correct
+ 167:nrf24.c       **** // amount of bytes as configured as payload on the receiver.
+ 168:nrf24.c       **** void nrf24_send(uint8_t* value, uint8_t pay_length) 
+ 169:nrf24.c       **** {    
+ 170:nrf24.c       **** //	int i;
+ 171:nrf24.c       **** 
+ 172:nrf24.c       ****     /* Go to Standby-I first */
+ 173:nrf24.c       **** 	DEASSERT_CE();
+ 174:nrf24.c       ****      
+ 175:nrf24.c       ****     /* Set to transmitter mode , Power up if needed */
+ 176:nrf24.c       ****     nrf24_powerUpTx();
+ 177:nrf24.c       **** 
+ 178:nrf24.c       ****     /* Do we really need to flush TX fifo each time ? */
+ 179:nrf24.c       **** #if 1
+ 180:nrf24.c       ****         /* Pull down chip select */
+ 181:nrf24.c       ****     ASSERT_CSN();
+ 182:nrf24.c       **** 
+ 183:nrf24.c       ****     /* Write cmd to flush transmit FIFO */
+ 184:nrf24.c       ****     spi_transfer(FLUSH_TX);     
+ 185:nrf24.c       **** 
+ 186:nrf24.c       ****     /* Pull up chip select */
+ 187:nrf24.c       ****     DEASSERT_CSN();
+ 188:nrf24.c       **** #endif 
+ 189:nrf24.c       **** 
+ 190:nrf24.c       ****     /* Pull down chip select */
+ 191:nrf24.c       **** 	ASSERT_CSN();
+ 192:nrf24.c       **** 
+ 193:nrf24.c       ****     /* Write cmd to write payload */
+ 194:nrf24.c       ****     spi_transfer(W_TX_PAYLOAD);
+ 195:nrf24.c       **** 
+ 196:nrf24.c       ****     /* Write payload */
+ 197:nrf24.c       ****     nrf24_transmitSync(value, pay_length);   
+ 198:nrf24.c       **** 
+ 199:nrf24.c       ****     /* Pull up chip select */
+ 200:nrf24.c       **** 	DEASSERT_CSN();
+ 201:nrf24.c       **** 
+ 202:nrf24.c       ****     /* Start the transmission */
+ 203:nrf24.c       **** 	ASSERT_CE();
+ 204:nrf24.c       **** 
+ 205:nrf24.c       **** //	DEASSERT_CE();
+ 206:nrf24.c       **** }
+ 207:nrf24.c       **** 
+ 208:nrf24.c       **** uint8_t nrf24_isSending()
+ 209:nrf24.c       **** {
+ 210:nrf24.c       ****     uint8_t status;
+ 211:nrf24.c       **** 
+ 212:nrf24.c       ****     /* read the current status */
+ 213:nrf24.c       ****     status = nrf24_getStatus();
+ 214:nrf24.c       ****                 
+ 215:nrf24.c       ****     /* if sending successful (TX_DS) or max retries exceded (MAX_RT). */
+ 216:nrf24.c       ****     if ((status & ((1 << TX_DS)  | (1 << MAX_RT)))) {        
+ 217:nrf24.c       ****         return 0; /* false */
+ 218:nrf24.c       ****     }
+ 219:nrf24.c       **** 
+ 220:nrf24.c       ****     return 1; /* true */
+ 221:nrf24.c       **** 
+ 222:nrf24.c       **** }
+ 223:nrf24.c       **** 
+ 224:nrf24.c       **** uint8_t nrf24_getStatus(void)
+ 225:nrf24.c       **** {
+ 273               		.loc 1 225 0
+ 274               		.cfi_startproc
+ 275               	/* prologue: function */
+ 276               	/* frame size = 0 */
+ 277               	/* stack size = 0 */
+ 278               	.L__stack_usage = 0
+ 226:nrf24.c       ****     uint8_t rv;
+ 227:nrf24.c       **** 	ASSERT_CSN();
+ 279               		.loc 1 227 0
+ 280 00bc D998      		cbi 0x1b,1
+ 228:nrf24.c       ****     rv = spi_transfer(NOP);
+ 281               		.loc 1 228 0
+ 282 00be 8FEF      		ldi r24,lo8(-1)
+ 283 00c0 00D0      		rcall spi_transfer
+ 284               	.LVL23:
+ 229:nrf24.c       **** 	DEASSERT_CSN();
+ 285               		.loc 1 229 0
+ 286 00c2 D99A      		sbi 0x1b,1
+ 230:nrf24.c       ****     return rv;
+ 231:nrf24.c       **** }
+ 287               		.loc 1 231 0
+ 288 00c4 0895      		ret
+ 289               		.cfi_endproc
+ 290               	.LFE8:
+ 292               	.global	nrf24_isSending
+ 294               	nrf24_isSending:
+ 295               	.LFB7:
+ 209:nrf24.c       ****     uint8_t status;
+ 296               		.loc 1 209 0
+ 297               		.cfi_startproc
+ 298               	/* prologue: function */
+ 299               	/* frame size = 0 */
+ 300               	/* stack size = 0 */
+ 301               	.L__stack_usage = 0
+ 213:nrf24.c       ****                 
+ 302               		.loc 1 213 0
+ 303 00c6 00D0      		rcall nrf24_getStatus
+ 304               	.LVL24:
+ 305 00c8 982F      		mov r25,r24
+ 306 00ca 9073      		andi r25,lo8(48)
+ 307 00cc 81E0      		ldi r24,lo8(1)
+ 308               	.LVL25:
+ 309 00ce 01F0      		breq .L18
+ 310 00d0 80E0      		ldi r24,0
+ 311               	.L18:
+ 222:nrf24.c       **** 
+ 312               		.loc 1 222 0
+ 313 00d2 0895      		ret
+ 314               		.cfi_endproc
+ 315               	.LFE7:
+ 317               	.global	nrf24_powerUpTx
+ 319               	nrf24_powerUpTx:
+ 320               	.LFB9:
+ 232:nrf24.c       **** 
+ 233:nrf24.c       **** 
+ 234:nrf24.c       **** void nrf24_powerUpTx(void)
+ 235:nrf24.c       **** {
+ 321               		.loc 1 235 0
+ 322               		.cfi_startproc
+ 323               	/* prologue: function */
+ 324               	/* frame size = 0 */
+ 325               	/* stack size = 0 */
+ 326               	.L__stack_usage = 0
+ 236:nrf24.c       ****     nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
+ 327               		.loc 1 236 0
+ 328 00d4 60E7      		ldi r22,lo8(112)
+ 329 00d6 87E0      		ldi r24,lo8(7)
+ 330 00d8 00D0      		rcall nrf24_configRegister
+ 331               	.LVL26:
+ 237:nrf24.c       **** 
+ 238:nrf24.c       ****     nrf24_configRegister(CONFIG,nrf24_CONFIG|((1<<PWR_UP)|(0<<PRIM_RX)));
+ 332               		.loc 1 238 0
+ 333 00da 6AE0      		ldi r22,lo8(10)
+ 334 00dc 80E0      		ldi r24,0
+ 335 00de 00C0      		rjmp nrf24_configRegister
+ 336               	.LVL27:
+ 337               		.cfi_endproc
+ 338               	.LFE9:
+ 340               	.global	nrf24_transmitSync
+ 342               	nrf24_transmitSync:
+ 343               	.LFB10:
+ 239:nrf24.c       **** }
+ 240:nrf24.c       **** 
+ 241:nrf24.c       **** 
+ 242:nrf24.c       **** /* send multiple bytes over SPI */
+ 243:nrf24.c       **** void nrf24_transmitSync(uint8_t* dataout, uint8_t len)
+ 244:nrf24.c       **** {
+ 344               		.loc 1 244 0
+ 345               		.cfi_startproc
+ 346               	.LVL28:
+ 347 00e0 0F93      		push r16
+ 348               	.LCFI5:
+ 349               		.cfi_def_cfa_offset 3
+ 350               		.cfi_offset 16, -2
+ 351 00e2 1F93      		push r17
+ 352               	.LCFI6:
+ 353               		.cfi_def_cfa_offset 4
+ 354               		.cfi_offset 17, -3
+ 355 00e4 CF93      		push r28
+ 356               	.LCFI7:
+ 357               		.cfi_def_cfa_offset 5
+ 358               		.cfi_offset 28, -4
+ 359 00e6 DF93      		push r29
+ 360               	.LCFI8:
+ 361               		.cfi_def_cfa_offset 6
+ 362               		.cfi_offset 29, -5
+ 363               	/* prologue: function */
+ 364               	/* frame size = 0 */
+ 365               	/* stack size = 4 */
+ 366               	.L__stack_usage = 4
+ 367               	.LVL29:
+ 368 00e8 EC01      		movw r28,r24
+ 369 00ea 8C01      		movw r16,r24
+ 370 00ec 060F      		add r16,r22
+ 371 00ee 111D      		adc r17,__zero_reg__
+ 372               	.LVL30:
+ 373               	.L24:
+ 245:nrf24.c       ****     uint8_t i;
+ 246:nrf24.c       ****     
+ 247:nrf24.c       ****     for (i=0; i<len; i++) {
+ 374               		.loc 1 247 0 discriminator 1
+ 375 00f0 C017      		cp r28,r16
+ 376 00f2 D107      		cpc r29,r17
+ 377 00f4 01F0      		breq .L26
+ 248:nrf24.c       ****         spi_transfer(dataout[i]);
+ 378               		.loc 1 248 0 discriminator 3
+ 379 00f6 8991      		ld r24,Y+
+ 380               	.LVL31:
+ 381 00f8 00D0      		rcall spi_transfer
+ 382               	.LVL32:
+ 383 00fa 00C0      		rjmp .L24
+ 384               	.L26:
+ 385               	/* epilogue start */
+ 249:nrf24.c       ****     }
+ 250:nrf24.c       **** }
+ 386               		.loc 1 250 0
+ 387 00fc DF91      		pop r29
+ 388 00fe CF91      		pop r28
+ 389               	.LVL33:
+ 390 0100 1F91      		pop r17
+ 391 0102 0F91      		pop r16
+ 392 0104 0895      		ret
+ 393               		.cfi_endproc
+ 394               	.LFE10:
+ 396               	.global	nrf24_send
+ 398               	nrf24_send:
+ 399               	.LFB6:
+ 169:nrf24.c       **** //	int i;
+ 400               		.loc 1 169 0
+ 401               		.cfi_startproc
+ 402               	.LVL34:
+ 403 0106 0F93      		push r16
+ 404               	.LCFI9:
+ 405               		.cfi_def_cfa_offset 3
+ 406               		.cfi_offset 16, -2
+ 407 0108 1F93      		push r17
+ 408               	.LCFI10:
+ 409               		.cfi_def_cfa_offset 4
+ 410               		.cfi_offset 17, -3
+ 411 010a CF93      		push r28
+ 412               	.LCFI11:
+ 413               		.cfi_def_cfa_offset 5
+ 414               		.cfi_offset 28, -4
+ 415 010c DF93      		push r29
+ 416               	.LCFI12:
+ 417               		.cfi_def_cfa_offset 6
+ 418               		.cfi_offset 29, -5
+ 419 010e 1F92      		push __zero_reg__
+ 420               	.LCFI13:
+ 421               		.cfi_def_cfa_offset 7
+ 422 0110 CDB7      		in r28,__SP_L__
+ 423 0112 DEB7      		in r29,__SP_H__
+ 424               	.LCFI14:
+ 425               		.cfi_def_cfa_register 28
+ 426               	/* prologue: function */
+ 427               	/* frame size = 1 */
+ 428               	/* stack size = 5 */
+ 429               	.L__stack_usage = 5
+ 430 0114 8C01      		movw r16,r24
+ 173:nrf24.c       ****      
+ 431               		.loc 1 173 0
+ 432 0116 D898      		cbi 0x1b,0
+ 176:nrf24.c       **** 
+ 433               		.loc 1 176 0
+ 434 0118 6983      		std Y+1,r22
+ 435 011a 00D0      		rcall nrf24_powerUpTx
+ 436               	.LVL35:
+ 181:nrf24.c       **** 
+ 437               		.loc 1 181 0
+ 438 011c D998      		cbi 0x1b,1
+ 184:nrf24.c       **** 
+ 439               		.loc 1 184 0
+ 440 011e 81EE      		ldi r24,lo8(-31)
+ 441 0120 00D0      		rcall spi_transfer
+ 442               	.LVL36:
+ 187:nrf24.c       **** #endif 
+ 443               		.loc 1 187 0
+ 444 0122 D99A      		sbi 0x1b,1
+ 191:nrf24.c       **** 
+ 445               		.loc 1 191 0
+ 446 0124 D998      		cbi 0x1b,1
+ 194:nrf24.c       **** 
+ 447               		.loc 1 194 0
+ 448 0126 80EA      		ldi r24,lo8(-96)
+ 449 0128 00D0      		rcall spi_transfer
+ 450               	.LVL37:
+ 197:nrf24.c       **** 
+ 451               		.loc 1 197 0
+ 452 012a 6981      		ldd r22,Y+1
+ 453 012c C801      		movw r24,r16
+ 454 012e 00D0      		rcall nrf24_transmitSync
+ 455               	.LVL38:
+ 200:nrf24.c       **** 
+ 456               		.loc 1 200 0
+ 457 0130 D99A      		sbi 0x1b,1
+ 203:nrf24.c       **** 
+ 458               		.loc 1 203 0
+ 459 0132 D89A      		sbi 0x1b,0
+ 460               	/* epilogue start */
+ 206:nrf24.c       **** 
+ 461               		.loc 1 206 0
+ 462 0134 0F90      		pop __tmp_reg__
+ 463 0136 DF91      		pop r29
+ 464 0138 CF91      		pop r28
+ 465 013a 1F91      		pop r17
+ 466 013c 0F91      		pop r16
+ 467               	.LVL39:
+ 468 013e 0895      		ret
+ 469               		.cfi_endproc
+ 470               	.LFE6:
+ 472               	.global	nrf24_transferSync
+ 474               	nrf24_transferSync:
+ 475               	.LFB12:
+ 251:nrf24.c       **** 
+ 252:nrf24.c       **** 
+ 253:nrf24.c       **** /* Read single register from nrf24 */
+ 254:nrf24.c       **** void nrf24_readRegister(uint8_t reg, uint8_t* value, uint8_t len)
+ 255:nrf24.c       **** {
+ 256:nrf24.c       ****     ASSERT_CSN();
+ 257:nrf24.c       ****     spi_transfer(R_REGISTER | (REGISTER_MASK & reg));
+ 258:nrf24.c       ****     nrf24_transferSync(value,value,len);
+ 259:nrf24.c       ****     DEASSERT_CSN();
+ 260:nrf24.c       **** }
+ 261:nrf24.c       **** 
+ 262:nrf24.c       **** /* send and receive multiple bytes over SPI */
+ 263:nrf24.c       **** void nrf24_transferSync(uint8_t* dataout,uint8_t* datain,uint8_t len)
+ 264:nrf24.c       **** {
+ 476               		.loc 1 264 0
+ 477               		.cfi_startproc
+ 478               	.LVL40:
+ 479 0140 EF92      		push r14
+ 480               	.LCFI15:
+ 481               		.cfi_def_cfa_offset 3
+ 482               		.cfi_offset 14, -2
+ 483 0142 FF92      		push r15
+ 484               	.LCFI16:
+ 485               		.cfi_def_cfa_offset 4
+ 486               		.cfi_offset 15, -3
+ 487 0144 0F93      		push r16
+ 488               	.LCFI17:
+ 489               		.cfi_def_cfa_offset 5
+ 490               		.cfi_offset 16, -4
+ 491 0146 1F93      		push r17
+ 492               	.LCFI18:
+ 493               		.cfi_def_cfa_offset 6
+ 494               		.cfi_offset 17, -5
+ 495 0148 CF93      		push r28
+ 496               	.LCFI19:
+ 497               		.cfi_def_cfa_offset 7
+ 498               		.cfi_offset 28, -6
+ 499 014a DF93      		push r29
+ 500               	.LCFI20:
+ 501               		.cfi_def_cfa_offset 8
+ 502               		.cfi_offset 29, -7
+ 503               	/* prologue: function */
+ 504               	/* frame size = 0 */
+ 505               	/* stack size = 6 */
+ 506               	.L__stack_usage = 6
+ 507               	.LVL41:
+ 508 014c EC01      		movw r28,r24
+ 509 014e 8B01      		movw r16,r22
+ 510 0150 7C01      		movw r14,r24
+ 511 0152 E40E      		add r14,r20
+ 512 0154 F11C      		adc r15,__zero_reg__
+ 513               	.LVL42:
+ 514               	.L29:
+ 265:nrf24.c       ****     uint8_t i;
+ 266:nrf24.c       **** 
+ 267:nrf24.c       ****     for (i=0; i<len; i++) {
+ 515               		.loc 1 267 0 discriminator 1
+ 516 0156 CE15      		cp r28,r14
+ 517 0158 DF05      		cpc r29,r15
+ 518 015a 01F0      		breq .L31
+ 268:nrf24.c       ****         datain[i] = spi_transfer(dataout[i]);
+ 519               		.loc 1 268 0 discriminator 3
+ 520 015c 8991      		ld r24,Y+
+ 521               	.LVL43:
+ 522 015e 00D0      		rcall spi_transfer
+ 523               	.LVL44:
+ 524 0160 F801      		movw r30,r16
+ 525 0162 8193      		st Z+,r24
+ 526 0164 8F01      		movw r16,r30
+ 527               	.LVL45:
+ 528 0166 00C0      		rjmp .L29
+ 529               	.L31:
+ 530               	/* epilogue start */
+ 269:nrf24.c       ****     }
+ 270:nrf24.c       **** }
+ 531               		.loc 1 270 0
+ 532 0168 DF91      		pop r29
+ 533 016a CF91      		pop r28
+ 534               	.LVL46:
+ 535 016c 1F91      		pop r17
+ 536 016e 0F91      		pop r16
+ 537 0170 FF90      		pop r15
+ 538 0172 EF90      		pop r14
+ 539 0174 0895      		ret
+ 540               		.cfi_endproc
+ 541               	.LFE12:
+ 543               	.global	nrf24_readRegister
+ 545               	nrf24_readRegister:
+ 546               	.LFB11:
+ 255:nrf24.c       ****     ASSERT_CSN();
+ 547               		.loc 1 255 0
+ 548               		.cfi_startproc
+ 549               	.LVL47:
+ 550 0176 0F93      		push r16
+ 551               	.LCFI21:
+ 552               		.cfi_def_cfa_offset 3
+ 553               		.cfi_offset 16, -2
+ 554 0178 1F93      		push r17
+ 555               	.LCFI22:
+ 556               		.cfi_def_cfa_offset 4
+ 557               		.cfi_offset 17, -3
+ 558 017a CF93      		push r28
+ 559               	.LCFI23:
+ 560               		.cfi_def_cfa_offset 5
+ 561               		.cfi_offset 28, -4
+ 562 017c DF93      		push r29
+ 563               	.LCFI24:
+ 564               		.cfi_def_cfa_offset 6
+ 565               		.cfi_offset 29, -5
+ 566 017e 1F92      		push __zero_reg__
+ 567               	.LCFI25:
+ 568               		.cfi_def_cfa_offset 7
+ 569 0180 CDB7      		in r28,__SP_L__
+ 570 0182 DEB7      		in r29,__SP_H__
+ 571               	.LCFI26:
+ 572               		.cfi_def_cfa_register 28
+ 573               	/* prologue: function */
+ 574               	/* frame size = 1 */
+ 575               	/* stack size = 5 */
+ 576               	.L__stack_usage = 5
+ 577 0184 8B01      		movw r16,r22
+ 256:nrf24.c       ****     spi_transfer(R_REGISTER | (REGISTER_MASK & reg));
+ 578               		.loc 1 256 0
+ 579 0186 D998      		cbi 0x1b,1
+ 257:nrf24.c       ****     nrf24_transferSync(value,value,len);
+ 580               		.loc 1 257 0
+ 581 0188 8F71      		andi r24,lo8(31)
+ 582               	.LVL48:
+ 583 018a 4983      		std Y+1,r20
+ 584 018c 00D0      		rcall spi_transfer
+ 585               	.LVL49:
+ 258:nrf24.c       ****     DEASSERT_CSN();
+ 586               		.loc 1 258 0
+ 587 018e 4981      		ldd r20,Y+1
+ 588 0190 B801      		movw r22,r16
+ 589 0192 C801      		movw r24,r16
+ 590 0194 00D0      		rcall nrf24_transferSync
+ 591               	.LVL50:
+ 259:nrf24.c       **** }
+ 592               		.loc 1 259 0
+ 593 0196 D99A      		sbi 0x1b,1
+ 594               	/* epilogue start */
+ 260:nrf24.c       **** 
+ 595               		.loc 1 260 0
+ 596 0198 0F90      		pop __tmp_reg__
+ 597 019a DF91      		pop r29
+ 598 019c CF91      		pop r28
+ 599 019e 1F91      		pop r17
+ 600 01a0 0F91      		pop r16
+ 601               	.LVL51:
+ 602 01a2 0895      		ret
+ 603               		.cfi_endproc
+ 604               	.LFE11:
+ 606               	.Letext0:
+ 607               		.file 2 "/usr/avr/include/stdint.h"
 DEFINED SYMBOLS
                             *ABS*:0000000000000000 nrf24.c
-     /tmp/cc0pw52c.s:2      *ABS*:000000000000003e __SP_H__
-     /tmp/cc0pw52c.s:3      *ABS*:000000000000003d __SP_L__
-     /tmp/cc0pw52c.s:4      *ABS*:000000000000003f __SREG__
-     /tmp/cc0pw52c.s:5      *ABS*:0000000000000000 __tmp_reg__
-     /tmp/cc0pw52c.s:6      *ABS*:0000000000000001 __zero_reg__
-     /tmp/cc0pw52c.s:12     .text:0000000000000000 nrf24_init
-     /tmp/cc0pw52c.s:37     .text:000000000000000a nrf24_payload_length
-                            *COM*:0000000000000001 payload_len
-     /tmp/cc0pw52c.s:53     .text:0000000000000010 spi_transfer
-     /tmp/cc0pw52c.s:157    .text:0000000000000066 nrf24_payloadLength
-     /tmp/cc0pw52c.s:199    .text:0000000000000080 nrf24_getStatus
-     /tmp/cc0pw52c.s:237    .text:0000000000000096 nrf24_isSending
-     /tmp/cc0pw52c.s:262    .text:00000000000000a4 nrf24_lastMessageStatus
-     /tmp/cc0pw52c.s:301    .text:00000000000000ba nrf24_transferSync
-     /tmp/cc0pw52c.s:372    .text:00000000000000f0 nrf24_transmitSync
-     /tmp/cc0pw52c.s:428    .text:0000000000000116 nrf24_configRegister
-     /tmp/cc0pw52c.s:491    .text:0000000000000144 nrf24_getData
-     /tmp/cc0pw52c.s:544    .text:000000000000016a nrf24_powerUpRx
-     /tmp/cc0pw52c.s:587    .text:000000000000018a nrf24_config
-     /tmp/cc0pw52c.s:648    .text:00000000000001c4 nrf24_powerUpTx
-     /tmp/cc0pw52c.s:671    .text:00000000000001d0 nrf24_send
-     /tmp/cc0pw52c.s:729    .text:00000000000001f8 nrf24_powerDown
-     /tmp/cc0pw52c.s:751    .text:0000000000000202 nrf24_readRegister
-     /tmp/cc0pw52c.s:826    .text:000000000000023a nrf24_rxFifoEmpty
-     /tmp/cc0pw52c.s:871    .text:000000000000025c nrf24_dataReady
-     /tmp/cc0pw52c.s:907    .text:0000000000000274 nrf24_retransmissionCount
-     /tmp/cc0pw52c.s:954    .text:0000000000000296 nrf24_writeRegister
-     /tmp/cc0pw52c.s:1030   .text:00000000000002d0 nrf24_rx_address
-     /tmp/cc0pw52c.s:1074   .text:00000000000002ea nrf24_tx_address
+     /tmp/cc3PasA9.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/cc3PasA9.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/cc3PasA9.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/cc3PasA9.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/cc3PasA9.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/cc3PasA9.s:12     .text:0000000000000000 spi_init
+     /tmp/cc3PasA9.s:46     .text:0000000000000016 spi_transfer
+     /tmp/cc3PasA9.s:110    .text:000000000000004e nrf24_init
+     /tmp/cc3PasA9.s:124    .text:0000000000000050 nrf24_configRegister
+     /tmp/cc3PasA9.s:176    .text:0000000000000074 nrf24_config
+     /tmp/cc3PasA9.s:235    .text:00000000000000a2 nrf24_powerUpRx
+     /tmp/cc3PasA9.s:271    .text:00000000000000bc nrf24_getStatus
+     /tmp/cc3PasA9.s:294    .text:00000000000000c6 nrf24_isSending
+     /tmp/cc3PasA9.s:319    .text:00000000000000d4 nrf24_powerUpTx
+     /tmp/cc3PasA9.s:342    .text:00000000000000e0 nrf24_transmitSync
+     /tmp/cc3PasA9.s:398    .text:0000000000000106 nrf24_send
+     /tmp/cc3PasA9.s:474    .text:0000000000000140 nrf24_transferSync
+     /tmp/cc3PasA9.s:545    .text:0000000000000176 nrf24_readRegister
 
-UNDEFINED SYMBOLS
-nrf24_setupPins
-nrf24_ce_digitalWrite
-nrf24_csn_digitalWrite
-nrf24_sck_digitalWrite
-nrf24_mosi_digitalWrite
-nrf24_miso_digitalRead
-__do_clear_bss
+NO UNDEFINED SYMBOLS
