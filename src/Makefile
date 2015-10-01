@@ -80,7 +80,9 @@ OBJDIR = .
 
 
 # List C source files here. (C dependencies are automatically generated.)
-SRC = $(TARGET).c radioPinFunctions.c nrf24.c
+SRC = $(TARGET).c
+
+#radioPinFunctions.c nrf24.c
 
 
 # List C++ source files here. (C dependencies are automatically generated.)
@@ -398,7 +400,7 @@ ALL_ASFLAGS = -mmcu=$(MCU) -I. -x assembler-with-cpp $(ASFLAGS)
 # Default target.
 all: begin gccversion sizebefore build sizeafter end
 
-tags: main.c nrf24.c radioPinFunctions.c nrf24.h nRF24L01.h softuart.c
+tags: main.c nRF24L01.h
 	ctags $^
 
 # Change the build target to build a HEX file or a library.

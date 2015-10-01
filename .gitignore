@@ -1,0 +1,11 @@
+*.elf
+*.hex
+*.lst
+*.map
+*.o
+*.sym
+*.lss
+src/.dep/
+*~
+src/tags
+

@@ -102,8 +102,7 @@ uint8_t nrf24_dataReady()
 
     // We can short circuit on RX_DR, but if it's not set, we still need
     // to check the FIFO for any pending packets
-    if ( status & (1 << RX_DR) ) 
-    {
+    if ( status & (1 << RX_DR) ) {
         return 1;
     }
 
@@ -170,7 +169,7 @@ void nrf24_send(uint8_t* value)
     nrf24_powerUpTx();
 
     /* Do we really need to flush TX fifo each time ? */
-    #if 0
+#if 0
         /* Pull down chip select */
         nrf24_csn_digitalWrite(LOW);           
 
@@ -179,7 +178,7 @@ void nrf24_send(uint8_t* value)
 
         /* Pull up chip select */
         nrf24_csn_digitalWrite(HIGH);                    
-    #endif 
+#endif 
 
     /* Pull down chip select */
     nrf24_csn_digitalWrite(LOW);
@@ -205,8 +204,7 @@ uint8_t nrf24_isSending()
     status = nrf24_getStatus();
                 
     /* if sending successful (TX_DS) or max retries exceded (MAX_RT). */
-    if((status & ((1 << TX_DS)  | (1 << MAX_RT))))
-    {        
+    if ((status & ((1 << TX_DS)  | (1 << MAX_RT)))) {        
         return 0; /* false */
     }
 
@@ -230,19 +228,16 @@ uint8_t nrf24_lastMessageStatus()
     rv = nrf24_getStatus();
 
     /* Transmission went OK */
-    if((rv & ((1 << TX_DS))))
-    {
+    if ((rv & ((1 << TX_DS)))) {
         return NRF24_TRANSMISSON_OK;
     }
     /* Maximum retransmission count is reached */
     /* Last message probably went missing ... */
-    else if((rv & ((1 << MAX_RT))))
-    {
+    else if ((rv & ((1 << MAX_RT)))) {
         return NRF24_MESSAGE_LOST;
     }  
     /* Probably still sending ... */
-    else
-    {
+    else {
         return 0xFF;
     }
 }
@@ -281,30 +276,24 @@ uint8_t spi_transfer(uint8_t tx)
 
     nrf24_sck_digitalWrite(LOW);
 
-    for(i=0;i<8;i++)
-    {
+    for (i=0; i<8; i++) {
 
-        if(tx & (1<<(7-i)))
-        {
+        if (tx & (1<<(7-i))) {
             nrf24_mosi_digitalWrite(HIGH);            
-        }
-        else
-        {
+        } else {
             nrf24_mosi_digitalWrite(LOW);
         }
 
         nrf24_sck_digitalWrite(HIGH);        
 
         rx = rx << 1;
-        if(nrf24_miso_digitalRead())
-        {
+        if (nrf24_miso_digitalRead()) {
             rx |= 0x01;
         }
 
         nrf24_sck_digitalWrite(LOW);                
 
     }
-
     return rx;
 }
 
@@ -313,11 +302,9 @@ void nrf24_transferSync(uint8_t* dataout,uint8_t* datain,uint8_t len)
 {
     uint8_t i;
 
-    for(i=0;i<len;i++)
-    {
+    for (i=0; i<len; i++) {
         datain[i] = spi_transfer(dataout[i]);
     }
-
 }
 
 /* send multiple bytes over SPI */
@@ -325,11 +312,9 @@ void nrf24_transmitSync(uint8_t* dataout,uint8_t len)
 {
     uint8_t i;
     
-    for(i=0;i<len;i++)
-    {
+    for (i=0; i<len; i++) {
         spi_transfer(dataout[i]);
     }
-
 }
 
 /* Clocks only one byte into the given nrf24 register */

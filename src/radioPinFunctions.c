@@ -15,6 +15,10 @@
 #define clr_bit(reg,bit) reg &= ~(1<<bit)
 #define check_bit(reg,bit) (reg&(1<<bit))
 
+#define ASSERT_CE()     (PORTA |= (1<<CE))
+#define DEASSERT_CE()   (PORTA &= (1<<CE))
+#define DEASSERT_CN()   (PORTA |= (1<<CN))
+#define ASSERT_CN()     (PORTA &= (1<<CN))
 #define CE    0
 #define CSN   1
 #define SCK   4

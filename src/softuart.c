@@ -98,11 +98,13 @@ V0.3
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 
+#define EN_RX                 0
 #include "softuart.h"
 
 #define SU_TRUE 1
 #define SU_FALSE 0
 
+#if EN_RX
 // startbit and stopbit parsed internaly (see ISR)
 #define RX_NUM_OF_BITS (8)
 volatile static char              inbuf[SOFTUART_IN_BUF_SIZE];
@@ -110,6 +112,7 @@ volatile static unsigned char    qin  = 0;
 /*volatile*/ static unsigned char qout = 0;
 volatile static unsigned char    flag_rx_off;
 volatile static unsigned char    flag_rx_ready;
+#endif
 
 // 1 Startbit, 8 Databits, 1 Stopbit = 10 Bits/Frame
 #define TX_NUM_OF_BITS (10)
@@ -120,19 +123,23 @@ volatile static unsigned short internal_tx_buffer; /* ! mt: was type uchar - thi
 
 #define set_tx_pin_high()      ( SOFTUART_TXPORT |=  ( 1<<SOFTUART_TXBIT ) )
 #define set_tx_pin_low()       ( SOFTUART_TXPORT &= ~( 1<<SOFTUART_TXBIT ) )
+#if EN_RX
 #define get_rx_pin_status()    ( SOFTUART_RXPIN  & ( 1<<SOFTUART_RXBIT ) )
 // #define get_rx_pin_status() ( ( SOFTUART_RXPIN & ( 1<<SOFTUART_RXBIT ) ) ? 1 : 0 )
+#endif
 
 ISR(SOFTUART_T_COMP_LABEL)
 {
+#if EN_RX
 	static unsigned char flag_rx_waiting_for_stop_bit = SU_FALSE;
 	static unsigned char rx_mask;
 	
 	static char timer_rx_ctr;
 	static char bits_left_in_rx;
 	static unsigned char internal_rx_buffer;
-	
 	char start_bit, flag_in;
+#endif
+
 	char tmp;
 	
 	// Transmitter Section
@@ -153,7 +160,7 @@ ISR(SOFTUART_T_COMP_LABEL)
 		}
 		timer_tx_ctr = tmp;
 	}
-
+#if EN_RX
 	// Receiver Section
 	if ( flag_rx_off == SU_FALSE ) {
 		if ( flag_rx_waiting_for_stop_bit ) {
@@ -195,14 +202,17 @@ ISR(SOFTUART_T_COMP_LABEL)
 			}
 		}
 	}
+#endif
 }
 
 static void avr_io_init(void)
 {
 	// TX-Pin as output
 	SOFTUART_TXDDR |=  ( 1 << SOFTUART_TXBIT );
+#if EN_RX
 	// RX-Pin as input
 	SOFTUART_RXDDR &= ~( 1 << SOFTUART_RXBIT );
+#endif
 }
 
 static void avr_timer_init(void)
@@ -227,9 +237,11 @@ static void avr_timer_init(void)
 void softuart_init( void )
 {
 	flag_tx_ready = SU_FALSE;
+#if EN_RX
 	flag_rx_ready = SU_FALSE;
 	flag_rx_off   = SU_FALSE;
-	
+#endif
+
 	set_tx_pin_high(); /* mt: set to high to avoid garbage on init */
 	avr_io_init();
 
@@ -245,6 +257,7 @@ static void idle(void)
 	// add watchdog-reset here if needed
 }
 
+#if EN_RX
 void softuart_turn_rx_on( void )
 {
 	flag_rx_off = SU_FALSE;
@@ -280,7 +293,8 @@ void softuart_flush_input_buffer( void )
 	qin  = 0;
 	qout = 0;
 }
-	
+#endif
+
 unsigned char softuart_can_transmit( void ) 
 {
 	return ( flag_tx_ready );
@@ -289,8 +303,9 @@ unsigned char softuart_can_transmit( void )
 void softuart_putchar( const char ch )
 {
 	while ( flag_tx_ready ) {
-		; // wait for transmitter ready
+		 ;// wait for transmitter ready
 		  // add watchdog-reset here if needed;
+
 	}
 
 	// invoke_UART_transmit
@@ -316,3 +331,13 @@ void softuart_puts_p( const char *prg_s )
 	}
 }
 
+const char hex[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+void softuart_put_hex( uint8_t data )
+{
+	uint8_t val = data;
+
+	data >>= 4;
+	softuart_putchar(hex[data]);
+	val &= 0xF;
+	softuart_putchar(hex[val]);
+}
