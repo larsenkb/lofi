@@ -168,14 +168,14 @@ void nrf24_powerUpRx()
 // amount of bytes as configured as payload on the receiver.
 void nrf24_send(uint8_t* value, uint8_t pay_length) 
 {    
-	int i;
+	volatile int i;
 
     /* Go to Standby-I first */
 //	DEASSERT_CE();
      
     /* Set to transmitter mode , Power up if needed */
     nrf24_powerUpTx();
-    _delay_ms(10);
+//    _delay_ms(10);
 
     /* Do we really need to flush TX fifo each time ? */
 #if 1
@@ -188,7 +188,7 @@ void nrf24_send(uint8_t* value, uint8_t pay_length)
     /* Pull up chip select */
     DEASSERT_CSN();
 #endif 
-    _delay_ms(10);
+//    _delay_ms(10);
 
     /* Pull down chip select */
 	ASSERT_CSN();
@@ -202,12 +202,12 @@ void nrf24_send(uint8_t* value, uint8_t pay_length)
     /* Pull up chip select */
     DEASSERT_CSN();
 
-    _delay_ms(10);
+//    _delay_ms(10);
 
     /* Start the transmission */
 	ASSERT_CE();
-    _delay_ms(10);
-    for (i = 0; i < 200; ) {
+//    _delay_ms(10);
+    for (i = 0; i < 20; ) {
         i++;
     }
 	DEASSERT_CE();
