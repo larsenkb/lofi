@@ -124,41 +124,28 @@ int main(void)
     sei();
 #endif
 
-    uartbb_puts("\r\nHello\r\n");
+    xprintf("\nHello\n");
     nrf24_readRegister(0,&rv,1);
-    uartbb_puts("00:");
-    uartbb_puthex(rv);
+    xprintf("00:%02X\n", rv);
+    xprintf("00:%02X\n", nrf24_rdReg(0));
     nrf24_readRegister(1,&rv,1);
-    uartbb_puts("\r\n01:");
-    uartbb_puthex(rv);
+    xprintf("01:%02X\n", rv);
     nrf24_readRegister(2,&rv,1);
-    uartbb_puts("\r\n02:");
-    uartbb_puthex(rv);
-//    uartbb_puts("\r\n");
-//    _delay_ms(100);
+    xprintf("02:%02X\n", rv);
     nrf24_readRegister(3,&rv,1);
-    uartbb_puts("\r\n03:");
-    uartbb_puthex(rv);
+    xprintf("03:%02X\n", rv);
     nrf24_readRegister(4,&rv,1);
-    uartbb_puts("\r\n04:");
-    uartbb_puthex(rv);
+    xprintf("04:%02X\n", rv);
     nrf24_readRegister(5,&rv,1);
-    uartbb_puts("\r\n05:");
-    uartbb_puthex(rv);
+    xprintf("05:%02X\n", rv);
     nrf24_readRegister(6,&rv,1);
-    uartbb_puts("\r\n06:");
-    uartbb_puthex(rv);
+    xprintf("06:%02X\n", rv);
     nrf24_readRegister(7,&rv,1);
-    uartbb_puts("\r\n07:");
-    uartbb_puthex(rv);
-//    _delay_ms(100);
+    xprintf("07:%02X\n", rv);
     nrf24_readRegister(8,&rv,1);
-    uartbb_puts("\r\n08:");
-    uartbb_puthex(rv);
+    xprintf("08:%02X\n", rv);
     nrf24_readRegister(9,&rv,1);
-    uartbb_puts("\r\n09:");
-    uartbb_puthex(rv);
-    uartbb_puts("\r\n");
+    xprintf("09:%02X\n", rv);
     _delay_ms(100);
 
 	while (1) {
@@ -170,8 +157,8 @@ int main(void)
         if (wdInt) {
             wdInt = 0;
 #if 1
-            nrf24_readRegister(8,&rv,1);
-            xprintf("%02X ", rv);
+//            nrf24_readRegister(8,&rv,1);
+            xprintf("%02X ", nrf24_rdReg(8));
 //            uartbb_puthex(rv);
 //	        uartbb_puthex(nrf24_getStatus());
 #endif

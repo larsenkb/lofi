@@ -273,6 +273,18 @@ void nrf24_transmitSync(uint8_t* dataout, uint8_t len)
 
 
 /* Read single register from nrf24 */
+uint8_t nrf24_rdReg(uint8_t reg)
+{
+    uint8_t val;
+
+    ASSERT_CSN();
+    spi_transfer(R_REGISTER | (REGISTER_MASK & reg));
+    val = spi_transfer(val);
+    DEASSERT_CSN();
+    return val;
+}
+
+/* Read single register from nrf24 */
 void nrf24_readRegister(uint8_t reg, uint8_t* value, uint8_t len)
 {
     ASSERT_CSN();
