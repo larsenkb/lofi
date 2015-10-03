@@ -6,6 +6,8 @@
 //#include "nRF24L01.h"
 #include "nrf24.h"
 #include "uartbb.h"
+#include "xprintf.h"
+
 
 #undef F_CPU
 #define F_CPU 1000000UL
@@ -94,6 +96,7 @@ int main(void)
 
 	/* Perform system initialization */
 	uartbb_init();
+    xfunc_out = uartbb_putchar;
 
 	/* init LED pins as OUTPUT */
 	DDRB |= (1<<LED_GREEN);
@@ -168,7 +171,8 @@ int main(void)
             wdInt = 0;
 #if 1
             nrf24_readRegister(8,&rv,1);
-            uartbb_puthex(rv);
+            xprintf("%02X ", rv);
+//            uartbb_puthex(rv);
 //	        uartbb_puthex(nrf24_getStatus());
 #endif
 

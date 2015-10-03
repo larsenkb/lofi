@@ -25,7 +25,7 @@ OBJDIR = .
 
 
 # List C source files here. (C dependencies are automatically generated.)
-SRC = $(TARGET).c uartbb.c nrf24.c
+SRC = $(TARGET).c uartbb.c nrf24.c xprintf.c
 
 
 
@@ -290,6 +290,14 @@ ALL_ASFLAGS = -mmcu=$(MCU) -I. -x assembler-with-cpp $(ASFLAGS)
 # Default target.
 all: main.hex
 
+main.o: main.c uartbb.h nrf24.h
+
+uartbb.o: uartbb.c uartbb.h
+
+nrf24.o: nrf24.c nrf24.h nRF24L01.h
+
+xprintf.o: xprintf.c xprintf.h
+
 tags: main.c uartbb.c uartbb.h nrf24.c nrf24.h nRF24L01.h
 	ctags $^
 
@@ -373,9 +381,10 @@ clean:
 	$(REMOVE) *.map
 	$(REMOVE) *.sym
 	$(REMOVE) *.lss
-	$(REMOVE) *.o)
-	$(REMOVE) *.lst)
+	$(REMOVE) *.o
+	$(REMOVE) *.lst
 	$(REMOVE) *.s
+	$(REMOVE) *~
 
 # Listing of phony targets.
 .PHONY : clean
