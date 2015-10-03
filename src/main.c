@@ -13,8 +13,8 @@
 
 #define EN_WD			1
 
-#define LED_RED			0		/* PORTB */
-#define LED_GREEN		1		/* PORTB */
+#define LED_RED			0		/* PORTB  bit0 */
+#define LED_GREEN		1		/* PORTB  bit1 */
 
 
 #define ASSERT_GRNLED()	(PORTB |= (1<<LED_GREEN))
@@ -77,11 +77,15 @@ void setup_watchdog(int ii)
 	WDTCSR |= _BV(WDIE);
 }
 
-//This runs each time the watch dog wakes us up from sleep
+// This runs each time the watch dog wakes us up from sleep
+// The system wakes up when any interrupt occurs. Setting this
+// flag lets background (main loop) know that the watchdog
+// interrupt occured so that we can xmit.
 ISR(WDT_vect)
 {
     wdInt = 1;
 }
+
 
 int main(void)
 {
