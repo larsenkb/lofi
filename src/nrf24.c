@@ -1,4 +1,5 @@
 #include <avr/io.h>
+#include <util/delay.h>
 #include "nrf24.h"
 
 #define CE				0		/* PORTA */
@@ -167,13 +168,14 @@ void nrf24_powerUpRx()
 // amount of bytes as configured as payload on the receiver.
 void nrf24_send(uint8_t* value, uint8_t pay_length) 
 {    
-//	int i;
+	int i;
 
     /* Go to Standby-I first */
-	DEASSERT_CE();
+//	DEASSERT_CE();
      
     /* Set to transmitter mode , Power up if needed */
     nrf24_powerUpTx();
+    _delay_ms(10);
 
     /* Do we really need to flush TX fifo each time ? */
 #if 1
@@ -186,6 +188,7 @@ void nrf24_send(uint8_t* value, uint8_t pay_length)
     /* Pull up chip select */
     DEASSERT_CSN();
 #endif 
+    _delay_ms(10);
 
     /* Pull down chip select */
 	ASSERT_CSN();
@@ -197,12 +200,17 @@ void nrf24_send(uint8_t* value, uint8_t pay_length)
     nrf24_transmitSync(value, pay_length);   
 
     /* Pull up chip select */
-	DEASSERT_CSN();
+    DEASSERT_CSN();
+
+    _delay_ms(10);
 
     /* Start the transmission */
 	ASSERT_CE();
-
-//	DEASSERT_CE();
+    _delay_ms(10);
+    for (i = 0; i < 200; ) {
+        i++;
+    }
+	DEASSERT_CE();
 }
 
 uint8_t nrf24_isSending()

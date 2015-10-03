@@ -11,11 +11,11 @@
 *   http://www.tinkerer.eu/AVRLib/nRF24L01
 * -----------------------------------------------------------------------------
 */
-#ifndef NRF24
-#define NRF24
+#ifndef __NRF24_H__
+#define __NRF24_H__
 
-#include <stdint.h>
 #include "nRF24L01.h"
+#include <stdint.h>
 
 #define LOW 0
 #define HIGH 1
@@ -114,4 +114,4 @@ extern void nrf24_mosi_digitalWrite(uint8_t state);
 /* -------------------------------------------------------------------------- */
 extern uint8_t nrf24_miso_digitalRead(void);
 
-#endif
+#endif /* __NRF24_H__ */
