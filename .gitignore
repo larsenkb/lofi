@@ -5,6 +5,7 @@
 *.o
 *.sym
 *.lss
+*.eep
 src/.dep/
 *~
 src/tags

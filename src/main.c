@@ -14,6 +14,12 @@
 
 
 #define EN_WD			1
+#define EN_SWITCH       1
+
+#define SWITCH_1        2       /* PORTB bit2 */
+#define SWITCH_MSK      2
+#define SWITCH_GMSK     5
+
 
 #define LED_RED			0		/* PORTB  bit0 */
 #define LED_GREEN		1		/* PORTB  bit1 */
@@ -32,6 +38,11 @@ uint8_t q = 0;
 uint8_t data_array[4];
 //uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
 //uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
+#if EN_SWITCH
+volatile uint8_t switchFlag;
+#endif
+
+
 /* ------------------------------------------------------------------------- */
 
 
@@ -83,11 +94,17 @@ void setup_watchdog(int ii)
 // The system wakes up when any interrupt occurs. Setting this
 // flag lets background (main loop) know that the watchdog
 // interrupt occured so that we can xmit.
-ISR(WDT_vect)
+ISR(WATCHDOG_vect)
 {
-    wdInt = 1;
+    wdInt++;
 }
 
+#if EN_SWITCH
+ISR(PCINT1_vect)
+{
+    switchFlag = 1;
+}
+#endif
 
 int main(void)
 {
@@ -100,7 +117,15 @@ int main(void)
 
 	/* init LED pins as OUTPUT */
 	DDRB |= (1<<LED_GREEN);
+	DDRB |= (1<<LED_RED);
 
+#if EN_SWITCH
+    switchFlag = 0;
+    DDRB &= ~(1<<2);
+    PORTB |= (1<<2);
+    GIMSK = (1<<SWITCH_GMSK);
+    PCMSK1 = (1<<SWITCH_MSK);
+#endif
 
 	/* init SPI */
 	spi_init();
@@ -148,19 +173,27 @@ int main(void)
     xprintf("09:%02X\n", rv);
     _delay_ms(100);
 
+
 	while (1) {
   
 #if EN_WD
         system_sleep();
 #endif
 
-        if (wdInt) {
+#if EN_SWITCH
+        if (switchFlag) {
+            switchFlag = 0;
+            ASSERT_REDLED();
+            _delay_ms(1);
+            DEASSERT_REDLED();
+            continue;
+        }
+#endif
+
+        if (wdInt > 3) {
             wdInt = 0;
-#if 1
-//            nrf24_readRegister(8,&rv,1);
+#if 0
             xprintf("%02X ", nrf24_rdReg(8));
-//            uartbb_puthex(rv);
-//	        uartbb_puthex(nrf24_getStatus());
 #endif
 
             /* Fill the data buffer */
@@ -189,10 +222,14 @@ int main(void)
 		    // nrf24_powerDown();            
 #endif
 
-            ASSERT_GRNLED();
-            _delay_ms(1);
-            DEASSERT_GRNLED();
         }
+
+#if 1
+        ASSERT_GRNLED();
+        _delay_ms(1);
+        DEASSERT_GRNLED();
+#endif
+
 		/* Wait a little ... */
 #if EN_WD==0
 		_delay_ms(1000);
