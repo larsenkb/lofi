@@ -40,8 +40,11 @@ uint8_t data_array[4];
 //uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
 #if EN_SWITCH
 volatile uint8_t switchFlag;
+volatile uint8_t switchFlagWd;
+volatile uint8_t debounceFlag;
 #endif
-
+uint8_t xmitFlagWd;
+uint8_t xmitFlagPc;
 
 /* ------------------------------------------------------------------------- */
 
@@ -96,7 +99,12 @@ void setup_watchdog(int ii)
 // interrupt occured so that we can xmit.
 ISR(WATCHDOG_vect)
 {
-    wdInt++;
+    if (debounceFlag) {
+        debounceFlag = 0;
+        switchFlagWd = 1;
+    } else {
+        wdInt++;
+    }
 }
 
 #if EN_SWITCH
@@ -121,6 +129,8 @@ int main(void)
 
 #if EN_SWITCH
     switchFlag = 0;
+    switchFlagWd = 0;
+    debounceFlag = 0;
     DDRB &= ~(1<<2);
     PORTB |= (1<<2);
     GIMSK = (1<<SWITCH_GMSK);
@@ -182,24 +192,37 @@ int main(void)
 
 #if EN_SWITCH
         if (switchFlag) {
+            setup_watchdog(3);
             switchFlag = 0;
+            debounceFlag = 1;
+            continue;
+        }
+        if (switchFlagWd) {
+            switchFlagWd = 0;
+            setup_watchdog(7);
             ASSERT_REDLED();
             _delay_ms(1);
             DEASSERT_REDLED();
-            continue;
+            /* set flag to xmit */
+            xmitFlagPc = 1;
         }
 #endif
 
         if (wdInt > 3) {
             wdInt = 0;
+            xmitFlagWd = 1;
+        }
 #if 0
             xprintf("%02X ", nrf24_rdReg(8));
 #endif
-
+        if (xmitFlagWd || xmitFlagPc) {
             /* Fill the data buffer */
 		    data_array[0] = 0x00;
 		    data_array[1] = 0xAA;
 		    data_array[2] = 0x55;
+            if (xmitFlagPc) {
+                q = 0;
+            }
 		    data_array[3] = q++;                                    
 #if 1
 		    /* Automatically goes to TX mode */
@@ -221,6 +244,8 @@ int main(void)
 		    /* Or you might want to power down after TX */
 		    // nrf24_powerDown();            
 #endif
+            xmitFlagWd = 0;
+            xmitFlagPc = 0;
 
         }
 
