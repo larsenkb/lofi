@@ -4,18 +4,20 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include <avr/eeprom.h>
-//#include "nRF24L01.h"
+#include <string.h>
+
+#include "lofi.h"
 #include "nrf24.h"
 #include "uartbb.h"
 #include "xprintf.h"
 
-
 #undef F_CPU
 #define F_CPU 1000000UL
 
-
 #define EN_WD			1
 #define EN_SWITCH       1
+
+#define PAYLOAD_LENGTH  8
 
 #define SWITCH_1        2       /* PORTB bit2 */
 #define SWITCH_MSK      2
@@ -36,8 +38,8 @@
 volatile uint8_t wdInt;
 uint8_t nodeId;
 //uint8_t temp;
-uint8_t q = 0;
-uint8_t data_array[4];
+//uint16_t q = 0;
+uint8_t data_array[PAYLOAD_LENGTH];
 //uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
 //uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
 #if EN_SWITCH
@@ -47,6 +49,8 @@ volatile uint8_t debounceFlag;
 #endif
 uint8_t xmitFlagWd;
 uint8_t xmitFlagPc;
+
+sensor_ctr_t     sens_ctr;
 
 /* ------------------------------------------------------------------------- */
 
@@ -139,11 +143,15 @@ int main(void)
     PCMSK1 = (1<<SWITCH_MSK);
 #endif
 
+    sens_ctr.ctr_lo = 0;
+    sens_ctr.ctr_hi = 0;
+    sens_ctr.sensorId = SENS_ID_CTR;
+
     nodeId = eeprom_read_byte((uint8_t *)0);
-    xprintf("nodeId: %02X\n", nodeId);
+//    xprintf("nodeId: %02X\n", nodeId);
 
 	/* init SPI */
-	spi_init();
+//	spi_init();
 
 	/* init hardware pins for talking to radio */
 	nrf24_init();
@@ -153,7 +161,8 @@ int main(void)
 //	nrf24_rx_address(rx_address);    
 
 	/* Channel 2 , payload length: 4 */
-	nrf24_config(2, 4);
+	nrf24_config(2, PAYLOAD_LENGTH);
+    data_array[0] = nodeId;
 
 #if EN_WD
 	setup_watchdog(7);
@@ -222,16 +231,19 @@ int main(void)
 #endif
         if (xmitFlagWd || xmitFlagPc) {
             /* Fill the data buffer */
-		    data_array[0] = nodeId;
-		    data_array[1] = 0xAA;
-		    data_array[2] = 0x55;
-            if (xmitFlagPc) {
-                q = 0;
-            }
-		    data_array[3] = q++;                                    
+//		    data_array[0] = nodeId;
+            memcpy(&data_array[1], &sens_ctr, sizeof(sens_ctr));
+            if (++sens_ctr.ctr_lo == 0)
+                sens_ctr.ctr_hi++;
+//		    data_array[1] = (SENID_CTR<<3) | ((q>>8) & 0x03);
+//		    data_array[2] = q & 0xFF;
+//            if (xmitFlagPc) {
+//                q = 0;
+//            }
+//		    data_array[3] = q++;                                    
 #if 1
 		    /* Automatically goes to TX mode */
-		    nrf24_send(data_array, 4);        
+		    nrf24_send(data_array, PAYLOAD_LENGTH);        
         
 		    /* Wait for transmission to end */
 //		    while (nrf24_isSending());

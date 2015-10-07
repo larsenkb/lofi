@@ -291,7 +291,7 @@ ALL_ASFLAGS = -mmcu=$(MCU) -I. -x assembler-with-cpp $(ASFLAGS)
 # Default target.
 all: main.hex
 
-main.o: main.c uartbb.h nrf24.h
+main.o: main.c uartbb.h nrf24.h lofi.h xprintf.h
 
 uartbb.o: uartbb.c uartbb.h
 
