@@ -3,6 +3,7 @@
 #include <avr/wdt.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
+#include <avr/eeprom.h>
 //#include "nRF24L01.h"
 #include "nrf24.h"
 #include "uartbb.h"
@@ -33,6 +34,7 @@
 
 /* ------------------------------------------------------------------------- */
 volatile uint8_t wdInt;
+uint8_t nodeId;
 //uint8_t temp;
 uint8_t q = 0;
 uint8_t data_array[4];
@@ -137,6 +139,9 @@ int main(void)
     PCMSK1 = (1<<SWITCH_MSK);
 #endif
 
+    nodeId = eeprom_read_byte((uint8_t *)0);
+    xprintf("nodeId: %02X\n", nodeId);
+
 	/* init SPI */
 	spi_init();
 
@@ -217,7 +222,7 @@ int main(void)
 #endif
         if (xmitFlagWd || xmitFlagPc) {
             /* Fill the data buffer */
-		    data_array[0] = 0x00;
+		    data_array[0] = nodeId;
 		    data_array[1] = 0xAA;
 		    data_array[2] = 0x55;
             if (xmitFlagPc) {
