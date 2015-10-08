@@ -29,6 +29,9 @@ typedef struct {
     uint8_t     ctr_lo;
 } sensor_ctr_t;
 
+typedef struct {
+    uint8_t     ctr             :1;
+} sensors_t;
 
 
 #endif  /* __LOFI_H__ */

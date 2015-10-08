@@ -15,6 +15,8 @@
 #define F_CPU 1000000UL
 
 #define EN_WD			1
+#define WD_TO           9
+#define WD_TO_SHORT     3
 #define EN_SWITCH       1
 
 #define PAYLOAD_LENGTH  8
@@ -50,7 +52,8 @@ volatile uint8_t debounceFlag;
 uint8_t xmitFlagWd;
 uint8_t xmitFlagPc;
 
-sensor_ctr_t     sens_ctr;
+sensor_ctr_t    sens_ctr;
+sensors_t       sensors;
 
 /* ------------------------------------------------------------------------- */
 
@@ -143,12 +146,15 @@ int main(void)
     PCMSK1 = (1<<SWITCH_MSK);
 #endif
 
-    sens_ctr.ctr_lo = 0;
-    sens_ctr.ctr_hi = 0;
-    sens_ctr.sensorId = SENS_ID_CTR;
-
     nodeId = eeprom_read_byte((uint8_t *)0);
+    *(uint8_t *)&sensors   = eeprom_read_byte((uint8_t *)1);
 //    xprintf("nodeId: %02X\n", nodeId);
+
+    if (sensors.ctr) {
+        sens_ctr.ctr_lo = 0;
+        sens_ctr.ctr_hi = 0;
+        sens_ctr.sensorId = SENS_ID_CTR;
+    }
 
 	/* init SPI */
 //	spi_init();
@@ -165,7 +171,7 @@ int main(void)
     data_array[0] = nodeId;
 
 #if EN_WD
-	setup_watchdog(7);
+	setup_watchdog(WD_TO);
 #endif
 
   /* Enable interrupts */
@@ -206,14 +212,14 @@ int main(void)
 
 #if EN_SWITCH
         if (switchFlag) {
-            setup_watchdog(3);
+            setup_watchdog(WD_TO_SHORT);
             switchFlag = 0;
             debounceFlag = 1;
             continue;
         }
         if (switchFlagWd) {
             switchFlagWd = 0;
-            setup_watchdog(7);
+            setup_watchdog(WD_TO);
             ASSERT_REDLED();
             _delay_ms(1);
             DEASSERT_REDLED();
@@ -232,9 +238,11 @@ int main(void)
         if (xmitFlagWd || xmitFlagPc) {
             /* Fill the data buffer */
 //		    data_array[0] = nodeId;
-            memcpy(&data_array[1], &sens_ctr, sizeof(sens_ctr));
-            if (++sens_ctr.ctr_lo == 0)
-                sens_ctr.ctr_hi++;
+            if (sensors.ctr) {
+                memcpy(&data_array[1], &sens_ctr, sizeof(sens_ctr));
+                if (++sens_ctr.ctr_lo == 0)
+                    sens_ctr.ctr_hi++;
+            }
 //		    data_array[1] = (SENID_CTR<<3) | ((q>>8) & 0x03);
 //		    data_array[2] = q & 0xFF;
 //            if (xmitFlagPc) {
