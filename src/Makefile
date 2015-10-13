@@ -299,7 +299,7 @@ nrf24.o: nrf24.c nrf24.h nRF24L01.h
 
 xprintf.o: xprintf.c xprintf.h
 
-tags: main.c uartbb.c uartbb.h nrf24.c nrf24.h nRF24L01.h
+tags: main.c uartbb.c uartbb.h nrf24.c nrf24.h nRF24L01.h xprintf.c xprintf.h lofi.h
 	ctags $^
 
 

@@ -14,7 +14,9 @@
 
 #endif
 
-#define SENS_ID_CTR       0x01
+#define SENS_ID_CTR             0x01
+#define SENS_ID_SW_NO_PC        0x02
+
 
 typedef struct {
     uint8_t     swtich_changed  :1;
@@ -31,6 +33,7 @@ typedef struct {
 
 typedef struct {
     uint8_t     ctr             :1;
+    uint8_t     sw01            :1;     /* switch NO on TR PIN CHANGE */
 } sensors_t;
 
 

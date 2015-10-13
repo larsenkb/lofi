@@ -303,6 +303,10 @@ void nrf24_transferSync(uint8_t* dataout,uint8_t* datain,uint8_t len)
     }
 }
 
+void nrf24_powerDown()
+{
+    nrf24_configRegister(CONFIG, nrf24_CONFIG);
+}
 
 
 

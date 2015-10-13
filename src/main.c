@@ -54,6 +54,7 @@ uint8_t xmitFlagPc;
 
 sensor_ctr_t    sens_ctr;
 sensors_t       sensors;
+sensor_switch_t sens_sw;
 
 /* ------------------------------------------------------------------------- */
 
@@ -156,6 +157,14 @@ int main(void)
         sens_ctr.sensorId = SENS_ID_CTR;
     }
 
+    if (sensors.sw01) {
+        sens_sw.sensorId = SENS_ID_SW_NO_PC;
+        sens_sw.swtich_changed = 0;
+        sens_sw.switch_state = (PINB & (1<<2))?(1):(0);
+        sens_sw.rsvd = 0;
+    }
+
+
 	/* init SPI */
 //	spi_init();
 
@@ -215,6 +224,8 @@ int main(void)
             setup_watchdog(WD_TO_SHORT);
             switchFlag = 0;
             debounceFlag = 1;
+            PORTB &= ~(1<<2);
+            PORTB |= (1<<2);
             continue;
         }
         if (switchFlagWd) {
@@ -236,25 +247,29 @@ int main(void)
             xprintf("%02X ", nrf24_rdReg(8));
 #endif
         if (xmitFlagWd || xmitFlagPc) {
+            uint8_t pay_idx = 1;
             /* Fill the data buffer */
-//		    data_array[0] = nodeId;
+            memset(data_array, 0, 8);
+		    data_array[0] = nodeId;
             if (sensors.ctr) {
-                memcpy(&data_array[1], &sens_ctr, sizeof(sens_ctr));
+                memcpy(&data_array[pay_idx], &sens_ctr, sizeof(sens_ctr));
+                pay_idx += sizeof(sens_ctr);
                 if (++sens_ctr.ctr_lo == 0)
                     sens_ctr.ctr_hi++;
             }
-//		    data_array[1] = (SENID_CTR<<3) | ((q>>8) & 0x03);
-//		    data_array[2] = q & 0xFF;
-//            if (xmitFlagPc) {
-//                q = 0;
-//            }
-//		    data_array[3] = q++;                                    
+            if (sensors.sw01) {
+                sens_sw.swtich_changed = xmitFlagPc;
+                sens_sw.switch_state = (PINB & (1<<2))?(1):(0);
+                data_array[pay_idx] = *(uint8_t *)&sens_sw;
+                pay_idx++;
+            }
+
 #if 1
 		    /* Automatically goes to TX mode */
 		    nrf24_send(data_array, PAYLOAD_LENGTH);        
         
 		    /* Wait for transmission to end */
-//		    while (nrf24_isSending());
+		    while (nrf24_isSending());
 
 		    /* Make analysis on last tranmission attempt */
 //		    temp = nrf24_lastMessageStatus();
@@ -267,14 +282,21 @@ int main(void)
 //		    nrf24_powerUpRx();
 
 		    /* Or you might want to power down after TX */
-		    // nrf24_powerDown();            
+		    nrf24_powerDown();            
 #endif
+
+#if 1
+            ASSERT_GRNLED();
+            _delay_us(500);
+            DEASSERT_GRNLED();
+#endif
+
             xmitFlagWd = 0;
             xmitFlagPc = 0;
 
         }
 
-#if 1
+#if 0
         ASSERT_GRNLED();
         _delay_ms(1);
         DEASSERT_GRNLED();
