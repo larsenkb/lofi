@@ -16,6 +16,7 @@
 
 #define SENS_ID_CTR             0x01
 #define SENS_ID_SW_NO_PC        0x02
+#define SENS_ID_VCC             0x03
 
 
 typedef struct {
@@ -34,7 +35,14 @@ typedef struct {
 typedef struct {
     uint8_t     ctr             :1;
     uint8_t     sw01            :1;     /* switch NO on TR PIN CHANGE */
+    uint8_t     vcc             :1;
 } sensors_t;
+
+typedef struct {
+    uint8_t     vcc_hi          :3;
+    uint8_t     sensorId        :5;
+    uint8_t     vcc_lo;
+} sensor_vcc_t;
 
 
 #endif  /* __LOFI_H__ */

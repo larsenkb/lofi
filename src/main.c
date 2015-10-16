@@ -15,7 +15,8 @@
 #define F_CPU 1000000UL
 
 #define EN_WD			1
-#define WD_TO           9
+#define EN_UART			1
+#define WD_TO           6
 #define WD_TO_SHORT     3
 #define EN_SWITCH       1
 
@@ -38,12 +39,11 @@
 
 /* ------------------------------------------------------------------------- */
 volatile uint8_t wdInt;
+volatile uint8_t wdTick;
+uint8_t wdSec, wdMin, wdHour;
+uint16_t wdDay;
 uint8_t nodeId;
-//uint8_t temp;
-//uint16_t q = 0;
 uint8_t data_array[PAYLOAD_LENGTH];
-//uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
-//uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
 #if EN_SWITCH
 volatile uint8_t switchFlag;
 volatile uint8_t switchFlagWd;
@@ -52,12 +52,17 @@ volatile uint8_t debounceFlag;
 uint8_t xmitFlagWd;
 uint8_t xmitFlagPc;
 
+uint8_t ta[8];
+
 sensor_ctr_t    sens_ctr;
 sensors_t       sensors;
 sensor_switch_t sens_sw;
+sensor_vcc_t    sens_vcc;
+
 
 /* ------------------------------------------------------------------------- */
 
+uint16_t readVccVoltage(void);
 
 
 //****************************************************************  
@@ -113,6 +118,7 @@ ISR(WATCHDOG_vect)
         debounceFlag = 0;
         switchFlagWd = 1;
     } else {
+        wdTick = 1;
         wdInt++;
     }
 }
@@ -126,12 +132,20 @@ ISR(PCINT1_vect)
 
 int main(void)
 {
-    uint8_t rv;
+//    uint8_t rv;
 
 
 	/* Perform system initialization */
+	CLKPR = (1<<CLKPCE);
+	CLKPR = 3;
+
+//	PRR |= (1<<PRTIM1) | (1<<PRTIM0) | (1<<PRUSI) | (1<<PRADC);
+
+    /* initialize uart */
+#if EN_UART
 	uartbb_init();
-    xfunc_out = uartbb_putchar;
+	xfunc_out = uartbb_putchar;
+#endif
 
 	/* init LED pins as OUTPUT */
 	DDRB |= (1<<LED_GREEN);
@@ -165,21 +179,20 @@ int main(void)
     }
 
 
-	/* init SPI */
-//	spi_init();
-
 	/* init hardware pins for talking to radio */
 	nrf24_init();
     
-	/* Set the device addresses */
-//	nrf24_tx_address(tx_address);
-//	nrf24_rx_address(rx_address);    
-
 	/* Channel 2 , payload length: 4 */
 	nrf24_config(2, PAYLOAD_LENGTH);
     data_array[0] = nodeId;
 
 #if EN_WD
+    /* initialize watchdog and associated variables */
+    wdTick = 0;
+    wdSec = 0;
+    wdMin = 0;
+    wdHour = 0;
+    wdDay = 0;
 	setup_watchdog(WD_TO);
 #endif
 
@@ -188,28 +201,39 @@ int main(void)
     sei();
 #endif
 
+#if 1
     xprintf("\nHello\n");
-    nrf24_readRegister(0,&rv,1);
-    xprintf("00:%02X\n", rv);
-    xprintf("00:%02X\n", nrf24_rdReg(0));
-    nrf24_readRegister(1,&rv,1);
-    xprintf("01:%02X\n", rv);
-    nrf24_readRegister(2,&rv,1);
-    xprintf("02:%02X\n", rv);
-    nrf24_readRegister(3,&rv,1);
-    xprintf("03:%02X\n", rv);
-    nrf24_readRegister(4,&rv,1);
-    xprintf("04:%02X\n", rv);
-    nrf24_readRegister(5,&rv,1);
-    xprintf("05:%02X\n", rv);
-    nrf24_readRegister(6,&rv,1);
-    xprintf("06:%02X\n", rv);
-    nrf24_readRegister(7,&rv,1);
-    xprintf("07:%02X\n", rv);
-    nrf24_readRegister(8,&rv,1);
-    xprintf("08:%02X\n", rv);
-    nrf24_readRegister(9,&rv,1);
-    xprintf("09:%02X\n", rv);
+    xprintf("00:%02X", nrf24_rdReg(0));
+    xprintf("  01:%02X", nrf24_rdReg(1));
+    xprintf("  02:%02X", nrf24_rdReg(2));
+    xprintf("  03:%02X", nrf24_rdReg(3));
+    xprintf("  04:%02X", nrf24_rdReg(4));
+    xprintf("  05:%02X", nrf24_rdReg(5));
+    xprintf("  06:%02X", nrf24_rdReg(6));
+    xprintf("  07:%02X", nrf24_rdReg(7));
+    xprintf("  08:%02X", nrf24_rdReg(8));
+    xprintf("  09:%02X\n", nrf24_rdReg(9));
+	nrf24_readRegister(0x0a, ta, 5);
+	xprintf("0A:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
+	nrf24_readRegister(0x0b, ta, 5);
+	xprintf("0B:%02X %02X %02X %02X %02X", ta[4], ta[3], ta[2], ta[1], ta[0]);
+    xprintf("  0C:%02X", nrf24_rdReg(0x0c));
+    xprintf("  0D:%02X", nrf24_rdReg(0x0d));
+    xprintf("  0E:%02X", nrf24_rdReg(0x0e));
+    xprintf("  0F:%02X\n", nrf24_rdReg(0x0f));
+	nrf24_readRegister(0x10, ta, 5);
+	xprintf("10:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
+    xprintf("11:%02X", nrf24_rdReg(0x11));
+    xprintf("  12:%02X", nrf24_rdReg(0x12));
+    xprintf("  13:%02X", nrf24_rdReg(0x13));
+    xprintf("  14:%02X", nrf24_rdReg(0x14));
+    xprintf("  15:%02X", nrf24_rdReg(0x15));
+    xprintf("  16:%02X", nrf24_rdReg(0x16));
+    xprintf("  17:%02X\n", nrf24_rdReg(0x17));
+    xprintf("1C:%02X", nrf24_rdReg(0x1c));
+    xprintf("  1D:%02X\n", nrf24_rdReg(0x1d));
+//void nrf24_transferSync(uint8_t* dataout, uint8_t* datain, uint8_t len)
+#endif
     _delay_ms(100);
 
 
@@ -238,6 +262,20 @@ int main(void)
             xmitFlagPc = 1;
         }
 #endif
+        /* increment time variables */
+        if (wdTick) {
+            wdTick = 0;
+            if (++wdSec >= 7) {
+                wdSec = 0;
+                if (++wdMin >= 60) {
+                    wdMin = 0;
+                    if (++wdHour >= 24) {
+                        wdHour = 0;
+                        ++wdDay;
+                    }
+                }
+            }
+        }
 
         if (wdInt > 3) {
             wdInt = 0;
@@ -262,6 +300,16 @@ int main(void)
                 sens_sw.switch_state = (PINB & (1<<2))?(1):(0);
                 data_array[pay_idx] = *(uint8_t *)&sens_sw;
                 pay_idx++;
+            }
+
+
+            if (sensors.vcc) {
+                uint16_t vcc = readVccVoltage();
+                sens_vcc.sensorId = SENS_ID_VCC;
+                sens_vcc.vcc_lo = vcc & 0xFF;
+                sens_vcc.vcc_hi = (vcc>>8) & 0x3;
+                memcpy(&data_array[pay_idx], &sens_vcc, sizeof(sens_vcc));
+                pay_idx += sizeof(sens_vcc);
             }
 
 #if 1
@@ -296,11 +344,6 @@ int main(void)
 
         }
 
-#if 0
-        ASSERT_GRNLED();
-        _delay_ms(1);
-        DEASSERT_GRNLED();
-#endif
 
 		/* Wait a little ... */
 #if EN_WD==0
@@ -309,6 +352,95 @@ int main(void)
 
     }
     return 0;
+}
+
+// Returns the current Vcc voltage as a fixed point number with 1 implied decimal places, i.e.
+// 50 = 5 volts, 25 = 2.5 volts,  19 = 1.9 volts
+//
+// On each reading we: enable the ADC, take the measurement, and then disable the ADC for power savings.
+// This takes >1ms becuase the internal reference voltage must stabilize each time the ADC is enabled.
+// For faster readings, you could initialize once, and then take multiple fast readings, just make sure to
+// disable the ADC before going to sleep so you don't waste power. 
+
+uint16_t readVccVoltage(void)
+{
+	
+	PRR &= ~(1<<PRADC);
+
+	// Select ADC inputs
+	// bit    76543210 
+	// REFS = 00       = Vcc used as Vref
+	// MUX  =   100001 = Single ended, 1.1V (Internal Ref) as Vin
+	
+	ADMUX = 0b00100001;
+	
+	/*
+	By default, the successive approximation circuitry requires an input clock frequency between 50
+	kHz and 200 kHz to get maximum resolution.
+	*/	
+				
+	// Enable ADC, set prescaller to /8 which will give a ADC clock of 1mHz/8 = 125kHz
+	
+	ADCSRA = _BV(ADEN) | _BV(ADPS1) | _BV(ADPS0);
+	
+	/*
+		After switching to internal voltage reference the ADC requires a settling time of 1ms before
+		measurements are stable. Conversions starting before this may not be reliable. The ADC must
+		be enabled during the settling time.
+	*/
+		
+	_delay_ms(1);
+				
+	/*
+		The first conversion after switching voltage source may be inaccurate, and the user is advised to discard this result.
+	*/
+	
+		
+	ADCSRA |= _BV(ADSC);				// Start a conversion
+	while( ADCSRA & _BV( ADSC) ) ;		// Wait for 1st conversion to be ready...
+										//..and ignore the result
+	ADCSRA |= _BV(ADSC);				// Start a conversion
+	while( ADCSRA & _BV( ADSC) ) ;		// Wait for 1st conversion to be ready...
+						
+	ADCSRA |= _BV(ADSC);				// Start a conversion
+	while( ADCSRA & _BV( ADSC) ) ;		// Wait for 1st conversion to be ready...
+						
+		
+	/*
+		After the conversion is complete (ADIF is high), the conversion result can be found in the ADC
+		Result Registers (ADCL, ADCH).		
+		
+		When an ADC conversion is complete, the result is found in these two registers.
+		When ADCL is read, the ADC Data Register is not updated until ADCH is read.		
+	*/
+	
+	// Note we could have used ADLAR left adjust mode and then only needed to read a single byte here
+		
+	uint8_t low  = ADCL;
+	uint8_t high = ADCH;
+
+	uint16_t adc = (high << 8) | low;		// 0<= result <=1023
+			
+	// Compute a fixed point with 1 decimal place (i.e. 5v= 50)
+	//
+	// Vcc   =  (1.1v * 1024) / ADC
+	// Vcc10 = ((1.1v * 1024) / ADC ) * 10				->convert to 1 decimal fixed point
+	// Vcc10 = ((11   * 1024) / ADC )				->simplify to all 16-bit integer math
+				
+//	uint8_t vccx10 = (uint8_t) ( (11 * 1024) / adc); 
+	
+	/*	
+		Note that the ADC will not automatically be turned off when entering other sleep modes than Idle
+		mode and ADC Noise Reduction mode. The user is advised to write zero to ADEN before entering such
+		sleep modes to avoid excessive power consumption.
+	*/
+	
+	ADCSRA &= ~_BV( ADEN );			// Disable ADC to save power
+	PRR |= (1<<PRADC);
+
+	
+	return ( adc );
+	
 }
 
 

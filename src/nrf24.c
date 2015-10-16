@@ -18,8 +18,8 @@
 #define CE				0		/* PORTA */
 #define CSN				1		/* PORTA */
 #define SCK				4		/* PORTA */
-#define MOSI			6		/* PORTA */
-#define MISO			5		/* PORTA */
+#define MOSI			5		/* PORTA */
+#define MISO			6		/* PORTA */
 #define ASSERT_CE()     (PORTA |= (1<<CE))
 #define DEASSERT_CE()   (PORTA &= ~(1<<CE))
 #define DEASSERT_CSN()  (PORTA |= (1<<CSN))
@@ -37,11 +37,11 @@ void spi_init(void)
 	DEASSERT_CSN();
 	PORTA &= ~(1<<SCK);
 
-	USICR = _BV(USIWM0) | _BV(USICS1) | _BV(USICLK);
+	USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK);
 }
 
-#if 0
 #if 1
+#if 0
 uint8_t spi_transfer(uint8_t _data)
 {
   USIDR = _data;
@@ -56,11 +56,17 @@ uint8_t spi_transfer(uint8_t _data)
 uint8_t spi_transfer(uint8_t _data)
 {
   USIDR = _data;
-  USISR = _BV(USIOIF);
+  USISR = (1<<USIOIF);
   
-  while((USISR & _BV(USIOIF)) == 0){
-    USICR = _BV(USIWM0) | _BV(USICS1) | _BV(USICLK) | _BV(USITC);
+#if 1
+  while((USISR & (1<<USIOIF)) == 0) {
+    USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK) | (1<<USITC);
   }
+#else
+  do {
+    USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK) | (1<<USITC);
+  } while((USISR & (1<<USIOIF)) == 0);
+#endif
   return USIDR;
 }
 #endif
@@ -133,6 +139,7 @@ void nrf24_config(uint8_t channel, uint8_t pay_length)
 
     // 250Kbps, TX gain: 0dbm
 //    nrf24_configRegister(RF_SETUP, (2<<RF_DR) | ((0x03)<<RF_PWR));
+//    nrf24_configRegister(RF_SETUP, 0x06);
 
     // CRC enable, 1 byte CRC length
 //    nrf24_configRegister(CONFIG, nrf24_CONFIG);
@@ -275,7 +282,7 @@ void nrf24_transmitSync(uint8_t* dataout, uint8_t len)
 /* Read single register from nrf24 */
 uint8_t nrf24_rdReg(uint8_t reg)
 {
-    uint8_t val;
+    uint8_t val = 0;
 
     ASSERT_CSN();
     spi_transfer(R_REGISTER | (REGISTER_MASK & reg));
@@ -294,7 +301,7 @@ void nrf24_readRegister(uint8_t reg, uint8_t* value, uint8_t len)
 }
 
 /* send and receive multiple bytes over SPI */
-void nrf24_transferSync(uint8_t* dataout,uint8_t* datain,uint8_t len)
+void nrf24_transferSync(uint8_t* dataout, uint8_t* datain, uint8_t len)
 {
     uint8_t i;
 
