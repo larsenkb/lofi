@@ -18,8 +18,8 @@
 #define CE				0		/* PORTA */
 #define CSN				1		/* PORTA */
 #define SCK				4		/* PORTA */
-#define MOSI			5		/* PORTA */
-#define MISO			6		/* PORTA */
+#define MOSI			6		/* PORTA */
+#define MISO			5		/* PORTA */
 #define ASSERT_CE()     (PORTA |= (1<<CE))
 #define DEASSERT_CE()   (PORTA &= ~(1<<CE))
 #define DEASSERT_CSN()  (PORTA |= (1<<CSN))
@@ -40,7 +40,7 @@ void spi_init(void)
 	USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK);
 }
 
-#if 1
+#if 0
 #if 0
 uint8_t spi_transfer(uint8_t _data)
 {
