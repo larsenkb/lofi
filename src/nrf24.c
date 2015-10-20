@@ -151,7 +151,7 @@ void nrf24_config(uint8_t channel, uint8_t pay_length)
 //    nrf24_configRegister(EN_RXADDR,(1<<ERX_P0)|(1<<ERX_P1)|(0<<ERX_P2)|(0<<ERX_P3)|(0<<ERX_P4)|(0<<ERX_P5));
 
     // Auto retransmit delay: 1000 us and Up to 15 retransmit trials
-    nrf24_configRegister(SETUP_RETR,(0x04<<ARD)|(0x0F<<ARC));
+//    nrf24_configRegister(SETUP_RETR,(0x04<<ARD)|(0x0F<<ARC));
 
     // Dynamic length configurations: No dynamic length
 //    nrf24_configRegister(DYNPD,(0<<DPL_P0)|(0<<DPL_P1)|(0<<DPL_P2)|(0<<DPL_P3)|(0<<DPL_P4)|(0<<DPL_P5));
