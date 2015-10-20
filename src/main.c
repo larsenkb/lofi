@@ -15,7 +15,7 @@
 #define F_CPU 1000000UL
 
 #define EN_WD			1
-#define EN_UART			1
+#define EN_UART			0
 #define WD_TO           6
 #define WD_TO_SHORT     3
 #define EN_SWITCH       1
@@ -201,7 +201,7 @@ int main(void)
     sei();
 #endif
 
-#if 1
+#if EN_UART
     xprintf("\nHello\n");
     xprintf("00:%02X", nrf24_rdReg(0));
     xprintf("  01:%02X", nrf24_rdReg(1));
