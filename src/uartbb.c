@@ -105,7 +105,7 @@ void uartbb_putchar(char val)
 	}
 }
 
-
+#if 0
 void uartbb_puts( const char *s )
 {
 	while ( *s ) {
@@ -124,3 +124,5 @@ void uartbb_puthex( uint8_t data )
 	val &= 0xF;
 	uartbb_putchar(hex[val]);
 }
+#endif
+

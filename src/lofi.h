@@ -1,22 +1,25 @@
 #ifndef __LOFI_H__
 #define __LOFI_H__
 
-#if 0
-// Sensor ID/Types
-// 01   10-bit counter
-// 02   NO switch on TR (PIN CHANGE)
-// 03   NC switch on TR (PIN CHANGE)    // don't know if there needs to be a distinction between NC and NO
-// 04   NO switch on TR (POLLED)
-// 05   NC switch on TR (POLLED)
-// 06   Light Sensor on AD
-// 07   Temperature Sensor (Internal)
-// 
 
-#endif
+typedef enum {
+	SENID_NONE = 0,
+	SENID_CTR,
+	SENID_SW1_NC_PC,
+	SENID_VCC,
+	SENID_TEMP,
+	SENID_SW1_NC_POLL,
+	SENID_SW1_NO_PC,
+	SENID_SW1_NO_POLL,
+	SENID_SW2_NC_PC,
+	SENID_SW2_NC_POLL,
+	SENID_SW2_NO_PC,
+	SENID_SW2_NO_POLL
+} senId_t;
 
-#define SENS_ID_CTR             0x01
-#define SENS_ID_SW_NO_PC        0x02
-#define SENS_ID_VCC             0x03
+//#define SENS_ID_CTR             0x01
+//#define SENS_ID_SW_NO_PC        0x02
+//#define SENS_ID_VCC             0x03
 
 
 typedef struct {
@@ -33,9 +36,11 @@ typedef struct {
 } sensor_ctr_t;
 
 typedef struct {
-    uint8_t     ctr             :1;
-    uint8_t     sw01            :1;     /* switch NO on TR PIN CHANGE */
-    uint8_t     vcc             :1;
+    uint8_t     ctr				:1;
+    uint8_t     sw1				:1;
+    uint8_t     vcc				:1;
+	uint8_t		temp			:1;
+	uint8_t		sw2				:1;
 } sensors_t;
 
 typedef struct {
@@ -43,6 +48,12 @@ typedef struct {
     uint8_t     sensorId        :5;
     uint8_t     vcc_lo;
 } sensor_vcc_t;
+
+typedef struct {
+    uint8_t     temp_hi			:3;
+    uint8_t     sensorId		:5;
+    uint8_t     temp_lo;
+} sensor_temp_t;
 
 
 #endif  /* __LOFI_H__ */

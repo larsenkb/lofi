@@ -227,6 +227,7 @@ AVRDUDE_PORT = com1    # programmer connected to serial device
 
 AVRDUDE_WRITE_FLASH = -U flash:w:$(TARGET).hex
 #AVRDUDE_WRITE_EEPROM = -U eeprom:w:$(TARGET).eep
+AVRDUDE_WRITE_FUSES = -U lfuse:w:0x62:m -U hfuse:w:0xD7:m
 
 
 # Uncomment the following if you want avrdude's erase cycle counter.
@@ -315,7 +316,7 @@ lib: $(LIBNAME)
 
 # Program the device.  
 program: $(TARGET).hex $(TARGET).eep
-	$(AVRDUDE) $(AVRDUDE_FLAGS)  $(AVRDUDE_WRITE_FLASH) $(AVRDUDE_WRITE_EEPROM)
+	$(AVRDUDE) $(AVRDUDE_FLAGS)  $(AVRDUDE_WRITE_FLASH) $(AVRDUDE_WRITE_EEPROM) $(AVRDUDE_WRITE_FUSES)
 
 
 

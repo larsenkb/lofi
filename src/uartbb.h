@@ -14,6 +14,8 @@
 #define CLR_TX()  (UARTBB_TXPORT &= ~(1<<UARTBB_TXBIT))
 #define SET_TX()  (UARTBB_TXPORT |= (1<<UARTBB_TXBIT))
 
+/* the tx/rx buffer sizes are this power of two */
+/* always need to be a power of two */
 #define UARTBB_TX_PWR		5
 
 enum { UARTBB_STATE_IDLE = 0,

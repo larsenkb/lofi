@@ -17,9 +17,7 @@
 #if _USE_XFUNC_OUT
 #include <stdarg.h>
 void (*xfunc_out)(char);	/* Pointer to the output stream */
-#if 0
 static char *outptr;
-#endif
 
 /*----------------------------------------------*/
 /* Put a character                              */
@@ -29,12 +27,10 @@ void xputc (char c)
 {
 	if (_CR_CRLF && c == '\n') xputc('\r');		/* CR -> CRLF */
 
-#if 0
     if (outptr) {
 		*outptr++ = (unsigned char)c;
 		return;
 	}
-#endif
 
 	if (xfunc_out) xfunc_out((unsigned char)c);
 }
@@ -46,29 +42,11 @@ void xputc (char c)
 /*----------------------------------------------*/
 
 void xputs (					/* Put a string to the default device */
-	const char* str				/* Pointer to the string */
-)
+	const char* str)			/* Pointer to the string */
 {
 	while (*str)
 		xputc(*str++);
 }
-
-#if 0
-void xfputs (					/* Put a string to the specified device */
-	void(*func)(unsigned char),	/* Pointer to the output function */
-	const char*	str				/* Pointer to the string */
-)
-{
-	void (*pf)(unsigned char);
-
-
-	pf = xfunc_out;		/* Save current output device */
-	xfunc_out = func;	/* Switch output to specified device */
-	while (*str)		/* Put the string */
-		xputc(*str++);
-	xfunc_out = pf;		/* Restore output device */
-}
-#endif
 
 
 /*----------------------------------------------*/
@@ -91,8 +69,7 @@ void xfputs (					/* Put a string to the specified device */
 static
 void xvprintf (
 	const char*	fmt,	/* Pointer to the format string */
-	va_list arp			/* Pointer to arguments */
-)
+	va_list arp)		/* Pointer to arguments */
 {
 	unsigned int r, i, j, w, f;
 	unsigned long v;
@@ -168,8 +145,7 @@ void xvprintf (
 
 void xprintf (			/* Put a formatted string to the default device */
 	const char*	fmt,	/* Pointer to the format string */
-	...					/* Optional arguments */
-)
+	...)				/* Optional arguments */
 {
 	va_list arp;
 
@@ -179,12 +155,10 @@ void xprintf (			/* Put a formatted string to the default device */
 	va_end(arp);
 }
 
-#if 0
 void xsprintf (			/* Put a formatted string to the memory */
 	char* buff,			/* Pointer to the output buffer */
 	const char*	fmt,	/* Pointer to the format string */
-	...					/* Optional arguments */
-)
+	...)				/* Optional arguments */
 {
 	va_list arp;
 
@@ -199,6 +173,7 @@ void xsprintf (			/* Put a formatted string to the memory */
 	outptr = 0;			/* Switch destination for device */
 }
 
+#if 0
 void xfprintf (					/* Put a formatted string to the specified device */
 	void(*func)(unsigned char),	/* Pointer to the output function */
 	const char*	fmt,			/* Pointer to the format string */
