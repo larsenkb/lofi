@@ -28,8 +28,8 @@ enum { UARTBB_STATE_IDLE = 0,
 extern volatile uint8_t      uartbb_next_state;
 
 void uartbb_init(void);
-void uartbb_puthex( uint8_t data );
-void uartbb_puts( const char *s );
+//void uartbb_puthex( uint8_t data );
+//void uartbb_puts( const char *s );
 void uartbb_putchar(char val);
 
 #endif  /* __UARTBB_H__ */

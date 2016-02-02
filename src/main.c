@@ -1,3 +1,50 @@
+//-------------------------------------------------------------
+// lofi + nrf24
+//-------------------------------------------------------------
+// This is software that runs on a LoFi board designed by David Cook.
+// See https://hackaday.io/project/1552-lofi
+//
+// I have mated the lofi board with a nrf24l01+ instead of using
+// the 433 MHz transmitter described at the above link.
+//
+// I'm using the nrf24 in its very basic form, using miminal
+// features.
+//
+// I am using parts of xprintf.[ch] by ChaN (see xprintf.c for copyright)
+// I am using parts of nrf24.[ch] by <ihsan@ehribar.me> (see nrf24.c for license)
+//
+// The lofi+nrf24 combo draws ~6 uA in the idle mode.
+// It can monitor two reed switches, Vcc and internal temperature.
+// It uses the internal RC oscillator so timing is not very accurate.
+// The switches and be configured to generate an interrupt on Pin Change
+// which will trigger a transmission. Otherwise, they are only polled
+// and switch state will be transmitted at the polling frequency.
+// The polling period is approximately one minute for the switches
+// and temperature.
+// The polling period for Vcc is about one day.
+// A 10-bit counter is sent on each transmission.
+//
+// Configuration is stored in the eeprom as follows:
+// addr 0:  node ID
+//          This is an 8-bit node unique ID.
+// addr 1:  capability byte
+//          bit 0 - enable 10-bit counter to be xmitted.
+//                  (requires two bytes in tx payload).
+//          bit 1 - switch 1 is installed, so monitor it.
+//                  (requires one byte in tx payload).
+//          bit 2 - monitor Vcc and transmit it about once per day.
+//                  (requires two bytes in tx payload).
+//          bit 3 - monitor internal temperature and transmit it about once per minute.
+//                  (requires two bytes in tx payload).
+//          bit 4 - switch 2 is installed, so monitor it.
+//                  (requires one byte in tx payload).
+//          bit 5 - 
+//          bit 6 - 
+//          bit 7 - 
+// addr 2:   
+//
+//---------------------------------------------------------
+
 #include <avr/io.h>
 #include <avr/sleep.h>
 #include <avr/wdt.h>
@@ -26,15 +73,20 @@
 #define SWITCH_MSK      2
 #define SWITCH_GMSK     5
 
+#define EEPROM_NODEID_ADR        ((uint8_t *)0)
+#define EEPROM_CAPABILITY_ADR    ((uint8_t *)1)
 
-#define LED_RED			0		/* PORTB  bit0 */
-#define LED_GREEN		1		/* PORTB  bit1 */
+#define NRF24_CHANNEL            2
+#define NRF24_PAYLOAD_LEN        8
 
+// ---------  LED MACROS  ----------
+#define LED_RED                  (1<<0)  // PORTB bit0
+#define LED_GRN                  (1<<1)  // PORTB bit1
 
-#define ASSERT_GRNLED()	(PORTB |= (1<<LED_GREEN))
-#define DEASSERT_GRNLED() (PORTB &= ~(1<<LED_GREEN))
-#define ASSERT_REDLED()	(PORTB |= (1<<LED_RED))
-#define DEASSERT_REDLED() (PORTB &= ~(1<<LED_RED))
+#define LED_INIT(x)              (DDRB |= (x))
+#define LED_ASSERT(x)            (PORTB |= (x))
+#define LED_DEASSERT(x)          (PORTB &= ~(x))
+
 
 
 /* ------------------------------------------------------------------------- */
@@ -69,36 +121,35 @@ uint16_t readTemperature(void);
 
 
 //****************************************************************  
+// system_sleep - go to sleep
+//
 // set system into the sleep state 
 // system wakes up when watchdog times out
 void system_sleep(void)
 {
-
-//  cbi(ADCSRA,ADEN);                    // switch Analog to Digitalconverter OFF
-
   set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
   sleep_enable();
 
   sleep_mode();                        // System sleeps here
 
   sleep_disable();                     // System continues execution here when watchdog timed out 
-//  sbi(ADCSRA,ADEN);                    // switch Analog to Digitalconverter ON
-
 }
 
 //****************************************************************
+// setup_watchdog - configure watchdog timeout
+//
 // 0=16ms, 1=32ms,2=64ms,3=128ms,4=250ms,5=500ms
 // 6=1 sec,7=2 sec, 8=4 sec, 9= 8sec
-void setup_watchdog(int ii)
+void setup_watchdog(int val)
 {
 	uint8_t bb;
 
     wdInt = 0;
 
-	if (ii > 9 )
-		ii=9;
-	bb=ii & 7;
-	if (ii > 7)
+	if (val > 9 )
+		val = 9;
+	bb = val & 7;
+	if (val > 7)
 		bb |= (1<<5);
 	bb |= (1<<WDCE);
 
@@ -111,6 +162,9 @@ void setup_watchdog(int ii)
 	WDTCSR |= _BV(WDIE);
 }
 
+//****************************************************************
+// watchdog_isr
+//
 // This runs each time the watch dog wakes us up from sleep
 // The system wakes up when any interrupt occurs. Setting this
 // flag lets background (main loop) know that the watchdog
@@ -127,6 +181,9 @@ ISR(WATCHDOG_vect)
 }
 
 #if EN_SWITCH
+//****************************************************************
+// pinChange_isr
+//
 ISR(PCINT1_vect)
 {
     switchFlag = 1;
@@ -135,26 +192,28 @@ ISR(PCINT1_vect)
 }
 #endif
 
+//****************************************************************
+// main
+//
 int main(void)
 {
 //    uint8_t rv;
 
 
-	/* Perform system initialization */
+	// Perform system initialization
 	CLKPR = (1<<CLKPCE);
 	CLKPR = 3;
 
 //	PRR |= (1<<PRTIM1) | (1<<PRTIM0) | (1<<PRUSI) | (1<<PRADC);
 
-    /* initialize uart */
+    // initialize uart
 #if EN_UART
 	uartbb_init();
 	xfunc_out = uartbb_putchar;
 #endif
 
-	/* init LED pins as OUTPUT */
-	DDRB |= (1<<LED_GREEN);
-	DDRB |= (1<<LED_RED);
+    // init LED pins as OUTPUT
+    LED_INIT(LED_RED | LED_GRN);
 
 #if EN_SWITCH
     switchFlag = 0;
@@ -166,17 +225,21 @@ int main(void)
     PCMSK1 = (1<<SWITCH_MSK);
 #endif
 
-    nodeId = eeprom_read_byte((uint8_t *)0);
-    *(uint8_t *)&sensors = eeprom_read_byte((uint8_t *)1);
+	// read the NodeID from eeprom
+    nodeId = eeprom_read_byte(EEPROM_NODEID_ADR);
+	
+	// read the capabilities from eeprom
+    *(uint8_t *)&sensors = eeprom_read_byte(EEPROM_CAPABILITY_ADR);
 //    xprintf("nodeId: %02X\n", nodeId);
 
-	// Initialize sensor data from eeprom information
+	// Initialize counter capability/structure if installed
     if (sensors.ctr) {
         sens_ctr.sensorId = SENID_CTR;
         sens_ctr.ctr_lo = 0;
         sens_ctr.ctr_hi = 0;
     }
 
+	// Initialize switch 1 capability/structure if installed
     if (sensors.sw1) {
         sens_sw1.sensorId = SENID_SW1_NC_PC;
         sens_sw1.swtich_changed = 0;
@@ -184,6 +247,7 @@ int main(void)
         sens_sw1.rsvd = 0;
     }
 
+	// Initialize switch 2 capability/structure if installed
     if (sensors.sw2) {
         sens_sw2.sensorId = SENID_SW2_NC_PC;
         sens_sw2.swtich_changed = 0;
@@ -191,6 +255,7 @@ int main(void)
         sens_sw2.rsvd = 0;
     }
 
+	// Initialize Vcc capability/structure if installed
     if (sensors.vcc) {
         sens_vcc.sensorId = SENID_VCC;
         sens_vcc.vcc_lo = 0;
@@ -198,15 +263,15 @@ int main(void)
     }
 
 
-	/* init hardware pins for talking to radio */
+	// init hardware pins for talking to radio
 	nrf24_init();
     
-	/* Channel 2 , payload length: 4 */
-	nrf24_config(2, PAYLOAD_LENGTH);
-    data_array[0] = nodeId;
+	// Initialize radio channel and payload length
+	nrf24_config(NRF24_CHANNEL, NRF24_PAYLOAD_LEN);
+//    data_array[0] = nodeId;
 
 #if EN_WD
-    /* initialize watchdog and associated variables */
+    // initialize watchdog and associated variables
     wdTick = 0;
     wdSec = 0;
     wdMin = 0;
@@ -256,9 +321,13 @@ int main(void)
     _delay_ms(100);
 
 
+	//
+	// Start of main loop
+	//
 	while (1) {
   
 #if EN_WD
+		// go to sleep and wait for interrupt (watchdog or pin change)
         system_sleep();
 #endif
 
@@ -318,8 +387,9 @@ int main(void)
             if (xmitFlagWd) xmitFlagWd = 0;
             if (xmitFlagPc) xmitFlagPc = 0;
 
-            /* Fill the data buffer */
+            // Clear the payload buffer
             memset(data_array, 0, 8);
+            // Fill the payload buffer
 		    data_array[0] = nodeId;
             if (sensors.ctr) {
                 memcpy(&data_array[pay_idx], &sens_ctr, sizeof(sens_ctr));
@@ -375,9 +445,9 @@ int main(void)
 #endif
 
 #if 1
-            ASSERT_GRNLED();
+			LED_ASSERT(LED_GRN);
             _delay_us(500);
-            DEASSERT_GRNLED();
+			LED_DEASSERT(LED_GRN);
 #endif
 
 
@@ -393,12 +463,17 @@ int main(void)
     return 0;
 }
 
+//------------------------------------------------------------------
+// readVccVoltage - read Vcc (indirectly) through ADC subsystem
+//
 // Returns the 10-bit ADC value.
 // On each reading we: enable the ADC, take the measurement, and then disable the ADC for power savings.
 // This takes >1ms becuase the internal reference voltage must stabilize each time the ADC is enabled.
 // For faster readings, you could initialize once, and then take multiple fast readings, just make sure to
 // disable the ADC before going to sleep so you don't waste power. 
-
+// I got this technique from:
+//   http://wp.josh.com/2014/11/06/battery-fuel-guage-with-zero-parts-and-zero-pins-on-avr/
+//
 uint16_t readVccVoltage(void)
 {
 	
@@ -425,6 +500,7 @@ uint16_t readVccVoltage(void)
 	_delay_ms(1);
 				
 	// The first conversion after switching voltage source may be inaccurate, and the user is advised to discard this result.
+	// first conversion after disable/enable will be an extended conversion
 		
 	ADCSRA |= _BV(ADSC);				// Start a conversion
 	while( ADCSRA & _BV( ADSC) ) ;		// Wait for 1st conversion to be ready...
@@ -468,6 +544,9 @@ uint16_t readVccVoltage(void)
 	
 }
 
+//------------------------------------------------------------------
+// readTemperature - read internal temperature through ADC subsystem
+//
 // Returns the 10-bit ADC value.
 // On each reading we: enable the ADC, take the measurement, and then disable the ADC for power savings.
 // This takes >1ms becuase the internal reference voltage must stabilize each time the ADC is enabled.
@@ -500,6 +579,7 @@ uint16_t readTemperature(void)
 	_delay_ms(1);
 				
 	// The first conversion after switching voltage source may be inaccurate, and the user is advised to discard this result.
+	// first conversion after disable/enable will be an extended conversion
 		
 	ADCSRA |= _BV(ADSC);				// Start a conversion
 	while( ADCSRA & _BV( ADSC) ) ;		// Wait for 1st conversion to be ready...
@@ -530,7 +610,6 @@ uint16_t readTemperature(void)
 	// Vcc10 = ((1.1v * 1024) / ADC ) * 10				->convert to 1 decimal fixed point
 	// Vcc10 = ((11   * 1024) / ADC )				->simplify to all 16-bit integer math
 				
-//	uint8_t vccx10 = (uint8_t) ( (11 * 1024) / adc); 
 	
 	// Note that the ADC will not automatically be turned off when entering other sleep modes than Idle
 	// mode and ADC Noise Reduction mode. The user is advised to write zero to ADEN before entering such
@@ -546,6 +625,4 @@ uint16_t readTemperature(void)
 
 #if 0
 disable BOD to save power prior to sleep
-disable ADC prior to sleep
-first conversion after disable/enable will be an extended conversion
 #endif
