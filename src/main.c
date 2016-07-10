@@ -24,24 +24,8 @@
 // The polling period for Vcc is about one day.
 // A 10-bit counter is sent on each transmission.
 //
-// Configuration is stored in the eeprom as follows:
-// addr 0:  node ID
-//          This is an 8-bit node unique ID.
-// addr 1:  capability byte
-//          bit 0 - enable 10-bit counter to be xmitted.
-//                  (requires two bytes in tx payload).
-//          bit 1 - switch 1 is installed, so monitor it.
-//                  (requires one byte in tx payload).
-//          bit 2 - monitor Vcc and transmit it about once per day.
-//                  (requires two bytes in tx payload).
-//          bit 3 - monitor internal temperature and transmit it about once per minute.
-//                  (requires two bytes in tx payload).
-//          bit 4 - switch 2 is installed, so monitor it.
-//                  (requires one byte in tx payload).
-//          bit 5 - 
-//          bit 6 - 
-//          bit 7 - 
-// addr 2:   
+// Configuration is stored in the eeprom starting at addr 0.
+// See config_t structure for details.
 //
 //---------------------------------------------------------
 
@@ -94,7 +78,7 @@ volatile uint8_t wdInt;
 volatile uint8_t wdTick;
 uint8_t wdSec, wdMin, wdHour;
 uint16_t wdDay;
-uint8_t nodeId;
+//uint8_t nodeId;
 uint8_t data_array[PAYLOAD_LENGTH];
 #if EN_SWITCH
 volatile uint8_t switchFlag;
@@ -106,6 +90,7 @@ uint8_t xmitFlagPc;
 
 uint8_t ta[8];
 
+config_t		config;
 sensor_ctr_t    sens_ctr;
 sensors_t       sensors;
 sensor_switch_t sens_sw1;
@@ -176,7 +161,7 @@ ISR(WATCHDOG_vect)
 //        switchFlagWd = 1;
 //    } else {
         wdTick = 1;
-        wdInt++;
+//        wdInt++;
 //    }
 }
 
@@ -206,60 +191,92 @@ int main(void)
 
 //	PRR |= (1<<PRTIM1) | (1<<PRTIM0) | (1<<PRUSI) | (1<<PRADC);
 
+	eeprom_read_block(&config, 0, sizeof(config));
+
     // initialize uart
 #if EN_UART
-	uartbb_init();
-	xfunc_out = uartbb_putchar;
+	if (config.txDbg) {
+		uartbb_init();
+		xfunc_out = uartbb_putchar;
+	}
 #endif
 
     // init LED pins as OUTPUT
-    LED_INIT(LED_RED | LED_GRN);
+	if (config.enLed) {
+		LED_INIT(LED_RED | LED_GRN);
+	}
 
-#if EN_SWITCH
+#if 0
     switchFlag = 0;
     switchFlagWd = 0;
     debounceFlag = 0;
-    DDRB &= ~(1<<2);
+//    DDRB &= ~(1<<2);
 //    PORTB |= (1<<2);
     GIMSK = (1<<SWITCH_GMSK);
     PCMSK1 = (1<<SWITCH_MSK);
 #endif
 
 	// read the NodeID from eeprom
-    nodeId = eeprom_read_byte(EEPROM_NODEID_ADR);
+//    nodeId = eeprom_read_byte(EEPROM_NODEID_ADR);
 	
 	// read the capabilities from eeprom
-    *(uint8_t *)&sensors = eeprom_read_byte(EEPROM_CAPABILITY_ADR);
-//    xprintf("nodeId: %02X\n", nodeId);
+//    *(uint8_t *)&sensors = eeprom_read_byte(EEPROM_CAPABILITY_ADR);
+//    xprintf("nodeId: %02X\n", config.nodeId);
 
 	// Initialize counter capability/structure if installed
-    if (sensors.ctr) {
+    if (config.ctr) {
         sens_ctr.sensorId = SENID_CTR;
         sens_ctr.ctr_lo = 0;
         sens_ctr.ctr_hi = 0;
     }
 
-	// Initialize switch 1 capability/structure if installed
-    if (sensors.sw1) {
-        sens_sw1.sensorId = SENID_SW1_NC_PC;
-        sens_sw1.swtich_changed = 0;
-        sens_sw1.switch_state = (PINB & (1<<2))?(1):(0);
-        sens_sw1.rsvd = 0;
-    }
-
-	// Initialize switch 2 capability/structure if installed
-    if (sensors.sw2) {
-        sens_sw2.sensorId = SENID_SW2_NC_PC;
-        sens_sw2.swtich_changed = 0;
-        sens_sw2.switch_state = (PINB & (1<<2))?(1):(0);
-        sens_sw2.rsvd = 0;
-    }
-
 	// Initialize Vcc capability/structure if installed
-    if (sensors.vcc) {
+    if (config.vcc) {
         sens_vcc.sensorId = SENID_VCC;
         sens_vcc.vcc_lo = 0;
         sens_vcc.vcc_hi = 0;
+    }
+
+	// Initialize switch 1 capability/structure if installed
+    if (config.sw1_enb) {
+		DDRB &= ~(1<<2);
+		sens_sw1.sensorId = SENID_SW1;
+//        sens_sw1.sensorId = SENID_SW1_NC_PC;
+		if (config.sw1_nc)
+			sens_sw1.switch_closed = (PINB & (1<<2))?(1):(0);
+		else
+			sens_sw1.switch_closed = (PINB & (1<<2))?(0):(1);
+        sens_sw1.swtich_changed = 0;
+        sens_sw1.rsvd = 0;
+		if (config.sw1_pc) {
+			// enable pin change functionality
+			GIMSK = (1<<SWITCH_GMSK);
+			PCMSK1 = (1<<SWITCH_MSK);
+			switchFlag = 0;
+			switchFlagWd = 0;
+			debounceFlag = 0;
+		}
+    }
+
+	// Initialize switch 2 capability/structure if installed
+    if (config.sw2_enb) {
+		DDRA &= ~(1<<2);
+        sens_sw2.sensorId = SENID_SW2;
+//        sens_sw2.sensorId = SENID_SW2_NC_PC;
+		if (config.sw2_nc)
+			sens_sw2.switch_closed = (PINA & (1<<2))?(1):(0);
+		else
+			sens_sw2.switch_closed = (PINA & (1<<2))?(0):(1);
+        sens_sw2.swtich_changed = 0;
+        sens_sw2.rsvd = 0;
+		if (config.sw2_pc) {
+			// enable pin change functionality
+			GIMSK = (1<<SWITCH_GMSK);
+			PCMSK1 = (1<<SWITCH_MSK);
+			switchFlag = 0;
+			switchFlagWd = 0;
+			debounceFlag = 0;
+		}
     }
 
 
@@ -267,8 +284,8 @@ int main(void)
 	nrf24_init();
     
 	// Initialize radio channel and payload length
-	nrf24_config(NRF24_CHANNEL, NRF24_PAYLOAD_LEN);
-//    data_array[0] = nodeId;
+	nrf24_config(config.rf_chan, NRF24_PAYLOAD_LEN, config.spd_1M, config.rf_gain);
+//    data_array[0] = config.nodeId;
 
 #if EN_WD
     // initialize watchdog and associated variables
@@ -277,7 +294,10 @@ int main(void)
     wdMin = 0;
     wdHour = 0;
     wdDay = 0;
-	setup_watchdog(WD_TO);
+	if (config.fastTrack)
+		setup_watchdog(WD_TO-1);
+	else
+		setup_watchdog(WD_TO);
 #endif
 
   /* Enable interrupts */
@@ -286,37 +306,39 @@ int main(void)
 #endif
 
 #if 0 //EN_UART
-    xprintf("\nHello\n");
-    xprintf("00:%02X", nrf24_rdReg(0));
-    xprintf("  01:%02X", nrf24_rdReg(1));
-    xprintf("  02:%02X", nrf24_rdReg(2));
-    xprintf("  03:%02X", nrf24_rdReg(3));
-    xprintf("  04:%02X", nrf24_rdReg(4));
-    xprintf("  05:%02X", nrf24_rdReg(5));
-    xprintf("  06:%02X", nrf24_rdReg(6));
-    xprintf("  07:%02X", nrf24_rdReg(7));
-    xprintf("  08:%02X", nrf24_rdReg(8));
-    xprintf("  09:%02X\n", nrf24_rdReg(9));
-	nrf24_readRegister(0x0a, ta, 5);
-	xprintf("0A:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
-	nrf24_readRegister(0x0b, ta, 5);
-	xprintf("0B:%02X %02X %02X %02X %02X", ta[4], ta[3], ta[2], ta[1], ta[0]);
-    xprintf("  0C:%02X", nrf24_rdReg(0x0c));
-    xprintf("  0D:%02X", nrf24_rdReg(0x0d));
-    xprintf("  0E:%02X", nrf24_rdReg(0x0e));
-    xprintf("  0F:%02X\n", nrf24_rdReg(0x0f));
-	nrf24_readRegister(0x10, ta, 5);
-	xprintf("10:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
-    xprintf("11:%02X", nrf24_rdReg(0x11));
-    xprintf("  12:%02X", nrf24_rdReg(0x12));
-    xprintf("  13:%02X", nrf24_rdReg(0x13));
-    xprintf("  14:%02X", nrf24_rdReg(0x14));
-    xprintf("  15:%02X", nrf24_rdReg(0x15));
-    xprintf("  16:%02X", nrf24_rdReg(0x16));
-    xprintf("  17:%02X\n", nrf24_rdReg(0x17));
-    xprintf("1C:%02X", nrf24_rdReg(0x1c));
-    xprintf("  1D:%02X\n", nrf24_rdReg(0x1d));
-//void nrf24_transferSync(uint8_t* dataout, uint8_t* datain, uint8_t len)
+	if (config.txDbg) {
+	    xprintf("\nHello\n");
+	    xprintf("00:%02X", nrf24_rdReg(0));
+	    xprintf("  01:%02X", nrf24_rdReg(1));
+	    xprintf("  02:%02X", nrf24_rdReg(2));
+	    xprintf("  03:%02X", nrf24_rdReg(3));
+	    xprintf("  04:%02X", nrf24_rdReg(4));
+	    xprintf("  05:%02X", nrf24_rdReg(5));
+	    xprintf("  06:%02X", nrf24_rdReg(6));
+	    xprintf("  07:%02X", nrf24_rdReg(7));
+	    xprintf("  08:%02X", nrf24_rdReg(8));
+	    xprintf("  09:%02X\n", nrf24_rdReg(9));
+		nrf24_readRegister(0x0a, ta, 5);
+		xprintf("0A:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
+		nrf24_readRegister(0x0b, ta, 5);
+		xprintf("0B:%02X %02X %02X %02X %02X", ta[4], ta[3], ta[2], ta[1], ta[0]);
+	    xprintf("  0C:%02X", nrf24_rdReg(0x0c));
+	    xprintf("  0D:%02X", nrf24_rdReg(0x0d));
+	    xprintf("  0E:%02X", nrf24_rdReg(0x0e));
+	    xprintf("  0F:%02X\n", nrf24_rdReg(0x0f));
+		nrf24_readRegister(0x10, ta, 5);
+		xprintf("10:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
+	    xprintf("11:%02X", nrf24_rdReg(0x11));
+	    xprintf("  12:%02X", nrf24_rdReg(0x12));
+	    xprintf("  13:%02X", nrf24_rdReg(0x13));
+	    xprintf("  14:%02X", nrf24_rdReg(0x14));
+	    xprintf("  15:%02X", nrf24_rdReg(0x15));
+	    xprintf("  16:%02X", nrf24_rdReg(0x16));
+	    xprintf("  17:%02X\n", nrf24_rdReg(0x17));
+	    xprintf("1C:%02X", nrf24_rdReg(0x1c));
+	    xprintf("  1D:%02X\n", nrf24_rdReg(0x1d));
+		//void nrf24_transferSync(uint8_t* dataout, uint8_t* datain, uint8_t len)
+	}
 #endif
     _delay_ms(100);
 
@@ -374,12 +396,22 @@ int main(void)
         }
 #endif
 
-        if (wdInt > 3) {
-            wdInt = 0;
-            xmitFlagWd = 1;
-        }
+		if (wdTick) {
+			wdTick = 0;
+			if (config.fastTrack) {
+				xmitFlagWd = 1;
+			} else {
+				if (++wdInt > 3) {
+				    wdInt = 0;
+				    xmitFlagWd = 1;
+			    }
+			}
+		}
+
 #if 0
+		if (config.txDbg) {
             xprintf("%02X ", nrf24_rdReg(8));
+		}
 #endif
         if (xmitFlagWd || xmitFlagPc) {
             uint8_t pay_idx = 1;
@@ -390,22 +422,37 @@ int main(void)
             // Clear the payload buffer
             memset(data_array, 0, 8);
             // Fill the payload buffer
-		    data_array[0] = nodeId;
-            if (sensors.ctr) {
+		    data_array[0] = config.nodeId;
+            if (config.ctr) {
                 memcpy(&data_array[pay_idx], &sens_ctr, sizeof(sens_ctr));
                 pay_idx += sizeof(sens_ctr);
                 if (++sens_ctr.ctr_lo == 0)
                     sens_ctr.ctr_hi++;
             }
-            if (sensors.sw1) {
+
+            if (config.sw1_enb) {
                 sens_sw1.swtich_changed = 0; //xmitFlagPc;
-                sens_sw1.switch_state = (PINB & (1<<2))?(1):(0);
+				if (config.sw1_nc)
+					sens_sw1.switch_closed = (PINB & (1<<2))?(1):(0);
+				else
+					sens_sw1.switch_closed = (PINB & (1<<2))?(0):(1);
                 data_array[pay_idx] = *(uint8_t *)&sens_sw1;
                 pay_idx++;
             }
 
+            if (config.sw2_enb) {
+                sens_sw2.swtich_changed = 0; //xmitFlagPc;
+				if (config.sw2_nc)
+					sens_sw2.switch_closed = (PINA & (1<<2))?(1):(0);
+				else
+					sens_sw2.switch_closed = (PINA & (1<<2))?(0):(1);
+                data_array[pay_idx] = *(uint8_t *)&sens_sw2;
+                pay_idx++;
+            }
 
-            if (sensors.vcc) {
+
+
+            if (config.vcc) {
                 uint16_t vcc = readVccVoltage();
                 sens_vcc.sensorId = SENID_VCC;
                 sens_vcc.vcc_lo = vcc & 0xFF;
@@ -414,7 +461,7 @@ int main(void)
                 pay_idx += sizeof(sens_vcc);
             }
 
-            if (sensors.temp) {
+            if (config.temp) {
                 uint16_t temp = readTemperature();
                 sens_temp.sensorId = SENID_TEMP;
                 sens_temp.temp_lo = temp & 0xFF;
@@ -445,9 +492,11 @@ int main(void)
 #endif
 
 #if 1
-			LED_ASSERT(LED_GRN);
-            _delay_us(500);
-			LED_DEASSERT(LED_GRN);
+	if (config.enLed) {
+		LED_ASSERT(LED_GRN);
+        _delay_us(500);
+		LED_DEASSERT(LED_GRN);
+	}
 #endif
 
 

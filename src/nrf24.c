@@ -112,13 +112,13 @@ void nrf24_init(void)
 
 
 /* configure the module */
-void nrf24_config(uint8_t channel, uint8_t pay_length)
+void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed_1M, uint8_t rf_gain)
 {
     /* Use static payload length ... */
 //    payload_len = pay_length;
 
     // Set RF channel
-//    nrf24_configRegister(RF_CH, channel);
+    nrf24_configRegister(RF_CH, channel);
 
     // Set length of incoming payload 
 	nrf24_configRegister(RX_PW_P0, pay_length); // Auto-ACK pipe ...
@@ -130,7 +130,10 @@ void nrf24_config(uint8_t channel, uint8_t pay_length)
 
     // 250Kbps, TX gain: 0dbm
 //    nrf24_configRegister(RF_SETUP, (2<<RF_DR) | ((0x03)<<RF_PWR));
-//    nrf24_configRegister(RF_SETUP, 0x06);
+	if (speed_1M)
+		nrf24_configRegister(RF_SETUP, 0x00 | ((rf_gain & 0x3) << 1));
+	else
+		nrf24_configRegister(RF_SETUP, 0x08 | ((rf_gain & 0x3) << 1));
 
     // CRC enable, 1 byte CRC length
 //    nrf24_configRegister(CONFIG, nrf24_CONFIG);
