@@ -57,8 +57,10 @@ typedef enum {
 #define SWITCH_INSTALLED		1
 
 typedef struct {
+	// byte 0
 	uint8_t		nodeId;
 
+	// byte 1
 	uint8_t		sw1_nc			:1;
 	uint8_t		sw1_pc			:1;
 	uint8_t		sw1_enb			:1;
@@ -67,6 +69,7 @@ typedef struct {
 	uint8_t		sw2_enb			:1;
 	uint8_t		rsvd_1			:2;
 
+	// byte 2
     uint8_t     ctr				:1;
     uint8_t     vcc				:1;
 	uint8_t		temp			:1;
@@ -76,12 +79,15 @@ typedef struct {
 	uint8_t		spd_1M			:1;
 	uint8_t		spd_250K		:1;
 
+	// byte 3
 	uint8_t		rf_chan			:7;		// use only even chan #s at 2Mbps
 	uint8_t		rsvd_2			:1;
 
+	// byte 4
 	uint8_t		rf_gain			:2;
 	uint8_t		rsvd_3			:6;
 
+	// byte 5
 	uint8_t		rsvd_4;
 
 } config_t;

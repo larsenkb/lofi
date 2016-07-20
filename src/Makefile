@@ -314,10 +314,17 @@ lib: $(LIBNAME)
 
 
 
-# Program the device.  
-program: $(TARGET).hex $(TARGET).eep
-	$(AVRDUDE) $(AVRDUDE_FLAGS)  $(AVRDUDE_WRITE_FLASH) $(AVRDUDE_WRITE_EEPROM) $(AVRDUDE_WRITE_FUSES)
+# Program the flash. (add -B250 at end to recover when I pgm clock to low) 
+program: $(TARGET).hex 
+	sudo $(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_FLASH)
 
+# Program the eeprom.  
+programeeprom: $(TARGET).eep
+	sudo $(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_EEPROM)
+
+# Program the fuses.  
+programfuses: 
+	sudo $(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_FUSES)
 
 
 # Create final output files (.hex, .eep) from ELF output file.

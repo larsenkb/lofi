@@ -20,6 +20,16 @@
 #define LOW 0
 #define HIGH 1
 
+#define CE				0		/* PORTA */
+#define CSN				1		/* PORTA */
+#define SCK				4		/* PORTA */
+#define MOSI			6		/* PORTA */
+#define MISO			5		/* PORTA */
+#define ASSERT_CE()     (PORTA |= (1<<CE))
+#define DEASSERT_CE()   (PORTA &= ~(1<<CE))
+#define DEASSERT_CSN()  (PORTA |= (1<<CSN))
+#define ASSERT_CSN()    (PORTA &= ~(1<<CSN))
+
 #define nrf24_ADDR_LEN 5
 #define nrf24_CONFIG ((1<<EN_CRC)|(0<<CRCO))
 

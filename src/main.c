@@ -45,20 +45,22 @@
 #undef F_CPU
 #define F_CPU 1000000UL
 
+#define EN_NRF			1
+#define EN_NRF_VCC		1
 #define EN_WD			1
 #define EN_UART			0
 #define WD_TO           9
 #define WD_TO_SHORT     3
 #define EN_SWITCH       1
 
-#define PAYLOAD_LENGTH  8
+//#define PAYLOAD_LENGTH  8
 
 #define SWITCH_1        2       /* PORTB bit2 */
 #define SWITCH_MSK      2
 #define SWITCH_GMSK     5
 
 #define EEPROM_NODEID_ADR        ((uint8_t *)0)
-#define EEPROM_CAPABILITY_ADR    ((uint8_t *)1)
+//#define EEPROM_CAPABILITY_ADR    ((uint8_t *)1)
 
 #define NRF24_CHANNEL            2
 #define NRF24_PAYLOAD_LEN        8
@@ -71,7 +73,19 @@
 #define LED_ASSERT(x)            (PORTB |= (x))
 #define LED_DEASSERT(x)          (PORTB &= ~(x))
 
-
+#if EN_NRF_VCC
+#define NRF_VCC_PIN				(1<<2)
+#define NRF_VCC_INIT()			(DDRA |= NRF_VCC_PIN)
+#define NRF_VCC_ASSERT()		(PORTA |= NRF_VCC_PIN)
+#define NRF_VCC_DEASSERT()		(PORTA &= ~NRF_VCC_PIN)
+#define NRF_VCC_DLY_MS(x)		_delay_ms((x))
+#else
+#define NRF_VCC_PIN				(1<<2)
+#define NRF_VCC_INIT()			(DDRA |= NRF_VCC_PIN)
+#define NRF_VCC_ASSERT()		(PORTA |= NRF_VCC_PIN)
+#define NRF_VCC_DEASSERT()
+#define NRF_VCC_DLY_MS(x)		_delay_ms((x))
+#endif
 
 /* ------------------------------------------------------------------------- */
 volatile uint8_t wdInt;
@@ -79,7 +93,7 @@ volatile uint8_t wdTick;
 uint8_t wdSec, wdMin, wdHour;
 uint16_t wdDay;
 //uint8_t nodeId;
-uint8_t data_array[PAYLOAD_LENGTH];
+uint8_t data_array[NRF24_PAYLOAD_LEN];
 #if EN_SWITCH
 volatile uint8_t switchFlag;
 volatile uint8_t switchFlagWd;
@@ -165,7 +179,7 @@ ISR(WATCHDOG_vect)
 //    }
 }
 
-#if EN_SWITCH
+#if 0 //EN_SWITCH
 //****************************************************************
 // pinChange_isr
 //
@@ -202,8 +216,9 @@ int main(void)
 #endif
 
     // init LED pins as OUTPUT
+	LED_INIT(LED_RED | LED_GRN);		// set as output even if not used
+	LED_DEASSERT(LED_RED | LED_GRN);	// turn them both off
 	if (config.enLed) {
-		LED_INIT(LED_RED | LED_GRN);
 	}
 
 #if 0
@@ -223,21 +238,21 @@ int main(void)
 //    *(uint8_t *)&sensors = eeprom_read_byte(EEPROM_CAPABILITY_ADR);
 //    xprintf("nodeId: %02X\n", config.nodeId);
 
-	// Initialize counter capability/structure if installed
+	// Initialize counter capability/structure if eeprom configured
     if (config.ctr) {
         sens_ctr.sensorId = SENID_CTR;
         sens_ctr.ctr_lo = 0;
         sens_ctr.ctr_hi = 0;
     }
 
-	// Initialize Vcc capability/structure if installed
+	// Initialize Vcc capability/structure if eeprom configured
     if (config.vcc) {
         sens_vcc.sensorId = SENID_VCC;
         sens_vcc.vcc_lo = 0;
         sens_vcc.vcc_hi = 0;
     }
 
-	// Initialize switch 1 capability/structure if installed
+	// Initialize switch 1 capability/structure if eeprom configured
     if (config.sw1_enb) {
 		DDRB &= ~(1<<2);
 		sens_sw1.sensorId = SENID_SW1;
@@ -258,7 +273,7 @@ int main(void)
 		}
     }
 
-	// Initialize switch 2 capability/structure if installed
+	// Initialize switch 2 capability/structure if eeprom configured
     if (config.sw2_enb) {
 		DDRA &= ~(1<<2);
         sens_sw2.sensorId = SENID_SW2;
@@ -279,12 +294,21 @@ int main(void)
 		}
     }
 
+	// initialize pin and apply power to NRF
+	NRF_VCC_INIT();
+	NRF_VCC_ASSERT();
+	NRF_VCC_DLY_MS(10);
+/*    _delay_ms(10); */
 
+
+#if EN_NRF
 	// init hardware pins for talking to radio
 	nrf24_init();
     
 	// Initialize radio channel and payload length
 	nrf24_config(config.rf_chan, NRF24_PAYLOAD_LEN, config.spd_1M, config.rf_gain);
+#endif
+
 //    data_array[0] = config.nodeId;
 
 #if EN_WD
@@ -470,9 +494,16 @@ int main(void)
                 pay_idx += sizeof(sens_temp);
             }
 
-#if 1
+#if EN_NRF
+
+		NRF_VCC_ASSERT();
+		NRF_VCC_DLY_MS(10);
+
+#if EN_NRF
+		ASSERT_CE();
+#endif
 		    /* Automatically goes to TX mode */
-		    nrf24_send(data_array, PAYLOAD_LENGTH);        
+		    nrf24_send(data_array, NRF24_PAYLOAD_LEN);        
         
 		    /* Wait for transmission to end */
 		    while (nrf24_isSending());
@@ -489,17 +520,20 @@ int main(void)
 
 		    /* Or you might want to power down after TX */
 		    nrf24_powerDown();            
+#if EN_NRF
+		DEASSERT_CE();
+#endif
+		NRF_VCC_DEASSERT();
+
 #endif
 
 #if 1
-	if (config.enLed) {
-		LED_ASSERT(LED_GRN);
-        _delay_us(500);
-		LED_DEASSERT(LED_GRN);
-	}
+			if (config.enLed) {
+				LED_ASSERT(LED_GRN);
+        		_delay_us(500);
+				LED_DEASSERT(LED_GRN);
+			}
 #endif
-
-
         }
 
 
