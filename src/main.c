@@ -46,7 +46,6 @@
 #define F_CPU 1000000UL
 
 #define EN_NRF			1
-#define EN_NRF_VCC		1
 #define EN_WD			1
 #define EN_UART			0
 #define WD_TO           9
@@ -73,19 +72,11 @@
 #define LED_ASSERT(x)            (PORTB |= (x))
 #define LED_DEASSERT(x)          (PORTB &= ~(x))
 
-#if EN_NRF_VCC
-#define NRF_VCC_PIN				(1<<2)
+#define NRF_VCC_PIN				((1<<3) | (1<<7))
 #define NRF_VCC_INIT()			(DDRA |= NRF_VCC_PIN)
 #define NRF_VCC_ASSERT()		(PORTA |= NRF_VCC_PIN)
 #define NRF_VCC_DEASSERT()		(PORTA &= ~NRF_VCC_PIN)
 #define NRF_VCC_DLY_MS(x)		_delay_ms((x))
-#else
-#define NRF_VCC_PIN				(1<<2)
-#define NRF_VCC_INIT()			(DDRA |= NRF_VCC_PIN)
-#define NRF_VCC_ASSERT()		(PORTA |= NRF_VCC_PIN)
-#define NRF_VCC_DEASSERT()
-#define NRF_VCC_DLY_MS(x)		_delay_ms((x))
-#endif
 
 /* ------------------------------------------------------------------------- */
 volatile uint8_t wdInt;
@@ -218,8 +209,6 @@ int main(void)
     // init LED pins as OUTPUT
 	LED_INIT(LED_RED | LED_GRN);		// set as output even if not used
 	LED_DEASSERT(LED_RED | LED_GRN);	// turn them both off
-	if (config.enLed) {
-	}
 
 #if 0
     switchFlag = 0;
@@ -271,7 +260,11 @@ int main(void)
 			switchFlagWd = 0;
 			debounceFlag = 0;
 		}
-    }
+    } else {
+		// if we leave pin as input, it will draw more current if it oscillates
+		// but if we pgm pin as output and there REALLY is a switch connected
+		// we are going to do damage
+	}
 
 	// Initialize switch 2 capability/structure if eeprom configured
     if (config.sw2_enb) {
@@ -292,13 +285,16 @@ int main(void)
 			switchFlagWd = 0;
 			debounceFlag = 0;
 		}
+    } else {
+		// if we leave pin as input, it will draw more current if it oscillates
+		// but if we pgm pin as output and there REALLY is a switch connected
+		// we are going to do damage
     }
 
 	// initialize pin and apply power to NRF
 	NRF_VCC_INIT();
 	NRF_VCC_ASSERT();
 	NRF_VCC_DLY_MS(10);
-/*    _delay_ms(10); */
 
 
 #if EN_NRF
@@ -371,11 +367,14 @@ int main(void)
 	// Start of main loop
 	//
 	while (1) {
+
+		PORTA &= ~(1<<6);
   
 #if EN_WD
 		// go to sleep and wait for interrupt (watchdog or pin change)
         system_sleep();
 #endif
+
 
 #if 1
         if (switchFlag) {
@@ -521,19 +520,17 @@ int main(void)
 		    /* Or you might want to power down after TX */
 		    nrf24_powerDown();            
 #if EN_NRF
-		DEASSERT_CE();
+			DEASSERT_CE();
 #endif
-		NRF_VCC_DEASSERT();
+			NRF_VCC_DEASSERT();
 
 #endif
 
-#if 1
 			if (config.enLed) {
 				LED_ASSERT(LED_GRN);
         		_delay_us(500);
 				LED_DEASSERT(LED_GRN);
 			}
-#endif
         }
 
 

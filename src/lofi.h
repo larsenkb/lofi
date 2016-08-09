@@ -88,6 +88,9 @@ typedef struct {
 	uint8_t		rsvd_3			:6;
 
 	// byte 5
+	uint8_t		wdCnts;					// nbr of wd events before xmitting
+
+	// byte 5
 	uint8_t		rsvd_4;
 
 } config_t;
