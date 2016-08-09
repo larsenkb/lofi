@@ -46,10 +46,10 @@
 #define F_CPU 1000000UL
 
 #define EN_NRF			1
-#define EN_WD			1
+//#define EN_WD			1
 #define EN_UART			0
-#define WD_TO           9
-#define WD_TO_SHORT     3
+//#define WD_TO           9
+//#define WD_TO_SHORT     3
 #define EN_SWITCH       1
 
 //#define PAYLOAD_LENGTH  8
@@ -137,7 +137,7 @@ void setup_watchdog(int val)
     wdInt = 0;
 
 	if (val > 9 )
-		val = 9;
+		return;		//val = 9;
 	bb = val & 7;
 	if (val > 7)
 		bb |= (1<<5);
@@ -188,7 +188,7 @@ ISR(PCINT1_vect)
 int main(void)
 {
 //    uint8_t rv;
-
+	uint16_t i;
 
 	// Perform system initialization
 	CLKPR = (1<<CLKPCE);
@@ -307,18 +307,17 @@ int main(void)
 
 //    data_array[0] = config.nodeId;
 
-#if EN_WD
     // initialize watchdog and associated variables
     wdTick = 0;
     wdSec = 0;
     wdMin = 0;
     wdHour = 0;
     wdDay = 0;
-	if (config.fastTrack)
-		setup_watchdog(WD_TO-1);
-	else
-		setup_watchdog(WD_TO);
-#endif
+	setup_watchdog(config.wd_timeout + 5);
+//	if (config.fastTrack)
+//		setup_watchdog(WD_TO-1);
+//	else
+//		setup_watchdog(WD_TO);
 
   /* Enable interrupts */
 #if 1 //EN_WD
@@ -370,10 +369,8 @@ int main(void)
 
 		PORTA &= ~(1<<6);
   
-#if EN_WD
 		// go to sleep and wait for interrupt (watchdog or pin change)
         system_sleep();
-#endif
 
 
 #if 1
@@ -421,14 +418,16 @@ int main(void)
 
 		if (wdTick) {
 			wdTick = 0;
-			if (config.fastTrack) {
-				xmitFlagWd = 1;
-			} else {
-				if (++wdInt > 3) {
-				    wdInt = 0;
-				    xmitFlagWd = 1;
-			    }
-			}
+//			if (config.fastTrack) {
+//				xmitFlagWd = 1;
+//			} else {
+				if (config.wdCnts) {
+					if (++wdInt >= config.wdCnts) {
+						wdInt = 0;
+						xmitFlagWd = 1;
+					}
+				}
+//			}
 		}
 
 #if 0
@@ -505,7 +504,8 @@ int main(void)
 		    nrf24_send(data_array, NRF24_PAYLOAD_LEN);        
         
 		    /* Wait for transmission to end */
-		    while (nrf24_isSending());
+			i = 0;
+		    while (nrf24_isSending() && i < 10000);
 
 		    /* Make analysis on last tranmission attempt */
 //		    temp = nrf24_lastMessageStatus();
@@ -532,12 +532,6 @@ int main(void)
 				LED_DEASSERT(LED_GRN);
 			}
         }
-
-
-		/* Wait a little ... */
-#if EN_WD==0
-//		_delay_ms(1000);
-#endif
 
     }
     return 0;
