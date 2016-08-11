@@ -19,9 +19,6 @@ typedef enum {
 //	SENID_SW2_NO_POLL,
 } senId_t;
 
-//#define SENS_ID_CTR             0x01
-//#define SENS_ID_SW_NO_PC        0x02
-//#define SENS_ID_VCC             0x03
 
 
 typedef struct {

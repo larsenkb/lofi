@@ -47,7 +47,6 @@
 
 #define EN_NRF			1
 //#define EN_WD			1
-#define EN_UART			0
 //#define WD_TO           9
 //#define WD_TO_SHORT     3
 #define EN_SWITCH       1
@@ -108,6 +107,7 @@ sensor_temp_t   sens_temp;
 
 uint16_t readVccVoltage(void);
 uint16_t readTemperature(void);
+void printConfig(void);
 
 
 //****************************************************************  
@@ -199,12 +199,10 @@ int main(void)
 	eeprom_read_block(&config, 0, sizeof(config));
 
     // initialize uart
-#if EN_UART
 	if (config.txDbg) {
 		uartbb_init();
 		xfunc_out = uartbb_putchar;
 	}
-#endif
 
     // init LED pins as OUTPUT
 	LED_INIT(LED_RED | LED_GRN);		// set as output even if not used
@@ -324,42 +322,10 @@ int main(void)
     sei();
 #endif
 
-#if 0 //EN_UART
 	if (config.txDbg) {
-	    xprintf("\nHello\n");
-	    xprintf("00:%02X", nrf24_rdReg(0));
-	    xprintf("  01:%02X", nrf24_rdReg(1));
-	    xprintf("  02:%02X", nrf24_rdReg(2));
-	    xprintf("  03:%02X", nrf24_rdReg(3));
-	    xprintf("  04:%02X", nrf24_rdReg(4));
-	    xprintf("  05:%02X", nrf24_rdReg(5));
-	    xprintf("  06:%02X", nrf24_rdReg(6));
-	    xprintf("  07:%02X", nrf24_rdReg(7));
-	    xprintf("  08:%02X", nrf24_rdReg(8));
-	    xprintf("  09:%02X\n", nrf24_rdReg(9));
-		nrf24_readRegister(0x0a, ta, 5);
-		xprintf("0A:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
-		nrf24_readRegister(0x0b, ta, 5);
-		xprintf("0B:%02X %02X %02X %02X %02X", ta[4], ta[3], ta[2], ta[1], ta[0]);
-	    xprintf("  0C:%02X", nrf24_rdReg(0x0c));
-	    xprintf("  0D:%02X", nrf24_rdReg(0x0d));
-	    xprintf("  0E:%02X", nrf24_rdReg(0x0e));
-	    xprintf("  0F:%02X\n", nrf24_rdReg(0x0f));
-		nrf24_readRegister(0x10, ta, 5);
-		xprintf("10:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
-	    xprintf("11:%02X", nrf24_rdReg(0x11));
-	    xprintf("  12:%02X", nrf24_rdReg(0x12));
-	    xprintf("  13:%02X", nrf24_rdReg(0x13));
-	    xprintf("  14:%02X", nrf24_rdReg(0x14));
-	    xprintf("  15:%02X", nrf24_rdReg(0x15));
-	    xprintf("  16:%02X", nrf24_rdReg(0x16));
-	    xprintf("  17:%02X\n", nrf24_rdReg(0x17));
-	    xprintf("1C:%02X", nrf24_rdReg(0x1c));
-	    xprintf("  1D:%02X\n", nrf24_rdReg(0x1d));
-		//void nrf24_transferSync(uint8_t* dataout, uint8_t* datain, uint8_t len)
+		printConfig();
+		_delay_ms(100);
 	}
-#endif
-    _delay_ms(100);
 
 
 	//
@@ -430,11 +396,10 @@ int main(void)
 //			}
 		}
 
-#if 0
 		if (config.txDbg) {
             xprintf("%02X ", nrf24_rdReg(8));
 		}
-#endif
+
         if (xmitFlagWd || xmitFlagPc) {
             uint8_t pay_idx = 1;
 
@@ -535,6 +500,41 @@ int main(void)
 
     }
     return 0;
+}
+
+void printConfig(void)
+{
+    xprintf("\nHello\n");
+    xprintf("00:%02X", nrf24_rdReg(0));
+    xprintf("  01:%02X", nrf24_rdReg(1));
+    xprintf("  02:%02X", nrf24_rdReg(2));
+    xprintf("  03:%02X", nrf24_rdReg(3));
+    xprintf("  04:%02X", nrf24_rdReg(4));
+    xprintf("  05:%02X", nrf24_rdReg(5));
+    xprintf("  06:%02X", nrf24_rdReg(6));
+    xprintf("  07:%02X", nrf24_rdReg(7));
+    xprintf("  08:%02X", nrf24_rdReg(8));
+    xprintf("  09:%02X\n", nrf24_rdReg(9));
+	nrf24_readRegister(0x0a, ta, 5);
+	xprintf("0A:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
+	nrf24_readRegister(0x0b, ta, 5);
+	xprintf("0B:%02X %02X %02X %02X %02X", ta[4], ta[3], ta[2], ta[1], ta[0]);
+    xprintf("  0C:%02X", nrf24_rdReg(0x0c));
+    xprintf("  0D:%02X", nrf24_rdReg(0x0d));
+    xprintf("  0E:%02X", nrf24_rdReg(0x0e));
+    xprintf("  0F:%02X\n", nrf24_rdReg(0x0f));
+	nrf24_readRegister(0x10, ta, 5);
+	xprintf("10:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
+    xprintf("11:%02X", nrf24_rdReg(0x11));
+    xprintf("  12:%02X", nrf24_rdReg(0x12));
+    xprintf("  13:%02X", nrf24_rdReg(0x13));
+    xprintf("  14:%02X", nrf24_rdReg(0x14));
+    xprintf("  15:%02X", nrf24_rdReg(0x15));
+    xprintf("  16:%02X", nrf24_rdReg(0x16));
+    xprintf("  17:%02X\n", nrf24_rdReg(0x17));
+    xprintf("1C:%02X", nrf24_rdReg(0x1c));
+    xprintf("  1D:%02X\n", nrf24_rdReg(0x1d));
+		//void nrf24_transferSync(uint8_t* dataout, uint8_t* datain, uint8_t len)
 }
 
 //------------------------------------------------------------------
