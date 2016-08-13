@@ -114,14 +114,14 @@ void printConfig(void);
 // system wakes up when watchdog times out
 void system_sleep(void)
 {
-  set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
-  sleep_enable();
+	set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
+	sleep_enable();
 
-  sleep_bod_disable();
+	sleep_bod_disable();
 
 //  PRR |= 0x0D;
 
-  sleep_mode();                        // System sleeps here
+	sleep_mode();                        // System sleeps here
 
 //  sleep_disable();                     // System continues execution here when watchdog timed out 
 }
@@ -165,6 +165,7 @@ ISR(WATCHDOG_vect)
     wdTick = 1;
 }
 
+
 //****************************************************************
 // pinChange_isr
 //
@@ -173,10 +174,12 @@ ISR(PCINT1_vect)
     sw1Flag = 1;
 }
 
+
 ISR(PCINT0_vect)
 {
     sw2Flag = 1;
 }
+
 
 //****************************************************************
 // main
@@ -441,6 +444,7 @@ int main(void)
     return 0;
 }
 
+
 void printConfig(void)
 {
     xprintf("\nHello\n");
@@ -475,6 +479,7 @@ void printConfig(void)
     xprintf("  1D:%02X\n", nrf24_rdReg(0x1d));
 		//void nrf24_transferSync(uint8_t* dataout, uint8_t* datain, uint8_t len)
 }
+
 
 //------------------------------------------------------------------
 // readVccVoltage - read Vcc (indirectly) through ADC subsystem
@@ -557,6 +562,7 @@ uint16_t readVccVoltage(void)
 	
 }
 
+
 //------------------------------------------------------------------
 // readTemperature - read internal temperature through ADC subsystem
 //
@@ -634,8 +640,3 @@ uint16_t readTemperature(void)
 	return ( adc );
 	
 }
-
-
-#if 0
-disable BOD to save power prior to sleep
-#endif
