@@ -433,7 +433,7 @@ int main(void)
 
 			if (config.enLed) {
 				LED_ASSERT(LED_GRN);
-        		_delay_us(500);
+        		_delay_us(100);
 				LED_DEASSERT(LED_GRN);
 			}
 
