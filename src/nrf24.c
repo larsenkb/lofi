@@ -12,10 +12,80 @@
 * -----------------------------------------------------------------------------
 */
 #include <avr/io.h>
+#include <avr/cpufunc.h>
 #include <util/delay.h>
 #include "nrf24.h"
 
 
+
+#if 0
+uint8_t spi_transfer(uint8_t _data)
+{
+  USIDR = _data;
+  uint8_t i;
+  
+  for (i=0; i<16; i++) {
+    USICR = _BV(USIWM0) | _BV(USICS1) | _BV(USICLK) | _BV(USITC);
+  }
+  return USIDR;
+}
+#endif
+
+#if 1
+void spi_init(void)
+{
+#undef MOSI
+#undef MISO
+#define MOSI 5
+#define MISO 6
+    DDRA |= (1<<CSN) | (1<<SCK) | (1<<MOSI) | (1<<CE);	// OUTPUTs
+    DDRA &= ~(1<<MISO);	// INPUT
+	DEASSERT_CE();
+	DEASSERT_CSN();
+//	PORTA &= ~(1<<SCK);
+
+//	USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK);
+}
+uint8_t spi_transfer(uint8_t _data)
+{
+//	PORTA &= ~(1<<SCK);
+	USIDR = _data;
+  
+#if 0
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
+		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
+	return USIDR;
+#else
+	USISR = (1<<USIOIF);
+#if 1
+	while ((USISR & (1<<USIOIF)) == 0) {
+		USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK) | (1<<USITC);
+	}
+#else
+	do {
+		USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK) | (1<<USITC);
+	} while((USISR & (1<<USIOIF)) == 0);
+#endif
+	return USIBR;
+#endif
+}
+#endif
+
+#if 0  // this bit-bang method works
 void spi_init(void)
 {
     DDRA |= (1<<CSN);	// OUTPUT
@@ -29,38 +99,6 @@ void spi_init(void)
 
 	USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK);
 }
-
-#if 0
-#if 0
-uint8_t spi_transfer(uint8_t _data)
-{
-  USIDR = _data;
-  uint8_t i;
-  
-  for (i=0; i<16; i++) {
-    USICR = _BV(USIWM0) | _BV(USICS1) | _BV(USICLK) | _BV(USITC);
-  }
-  return USIDR;
-}
-#else
-uint8_t spi_transfer(uint8_t _data)
-{
-  USIDR = _data;
-  USISR = (1<<USIOIF);
-  
-#if 1
-  while((USISR & (1<<USIOIF)) == 0) {
-    USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK) | (1<<USITC);
-  }
-#else
-  do {
-    USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK) | (1<<USITC);
-  } while((USISR & (1<<USIOIF)) == 0);
-#endif
-  return USIDR;
-}
-#endif
-#else
 /* software spi routine */
 uint8_t spi_transfer(uint8_t tx)
 {
@@ -136,6 +174,9 @@ void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed_1M, uint8_t
 
     // Auto retransmit delay: 1000 us and Up to 15 retransmit trials
     nrf24_configRegister(SETUP_RETR,(0x04<<ARD)|(0x0F<<ARC));
+//    nrf24_configRegister(SETUP_RETR,0); //(0x04<<ARD)|(0x0F<<ARC));
+
+//    nrf24_configRegister(0x1d,1);
 
     // Dynamic length configurations: No dynamic length
 //    nrf24_configRegister(DYNPD,(0<<DPL_P0)|(0<<DPL_P1)|(0<<DPL_P2)|(0<<DPL_P3)|(0<<DPL_P4)|(0<<DPL_P5));
@@ -275,7 +316,7 @@ uint8_t nrf24_rdReg(uint8_t reg)
     return val;
 }
 
-/* Read single register from nrf24 */
+/* Read multiple register(s) from nrf24 */
 void nrf24_readRegister(uint8_t reg, uint8_t* value, uint8_t len)
 {
     ASSERT_CSN();
@@ -297,6 +338,7 @@ void nrf24_transferSync(uint8_t* dataout, uint8_t* datain, uint8_t len)
 void nrf24_powerDown()
 {
     nrf24_configRegister(CONFIG, nrf24_CONFIG);
+//	nrf24_configRegister(CONFIG, nrf24_rdReg(CONFIG) & ~0x02);
 }
 
 

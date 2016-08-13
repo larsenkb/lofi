@@ -16,13 +16,11 @@
 // The lofi+nrf24 combo draws ~6 uA in the idle mode.
 // It can monitor two reed switches, Vcc and internal temperature.
 // It uses the internal RC oscillator so timing is not very accurate.
-// The switches and be configured to generate an interrupt on Pin Change
+// The switches can be configured to generate an interrupt on Pin Change
 // which will trigger a transmission. Otherwise, they are only polled
 // and switch state will be transmitted at the polling frequency.
-// The polling period is approximately one minute for the switches
-// and temperature.
-// The polling period for Vcc is about one day.
-// A 10-bit counter is sent on each transmission.
+// The polling period is configured in eeprom.
+// A 10-bit incrementing count is sent on each transmission.
 //
 // Configuration is stored in the eeprom starting at addr 0.
 // See config_t structure for details.
@@ -51,7 +49,6 @@
 //#define WD_TO_SHORT     3
 #define EN_SWITCH       1
 
-//#define PAYLOAD_LENGTH  8
 
 #define SWITCH_1        2       /* PORTB bit2 */
 #define SWITCH_MSK      2
@@ -85,8 +82,8 @@ uint16_t wdDay;
 //uint8_t nodeId;
 uint8_t data_array[NRF24_PAYLOAD_LEN];
 #if EN_SWITCH
-volatile uint8_t switchFlag;
-volatile uint8_t switchFlagWd;
+volatile uint8_t sw1Flag;
+volatile uint8_t sw2Flag;
 volatile uint8_t debounceFlag;
 #endif
 uint8_t xmitFlagWd;
@@ -120,9 +117,13 @@ void system_sleep(void)
   set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
   sleep_enable();
 
+  sleep_bod_disable();
+
+//  PRR |= 0x0D;
+
   sleep_mode();                        // System sleeps here
 
-  sleep_disable();                     // System continues execution here when watchdog timed out 
+//  sleep_disable();                     // System continues execution here when watchdog timed out 
 }
 
 //****************************************************************
@@ -161,69 +162,52 @@ void setup_watchdog(int val)
 // interrupt occured so that we can xmit.
 ISR(WATCHDOG_vect)
 {
-//    if (debounceFlag) {
-//        debounceFlag = 0;
-//        switchFlagWd = 1;
-//    } else {
-        wdTick = 1;
-//        wdInt++;
-//    }
+    wdTick = 1;
 }
 
-#if 0 //EN_SWITCH
 //****************************************************************
 // pinChange_isr
 //
 ISR(PCINT1_vect)
 {
-    switchFlag = 1;
-//                if (++sens_ctr.ctr_lo == 0)
-//                    sens_ctr.ctr_hi++;
+    sw1Flag = 1;
 }
-#endif
+
+ISR(PCINT0_vect)
+{
+    sw2Flag = 1;
+}
 
 //****************************************************************
 // main
 //
 int main(void)
 {
-//    uint8_t rv;
 	uint16_t i;
 
-	// Perform system initialization
+	// Set Divide by 8 for 8MHz RC oscillator 
 	CLKPR = (1<<CLKPCE);
 	CLKPR = 3;
 
-//	PRR |= (1<<PRTIM1) | (1<<PRTIM0) | (1<<PRUSI) | (1<<PRADC);
+	// disable PUD
+	MCUCR &= ~(1<<PUD);
 
+	// turn off analog comparator
+	ACSR = 0x80;
+
+	// read the config params from eeprom
 	eeprom_read_block(&config, 0, sizeof(config));
-
-    // initialize uart
-	if (config.txDbg) {
-		uartbb_init();
-		xfunc_out = uartbb_putchar;
-	}
 
     // init LED pins as OUTPUT
 	LED_INIT(LED_RED | LED_GRN);		// set as output even if not used
 	LED_DEASSERT(LED_RED | LED_GRN);	// turn them both off
 
-#if 0
-    switchFlag = 0;
-    switchFlagWd = 0;
-    debounceFlag = 0;
-//    DDRB &= ~(1<<2);
-//    PORTB |= (1<<2);
-    GIMSK = (1<<SWITCH_GMSK);
-    PCMSK1 = (1<<SWITCH_MSK);
-#endif
+    // initialize uart if eeprom configured
+	if (config.txDbg) {
+		uartbb_init();
+		xfunc_out = uartbb_putchar;
+	}
 
-	// read the NodeID from eeprom
-//    nodeId = eeprom_read_byte(EEPROM_NODEID_ADR);
-	
-	// read the capabilities from eeprom
-//    *(uint8_t *)&sensors = eeprom_read_byte(EEPROM_CAPABILITY_ADR);
-//    xprintf("nodeId: %02X\n", config.nodeId);
 
 	// Initialize counter capability/structure if eeprom configured
     if (config.ctr) {
@@ -243,7 +227,6 @@ int main(void)
     if (config.sw1_enb) {
 		DDRB &= ~(1<<2);
 		sens_sw1.sensorId = SENID_SW1;
-//        sens_sw1.sensorId = SENID_SW1_NC_PC;
 		if (config.sw1_nc)
 			sens_sw1.switch_closed = (PINB & (1<<2))?(1):(0);
 		else
@@ -254,8 +237,7 @@ int main(void)
 			// enable pin change functionality
 			GIMSK = (1<<SWITCH_GMSK);
 			PCMSK1 = (1<<SWITCH_MSK);
-			switchFlag = 0;
-			switchFlagWd = 0;
+			sw1Flag = 0;
 			debounceFlag = 0;
 		}
     } else {
@@ -268,7 +250,6 @@ int main(void)
     if (config.sw2_enb) {
 		DDRA &= ~(1<<2);
         sens_sw2.sensorId = SENID_SW2;
-//        sens_sw2.sensorId = SENID_SW2_NC_PC;
 		if (config.sw2_nc)
 			sens_sw2.switch_closed = (PINA & (1<<2))?(1):(0);
 		else
@@ -277,10 +258,9 @@ int main(void)
         sens_sw2.rsvd = 0;
 		if (config.sw2_pc) {
 			// enable pin change functionality
-			GIMSK = (1<<SWITCH_GMSK);
-			PCMSK1 = (1<<SWITCH_MSK);
-			switchFlag = 0;
-			switchFlagWd = 0;
+			GIMSK |= (1<<4);
+			PCMSK0 = (1<<SWITCH_MSK);
+			sw2Flag = 0;
 			debounceFlag = 0;
 		}
     } else {
@@ -312,20 +292,20 @@ int main(void)
     wdHour = 0;
     wdDay = 0;
 	setup_watchdog(config.wd_timeout + 5);
-//	if (config.fastTrack)
-//		setup_watchdog(WD_TO-1);
-//	else
-//		setup_watchdog(WD_TO);
+//	setup_watchdog(3);
 
-  /* Enable interrupts */
-#if 1 //EN_WD
+	// Enable interrupts
     sei();
-#endif
 
 	if (config.txDbg) {
 		printConfig();
 		_delay_ms(100);
 	}
+
+	// Power off radio as we go into our first sleep
+	nrf24_powerDown();            
+	DEASSERT_CE();
+	NRF_VCC_DEASSERT();
 
 
 	//
@@ -333,67 +313,32 @@ int main(void)
 	//
 	while (1) {
 
+		// clear MOSI
 		PORTA &= ~(1<<6);
   
 		// go to sleep and wait for interrupt (watchdog or pin change)
-        system_sleep();
+		system_sleep();
 
 
-#if 1
-        if (switchFlag) {
-			switchFlag = 0;
+        if (sw1Flag) {
+			sw1Flag = 0;
             xmitFlagPc = 1;
 		}
-#endif
 
-#if 0 //EN_SWITCH
-        if (0 /*switchFlag*/) {
-            setup_watchdog(WD_TO_SHORT);
-            switchFlag = 0;
-            debounceFlag = 1;
-            PORTB &= ~(1<<2);
-            PORTB |= (1<<2);
-            continue;
-        }
-        if (switchFlagWd) {
-            switchFlagWd = 0;
-            setup_watchdog(WD_TO);
-            ASSERT_REDLED();
-            _delay_ms(1);
-            DEASSERT_REDLED();
-            /* set flag to xmit */
+        if (sw2Flag) {
+			sw2Flag = 0;
             xmitFlagPc = 1;
-        }
-#endif
-#if 0
-        /* increment time variables */
-        if (wdTick) {
-            wdTick = 0;
-            if (++wdSec >= 7) {
-                wdSec = 0;
-                if (++wdMin >= 60) {
-                    wdMin = 0;
-                    if (++wdHour >= 24) {
-                        wdHour = 0;
-                        ++wdDay;
-                    }
-                }
-            }
-        }
-#endif
+		}
+
 
 		if (wdTick) {
 			wdTick = 0;
-//			if (config.fastTrack) {
-//				xmitFlagWd = 1;
-//			} else {
-				if (config.wdCnts) {
-					if (++wdInt >= config.wdCnts) {
-						wdInt = 0;
-						xmitFlagWd = 1;
-					}
+			if (config.wdCnts) {
+				if (++wdInt >= config.wdCnts) {
+					wdInt = 0;
+					xmitFlagWd = 1;
 				}
-//			}
+			}
 		}
 
 		if (config.txDbg) {
@@ -457,20 +402,17 @@ int main(void)
                 pay_idx += sizeof(sens_temp);
             }
 
-#if EN_NRF
 
-		NRF_VCC_ASSERT();
-		NRF_VCC_DLY_MS(10);
+			NRF_VCC_ASSERT();
+			NRF_VCC_DLY_MS(10);
+			ASSERT_CE();
 
-#if EN_NRF
-		ASSERT_CE();
-#endif
 		    /* Automatically goes to TX mode */
 		    nrf24_send(data_array, NRF24_PAYLOAD_LEN);        
         
 		    /* Wait for transmission to end */
 			i = 0;
-		    while (nrf24_isSending() && i < 10000);
+		    while (nrf24_isSending() && i++ < 10000);
 
 		    /* Make analysis on last tranmission attempt */
 //		    temp = nrf24_lastMessageStatus();
@@ -479,26 +421,23 @@ int main(void)
 //		    temp = nrf24_retransmissionCount();
 //		    xprintf("> Retranmission count: %d\r\n",temp);
 
-		    /* Optionally, go back to RX mode ... */
-//		    nrf24_powerUpRx();
 
 		    /* Or you might want to power down after TX */
 		    nrf24_powerDown();            
-#if EN_NRF
 			DEASSERT_CE();
-#endif
 			NRF_VCC_DEASSERT();
 
-#endif
 
 			if (config.enLed) {
 				LED_ASSERT(LED_GRN);
         		_delay_us(500);
 				LED_DEASSERT(LED_GRN);
 			}
-        }
+
+        } //endof: if (xmitFlagWd || xmitFlagPc) {
 
     }
+
     return 0;
 }
 
