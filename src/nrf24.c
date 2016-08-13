@@ -18,19 +18,6 @@
 
 
 
-#if 0
-uint8_t spi_transfer(uint8_t _data)
-{
-  USIDR = _data;
-  uint8_t i;
-  
-  for (i=0; i<16; i++) {
-    USICR = _BV(USIWM0) | _BV(USICS1) | _BV(USICLK) | _BV(USITC);
-  }
-  return USIDR;
-}
-#endif
-
 #if 1
 void spi_init(void)
 {
@@ -48,40 +35,13 @@ void spi_init(void)
 }
 uint8_t spi_transfer(uint8_t _data)
 {
-//	PORTA &= ~(1<<SCK);
 	USIDR = _data;
-  
-#if 0
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
-		USICR = (1<<USIWM0) | (0<<USICS0) | (1<<USITC) | (1<<USICLK);
-	return USIDR;
-#else
 	USISR = (1<<USIOIF);
-#if 1
+
 	while ((USISR & (1<<USIOIF)) == 0) {
 		USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK) | (1<<USITC);
 	}
-#else
-	do {
-		USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK) | (1<<USITC);
-	} while((USISR & (1<<USIOIF)) == 0);
-#endif
 	return USIBR;
-#endif
 }
 #endif
 
@@ -133,22 +93,18 @@ uint8_t spi_transfer(uint8_t tx)
 void nrf24_init(void) 
 {
     spi_init();
-//    nrf24_setupPins();
-//    nrf24_ce_digitalWrite(LOW);
-//    nrf24_csn_digitalWrite(HIGH);    
 }
 
 
 /* configure the module */
 void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed_1M, uint8_t rf_gain)
 {
-    /* Use static payload length ... */
-//    payload_len = pay_length;
 
     // Set RF channel
     nrf24_configRegister(RF_CH, channel);
 
     // Set length of incoming payload 
+    // Use static payload length ...
 	nrf24_configRegister(RX_PW_P0, pay_length); // Auto-ACK pipe ...
     nrf24_configRegister(RX_PW_P1, pay_length); // Data payload pipe
     nrf24_configRegister(RX_PW_P2, 0x00); // Pipe not used 
@@ -338,99 +294,10 @@ void nrf24_transferSync(uint8_t* dataout, uint8_t* datain, uint8_t len)
 void nrf24_powerDown()
 {
     nrf24_configRegister(CONFIG, nrf24_CONFIG);
-//	nrf24_configRegister(CONFIG, nrf24_rdReg(CONFIG) & ~0x02);
 }
 
 
-
-
-
-
-
-
-
-
-
-#if 0
-/* Set the RX address */
-void nrf24_rx_address(uint8_t * adr) 
-{
-    nrf24_ce_digitalWrite(LOW);
-    nrf24_writeRegister(RX_ADDR_P1,adr,nrf24_ADDR_LEN);
-    nrf24_ce_digitalWrite(HIGH);
-}
-
-/* Returns the payload length */
-uint8_t nrf24_payload_length()
-{
-    return payload_len;
-}
-
-/* Set the TX address */
-void nrf24_tx_address(uint8_t* adr)
-{
-    /* RX_ADDR_P0 must be set to the sending addr for auto ack to work. */
-    nrf24_writeRegister(RX_ADDR_P0,adr,nrf24_ADDR_LEN);
-    nrf24_writeRegister(TX_ADDR,adr,nrf24_ADDR_LEN);
-}
-
-/* Checks if data is available for reading */
-/* Returns 1 if data is ready ... */
-uint8_t nrf24_dataReady() 
-{
-    // See note in getData() function - just checking RX_DR isn't good enough
-    uint8_t status = nrf24_getStatus();
-
-    // We can short circuit on RX_DR, but if it's not set, we still need
-    // to check the FIFO for any pending packets
-    if ( status & (1 << RX_DR) ) {
-        return 1;
-    }
-
-    return !nrf24_rxFifoEmpty();;
-}
-
-/* Checks if receive FIFO is empty or not */
-uint8_t nrf24_rxFifoEmpty()
-{
-    uint8_t fifoStatus;
-
-    nrf24_readRegister(FIFO_STATUS, &fifoStatus, 1);
-    
-    return (fifoStatus & (1 << RX_EMPTY));
-}
-
-/* Returns the length of data waiting in the RX fifo */
-uint8_t nrf24_payloadLength()
-{
-    uint8_t status;
-
-    ASSERT_CSN();
-    spi_transfer(R_RX_PL_WID);
-    status = spi_transfer(0x00);
-    DEASSERT_CSN();
-    return status;
-}
-
-/* Reads payload bytes into data array */
-void nrf24_getData(uint8_t* data) 
-{
-    /* Pull down chip select */
-    ASSERT_CSN();
-
-    /* Send cmd to read rx payload */
-    spi_transfer( R_RX_PAYLOAD );
-    
-    /* Read payload */
-    nrf24_transferSync(data,data,payload_len);
-    
-    /* Pull up chip select */
-    DEASSERT_CSN();
-
-    /* Reset status register */
-    nrf24_configRegister(STATUS,(1<<RX_DR));   
-}
-
+#if 1
 /* Returns the number of retransmissions occured for the last message */
 uint8_t nrf24_retransmissionCount()
 {
@@ -459,21 +326,6 @@ uint8_t nrf24_lastMessageStatus()
     else {
         return 0xFF;
     }
-}
-
-void nrf24_powerDown()
-{
-    nrf24_ce_digitalWrite(LOW);
-    nrf24_configRegister(CONFIG,nrf24_CONFIG);
-}
-
-/* Write to a single register of nrf24 */
-void nrf24_writeRegister(uint8_t reg, uint8_t* value, uint8_t len) 
-{
-    nrf24_csn_digitalWrite(LOW);
-    spi_transfer(W_REGISTER | (REGISTER_MASK & reg));
-    nrf24_transmitSync(value,len);
-    nrf24_csn_digitalWrite(HIGH);
 }
 #endif
 
