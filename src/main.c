@@ -33,6 +33,7 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include <avr/eeprom.h>
+#include <avr/cpufunc.h>
 #include <string.h>
 
 #include "lofi.h"
@@ -307,7 +308,7 @@ int main(void)
 
 	// Power off radio as we go into our first sleep
 	nrf24_powerDown();            
-	DEASSERT_CE();
+//	DEASSERT_CE();
 	NRF_VCC_DEASSERT();
 
 
@@ -408,11 +409,25 @@ int main(void)
 
 			NRF_VCC_ASSERT();
 			NRF_VCC_DLY_MS(10);
-			ASSERT_CE();
+//			ASSERT_CE();
 
 		    /* Automatically goes to TX mode */
 		    nrf24_send(data_array, NRF24_PAYLOAD_LEN);        
         
+			ASSERT_CE();
+			_NOP();
+			_NOP();
+			_NOP();
+			_NOP();
+			_NOP();
+			_NOP();
+			_NOP();
+			_NOP();
+			_NOP();
+			_NOP();
+			_NOP();
+			DEASSERT_CE();
+			
 		    /* Wait for transmission to end */
 			i = 0;
 		    while (nrf24_isSending() && i++ < 10000);
@@ -427,7 +442,7 @@ int main(void)
 
 		    /* Or you might want to power down after TX */
 		    nrf24_powerDown();            
-			DEASSERT_CE();
+//			DEASSERT_CE();
 			NRF_VCC_DEASSERT();
 
 
