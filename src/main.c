@@ -408,7 +408,8 @@ int main(void)
 
 
 			NRF_VCC_ASSERT();
-			NRF_VCC_DLY_MS(10);
+			for (i = 0; i < 200; i++) _NOP();
+//			NRF_VCC_DLY_MS(10);
 //			ASSERT_CE();
 
 		    /* Automatically goes to TX mode */
