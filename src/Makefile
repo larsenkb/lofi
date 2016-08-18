@@ -315,15 +315,15 @@ lib: $(LIBNAME)
 
 
 # Program the flash. (add -B250 at end to recover when I pgm clock to low) 
-program: $(TARGET).hex 
+pgm: $(TARGET).hex 
 	sudo $(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_FLASH)
 
 # Program the eeprom.  
-programeeprom: $(TARGET).eep
+pgmeeprom: $(TARGET).eep
 	sudo $(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_EEPROM)
 
 # Program the fuses.  
-programfuses: 
+pgmfuses: 
 	sudo $(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_FUSES)
 
 

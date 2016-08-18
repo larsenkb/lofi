@@ -72,7 +72,11 @@
 #define NRF_VCC_PIN				((1<<3) | (1<<7))
 #define NRF_VCC_INIT()			(DDRA |= NRF_VCC_PIN)
 #define NRF_VCC_ASSERT()		(PORTA |= NRF_VCC_PIN)
+#if 0
+#define NRF_VCC_DEASSERT()		
+#else
 #define NRF_VCC_DEASSERT()		(PORTA &= ~NRF_VCC_PIN)
+#endif
 #define NRF_VCC_DLY_MS(x)		_delay_ms((x))
 
 /* ------------------------------------------------------------------------- */
@@ -278,7 +282,6 @@ int main(void)
 	NRF_VCC_ASSERT();
 	NRF_VCC_DLY_MS(10);
 
-
 #if EN_NRF
 	// init hardware pins for talking to radio
 	nrf24_init();
@@ -408,8 +411,9 @@ int main(void)
 
 
 			NRF_VCC_ASSERT();
-			for (i = 0; i < 200; i++) _NOP();
-//			NRF_VCC_DLY_MS(10);
+//			for (i = 0; i < 200; i++) _NOP();
+			NRF_VCC_DLY_MS(5);
+//	nrf24_config(config.rf_chan, NRF24_PAYLOAD_LEN, config.spd_1M, config.rf_gain);
 //			ASSERT_CE();
 
 		    /* Automatically goes to TX mode */
