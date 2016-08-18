@@ -44,12 +44,6 @@
 #undef F_CPU
 #define F_CPU 1000000UL
 
-#define EN_NRF			1
-//#define EN_WD			1
-//#define WD_TO           9
-//#define WD_TO_SHORT     3
-#define EN_SWITCH       1
-
 
 #define SWITCH_1        2       /* PORTB bit2 */
 #define SWITCH_MSK      2
@@ -80,21 +74,15 @@
 #define NRF_VCC_DLY_MS(x)		_delay_ms((x))
 
 /* ------------------------------------------------------------------------- */
-//volatile uint8_t wdInt;
 volatile uint8_t wdTick;
 uint8_t wdSec, wdMin, wdHour;
 uint16_t wdDay;
 //uint8_t nodeId;
 uint8_t data_array[NRF24_PAYLOAD_LEN];
-#if EN_SWITCH
 volatile uint8_t sw1Flag;
 volatile uint8_t sw2Flag;
-//volatile uint8_t debounceFlag;
-#endif
 volatile uint8_t wdFlag;
-//uint8_t xmitFlagPc;
 
-//uint8_t ta[8];
 
 config_t		config;
 sensor_ctr_t    sens_ctr;
@@ -286,13 +274,11 @@ int main(void)
 	NRF_VCC_ASSERT();
 	NRF_VCC_DLY_MS(10);
 
-#if EN_NRF
 	// init hardware pins for talking to radio
 	nrf24_init();
     
 	// Initialize radio channel and payload length
 	nrf24_config(config.rf_chan, NRF24_PAYLOAD_LEN, config.spd_1M, config.rf_gain);
-#endif
 
 //    data_array[0] = config.nodeId;
 
@@ -329,35 +315,11 @@ int main(void)
 	while (1) {
 
 		// clear MOSI
-		PORTA &= ~(1<<6);
+		PORTA &= ~(1<<5);
   
 		// go to sleep and wait for interrupt (watchdog or pin change)
 		system_sleep();
 
-
-#if 0
-		if (sw1Flag) {
-			sw1Flag = 0;
-            xmitFlagPc = 1;
-		}
-
-        if (sw2Flag) {
-			sw2Flag = 0;
-            xmitFlagPc = 1;
-		}
-#endif
-
-#if 0
-		if (wdTick) {
-			wdTick = 0;
-			if (config.wdCnts) {
-				if (++wdInt >= config.wdCnts) {
-					wdInt = 0;
-					xmitFlagWd = 1;
-				}
-			}
-		}
-#endif
 
 		if (config.txDbg) {
             xprintf("%02X ", nrf24_rdReg(8));
@@ -365,10 +327,6 @@ int main(void)
 
 		if (wdFlag) {
 
-            // Clear the payload buffer
-//            memset(data_array, 0, 8);
-            // Fill the payload buffer
-//		    data_array[0] = config.nodeId;
             if (config.sw1_enb) {
                 sens_sw1.swtich_changed = 0; //xmitFlagPc;
 				if (config.sw1_nc)
