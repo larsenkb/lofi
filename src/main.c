@@ -94,7 +94,7 @@ volatile uint8_t sw2Flag;
 volatile uint8_t wdFlag;
 //uint8_t xmitFlagPc;
 
-uint8_t ta[8];
+//uint8_t ta[8];
 
 config_t		config;
 sensor_ctr_t    sens_ctr;
@@ -319,7 +319,7 @@ int main(void)
 	NRF_VCC_DEASSERT();
 
 	// Clear the payload buffer and setup for next xmit
-	memset(data_array, 0, 8);
+	memset(data_array, 0, NRF24_PAYLOAD_LEN);
 	data_array[0] = config.nodeId;
 	pay_idx = 1;
 
@@ -369,13 +369,6 @@ int main(void)
 //            memset(data_array, 0, 8);
             // Fill the payload buffer
 //		    data_array[0] = config.nodeId;
-            if (config.ctr) {
-                memcpy(&data_array[pay_idx], &sens_ctr, sizeof(sens_ctr));
-                pay_idx += sizeof(sens_ctr);
-                if (++sens_ctr.ctr_lo == 0)
-                    sens_ctr.ctr_hi++;
-            }
-
             if (config.sw1_enb) {
                 sens_sw1.swtich_changed = 0; //xmitFlagPc;
 				if (config.sw1_nc)
@@ -394,6 +387,13 @@ int main(void)
 					sens_sw2.switch_closed = (PINA & (1<<2))?(0):(1);
                 data_array[pay_idx] = *(uint8_t *)&sens_sw2;
                 pay_idx++;
+            }
+
+            if (config.ctr) {
+                memcpy(&data_array[pay_idx], &sens_ctr, sizeof(sens_ctr));
+                pay_idx += sizeof(sens_ctr);
+                if (++sens_ctr.ctr_lo == 0)
+                    sens_ctr.ctr_hi++;
             }
 
             if (config.vcc) {
@@ -506,6 +506,8 @@ int main(void)
 
 void printConfig(void)
 {
+	uint8_t  ta[8];
+
     xprintf("\nHello\n");
     xprintf("00:%02X", nrf24_rdReg(0));
     xprintf("  01:%02X", nrf24_rdReg(1));
