@@ -80,7 +80,7 @@
 #define NRF_VCC_DLY_MS(x)		_delay_ms((x))
 
 /* ------------------------------------------------------------------------- */
-volatile uint8_t wdInt;
+//volatile uint8_t wdInt;
 volatile uint8_t wdTick;
 uint8_t wdSec, wdMin, wdHour;
 uint16_t wdDay;
@@ -89,10 +89,10 @@ uint8_t data_array[NRF24_PAYLOAD_LEN];
 #if EN_SWITCH
 volatile uint8_t sw1Flag;
 volatile uint8_t sw2Flag;
-volatile uint8_t debounceFlag;
+//volatile uint8_t debounceFlag;
 #endif
-uint8_t xmitFlagWd;
-uint8_t xmitFlagPc;
+volatile uint8_t wdFlag;
+//uint8_t xmitFlagPc;
 
 uint8_t ta[8];
 
@@ -140,7 +140,7 @@ void setup_watchdog(int val)
 {
 	uint8_t bb;
 
-    wdInt = 0;
+//    wdInt = 0;
 
 	if (val > 9 )
 		return;		//val = 9;
@@ -167,7 +167,12 @@ void setup_watchdog(int val)
 // interrupt occured so that we can xmit.
 ISR(WATCHDOG_vect)
 {
-    wdTick = 1;
+	if (config.wdCnts) {
+		if (++wdTick >= config.wdCnts) {
+			wdTick = 0;
+			wdFlag = 1;
+		}
+	}
 }
 
 
@@ -192,6 +197,7 @@ ISR(PCINT0_vect)
 int main(void)
 {
 	uint16_t i;
+	uint8_t pay_idx = 1;
 
 	// Set Divide by 8 for 8MHz RC oscillator 
 	CLKPR = (1<<CLKPCE);
@@ -246,7 +252,6 @@ int main(void)
 			GIMSK = (1<<SWITCH_GMSK);
 			PCMSK1 = (1<<SWITCH_MSK);
 			sw1Flag = 0;
-			debounceFlag = 0;
 		}
     } else {
 		// if we leave pin as input, it will draw more current if it oscillates
@@ -269,7 +274,6 @@ int main(void)
 			GIMSK |= (1<<4);
 			PCMSK0 = (1<<SWITCH_MSK);
 			sw2Flag = 0;
-			debounceFlag = 0;
 		}
     } else {
 		// if we leave pin as input, it will draw more current if it oscillates
@@ -314,6 +318,10 @@ int main(void)
 //	DEASSERT_CE();
 	NRF_VCC_DEASSERT();
 
+	// Clear the payload buffer and setup for next xmit
+	memset(data_array, 0, 8);
+	data_array[0] = config.nodeId;
+	pay_idx = 1;
 
 	//
 	// Start of main loop
@@ -327,7 +335,8 @@ int main(void)
 		system_sleep();
 
 
-        if (sw1Flag) {
+#if 0
+		if (sw1Flag) {
 			sw1Flag = 0;
             xmitFlagPc = 1;
 		}
@@ -336,8 +345,9 @@ int main(void)
 			sw2Flag = 0;
             xmitFlagPc = 1;
 		}
+#endif
 
-
+#if 0
 		if (wdTick) {
 			wdTick = 0;
 			if (config.wdCnts) {
@@ -347,21 +357,18 @@ int main(void)
 				}
 			}
 		}
+#endif
 
 		if (config.txDbg) {
             xprintf("%02X ", nrf24_rdReg(8));
 		}
 
-        if (xmitFlagWd || xmitFlagPc) {
-            uint8_t pay_idx = 1;
-
-            if (xmitFlagWd) xmitFlagWd = 0;
-            if (xmitFlagPc) xmitFlagPc = 0;
+		if (wdFlag) {
 
             // Clear the payload buffer
-            memset(data_array, 0, 8);
+//            memset(data_array, 0, 8);
             // Fill the payload buffer
-		    data_array[0] = config.nodeId;
+//		    data_array[0] = config.nodeId;
             if (config.ctr) {
                 memcpy(&data_array[pay_idx], &sens_ctr, sizeof(sens_ctr));
                 pay_idx += sizeof(sens_ctr);
@@ -389,8 +396,6 @@ int main(void)
                 pay_idx++;
             }
 
-
-
             if (config.vcc) {
                 uint16_t vcc = readVccVoltage();
                 sens_vcc.sensorId = SENID_VCC;
@@ -409,6 +414,34 @@ int main(void)
                 pay_idx += sizeof(sens_temp);
             }
 
+		} else {
+
+			if (sw1Flag && config.sw1_enb) {
+                sens_sw1.swtich_changed = 0; //xmitFlagPc;
+				if (config.sw1_nc)
+					sens_sw1.switch_closed = (PINB & (1<<2))?(1):(0);
+				else
+					sens_sw1.switch_closed = (PINB & (1<<2))?(0):(1);
+                data_array[pay_idx] = *(uint8_t *)&sens_sw1;
+                pay_idx++;
+            }
+
+			if (sw2Flag && config.sw2_enb) {
+                sens_sw2.swtich_changed = 0; //xmitFlagPc;
+				if (config.sw2_nc)
+					sens_sw2.switch_closed = (PINA & (1<<2))?(1):(0);
+				else
+					sens_sw2.switch_closed = (PINA & (1<<2))?(0):(1);
+                data_array[pay_idx] = *(uint8_t *)&sens_sw2;
+                pay_idx++;
+            }
+
+		}
+
+		if (wdFlag || sw1Flag || sw2Flag) {
+			if (wdFlag) wdFlag = 0;
+			if (sw1Flag) sw1Flag = 0;
+			if (sw2Flag) sw2Flag = 0;
 
 			NRF_VCC_ASSERT();
 //			for (i = 0; i < 200; i++) _NOP();
@@ -457,7 +490,13 @@ int main(void)
 				LED_DEASSERT(LED_GRN);
 			}
 
-        } //endof: if (xmitFlagWd || xmitFlagPc) {
+            // Clear the payload buffer and setup for next xmit
+            memset(data_array, 0, 8);
+		    data_array[0] = config.nodeId;
+			pay_idx = 1;
+
+        } //endof: if (wdFlag || sw1Flag || sw2Flag) {
+
 
     }
 
