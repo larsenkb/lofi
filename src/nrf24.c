@@ -103,7 +103,8 @@ void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed_1M, uint8_t
     // Set RF channel
     nrf24_configRegister(RF_CH, channel);
 
-    // Set length of incoming payload 
+#if 0
+	// Set length of incoming payload 
     // Use static payload length ...
 	nrf24_configRegister(RX_PW_P0, pay_length); // Auto-ACK pipe ...
     nrf24_configRegister(RX_PW_P1, pay_length); // Data payload pipe
@@ -111,9 +112,9 @@ void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed_1M, uint8_t
     nrf24_configRegister(RX_PW_P3, 0x00); // Pipe not used 
     nrf24_configRegister(RX_PW_P4, 0x00); // Pipe not used 
     nrf24_configRegister(RX_PW_P5, 0x00); // Pipe not used 
+#endif
 
-    // 250Kbps, TX gain: 0dbm
-//    nrf24_configRegister(RF_SETUP, (2<<RF_DR) | ((0x03)<<RF_PWR));
+    // configure RF speed and power gain
 	if (speed_1M)
 		nrf24_configRegister(RF_SETUP, 0x00 | ((rf_gain & 0x3) << 1));
 	else
@@ -123,14 +124,22 @@ void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed_1M, uint8_t
 //    nrf24_configRegister(CONFIG, nrf24_CONFIG);
 
     // Auto Acknowledgment
+	// I think this is for PTX only
+    nrf24_configRegister(EN_AA,0);
 //    nrf24_configRegister(EN_AA,(1<<ENAA_P0)|(1<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
 
     // Enable RX addresses
 //    nrf24_configRegister(EN_RXADDR,(1<<ERX_P0)|(1<<ERX_P1)|(0<<ERX_P2)|(0<<ERX_P3)|(0<<ERX_P4)|(0<<ERX_P5));
 
-    // Auto retransmit delay: 1000 us and Up to 15 retransmit trials
-    nrf24_configRegister(SETUP_RETR,(0x04<<ARD)|(0x0F<<ARC));
+#if 1
+	// turn OFF auto retransmit
+    nrf24_configRegister(SETUP_RETR,0);
+#else
+	// Auto retransmit delay: 1000 us and Up to 15 retransmit trials
+    nrf24_configRegister(SETUP_RETR,(0x01<<ARD)|(0x02<<ARC));
+//    nrf24_configRegister(SETUP_RETR,(0x04<<ARD)|(0x0F<<ARC));
 //    nrf24_configRegister(SETUP_RETR,0); //(0x04<<ARD)|(0x0F<<ARC));
+#endif
 
 //    nrf24_configRegister(0x1d,1);
 
