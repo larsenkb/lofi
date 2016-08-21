@@ -44,10 +44,15 @@
 #undef F_CPU
 #define F_CPU 1000000UL
 
+#define EN_NRF_IRQ		1
+#define	NRF_IRQ_PIN		0
 
 #define SWITCH_1        2       /* PORTB bit2 */
-#define SWITCH_MSK      2
-#define SWITCH_GMSK     5
+#define SWITCH_1_MSK    2
+#define SWITCH_1_GMSK   5
+#define SWITCH_2        2       /* PORTA bit2 */
+#define SWITCH_2_MSK    2
+#define SWITCH_2_GMSK   4
 
 #define EEPROM_NODEID_ADR        ((uint8_t *)0)
 //#define EEPROM_CAPABILITY_ADR    ((uint8_t *)1)
@@ -56,14 +61,14 @@
 #define NRF24_PAYLOAD_LEN        8
 
 // ---------  LED MACROS  ----------
-#define LED_RED                  (1<<0)  // PORTB bit0
+//#define LED_RED                  (1<<0)  // PORTB bit0
 #define LED_GRN                  (1<<1)  // PORTB bit1
 
 #define LED_INIT(x)              (DDRB |= (x))
 #define LED_ASSERT(x)            (PORTB |= (x))
 #define LED_DEASSERT(x)          (PORTB &= ~(x))
 
-#define NRF_VCC_PIN				((1<<3) | (1<<7))
+#define NRF_VCC_PIN				(1<<3)
 #define NRF_VCC_INIT()			(DDRA |= NRF_VCC_PIN)
 #define NRF_VCC_ASSERT()		(PORTA |= NRF_VCC_PIN)
 #if 0
@@ -82,7 +87,9 @@ uint8_t data_array[NRF24_PAYLOAD_LEN];
 volatile uint8_t sw1Flag;
 volatile uint8_t sw2Flag;
 volatile uint8_t wdFlag;
+volatile uint8_t irqFlag;
 
+uint8_t tempCrap;
 
 config_t		config;
 sensor_ctr_t    sens_ctr;
@@ -128,15 +135,12 @@ void setup_watchdog(int val)
 {
 	uint8_t bb;
 
-//    wdInt = 0;
-
 	if (val > 9 )
 		return;		//val = 9;
 	bb = val & 7;
 	if (val > 7)
 		bb |= (1<<5);
 	bb |= (1<<WDCE);
-
 
 	MCUSR &= ~(1<<WDRF);
 	// start timed sequence
@@ -169,13 +173,26 @@ ISR(WATCHDOG_vect)
 //
 ISR(PCINT1_vect)
 {
-    sw1Flag = 1;
+	uint8_t pinb;
+	uint8_t pinState;
+
+	pinb = PINB;
+	if ((pinb & NRF_IRQ_PIN) == 0) {
+		irqFlag = 1;
+//		PCMSK1 &= ~(1<<NRF_IRQ_PIN);
+	}
+
+	pinState = (pinb>>SWITCH_1) & 1;
+    sw1Flag = (sens_sw1.lastState == pinState)?0:1;
 }
 
 
 ISR(PCINT0_vect)
 {
-    sw2Flag = 1;
+	uint8_t pinState;
+
+	pinState = (PINA>>SWITCH_2) & 1;
+    sw2Flag = (sens_sw2.lastState == pinState)?0:1;
 }
 
 
@@ -184,7 +201,7 @@ ISR(PCINT0_vect)
 //
 int main(void)
 {
-	uint16_t i;
+//	uint16_t i;
 	uint8_t pay_idx = 1;
 
 	// Set Divide by 8 for 8MHz RC oscillator 
@@ -201,15 +218,19 @@ int main(void)
 	eeprom_read_block(&config, 0, sizeof(config));
 
     // init LED pins as OUTPUT
-	LED_INIT(LED_RED | LED_GRN);		// set as output even if not used
-	LED_DEASSERT(LED_RED | LED_GRN);	// turn them both off
+	LED_INIT(LED_GRN);		// set as output even if not used
+	LED_DEASSERT(LED_GRN);	// turn them both off
+	DDRB &= ~1;
 
+
+	// init hardware pins for talking to radio
+	nrf24_init();
+    
     // initialize uart if eeprom configured
 	if (config.txDbg) {
 		uartbb_init();
 		xfunc_out = uartbb_putchar;
 	}
-
 
 	// Initialize counter capability/structure if eeprom configured
     if (config.ctr) {
@@ -227,18 +248,22 @@ int main(void)
 
 	// Initialize switch 1 capability/structure if eeprom configured
     if (config.sw1_enb) {
-		DDRB &= ~(1<<2);
+		uint8_t pinState;
+
+		DDRB &= ~(1<<SWITCH_1);
 		sens_sw1.sensorId = SENID_SW1;
-		if (config.sw1_nc)
-			sens_sw1.switch_closed = (PINB & (1<<2))?(1):(0);
-		else
-			sens_sw1.switch_closed = (PINB & (1<<2))?(0):(1);
-        sens_sw1.swtich_changed = 0;
-        sens_sw1.rsvd = 0;
+		pinState = (PINB>>SWITCH_1) & 1;
+		sens_sw1.closed = config.sw1_rev ^ pinState;
+//		if (config.sw1_nc)
+//			sens_sw1.closed = (PINB & (1<<SWITCH_1))?(1):(0);
+//		else
+//			sens_sw1.closed = (PINB & (1<<SWITCH_1))?(0):(1);
+        sens_sw1.changed = pinState;
+        sens_sw1.lastState = pinState;
 		if (config.sw1_pc) {
 			// enable pin change functionality
-			GIMSK = (1<<SWITCH_GMSK);
-			PCMSK1 = (1<<SWITCH_MSK);
+			GIMSK = (1<<SWITCH_1_GMSK);
+			PCMSK1 = (1<<SWITCH_1_MSK);
 			sw1Flag = 0;
 		}
     } else {
@@ -249,18 +274,22 @@ int main(void)
 
 	// Initialize switch 2 capability/structure if eeprom configured
     if (config.sw2_enb) {
-		DDRA &= ~(1<<2);
+		uint8_t pinState;
+
+		DDRA &= ~(1<<SWITCH_2);
         sens_sw2.sensorId = SENID_SW2;
-		if (config.sw2_nc)
-			sens_sw2.switch_closed = (PINA & (1<<2))?(1):(0);
-		else
-			sens_sw2.switch_closed = (PINA & (1<<2))?(0):(1);
-        sens_sw2.swtich_changed = 0;
-        sens_sw2.rsvd = 0;
+		pinState = (PINA>>SWITCH_2) & 1;
+		sens_sw2.closed = config.sw2_rev ^ pinState;
+//		if (config.sw2_nc)
+//			sens_sw2.switch_closed = (PINA & (1<<SWITCH_2))?(1):(0);
+//		else
+//			sens_sw2.switch_closed = (PINA & (1<<SWITCH_2))?(0):(1);
+        sens_sw2.changed = pinState;
+        sens_sw2.lastState = pinState;
 		if (config.sw2_pc) {
 			// enable pin change functionality
-			GIMSK |= (1<<4);
-			PCMSK0 = (1<<SWITCH_MSK);
+			GIMSK |= (1<<SWITCH_2_GMSK);
+			PCMSK0 = (1<<SWITCH_2_MSK);
 			sw2Flag = 0;
 		}
     } else {
@@ -269,16 +298,24 @@ int main(void)
 		// we are going to do damage
     }
 
+#if EN_NRF_IRQ
+	DDRB &= ~(1<<NRF_IRQ_PIN);
+	GIMSK |= (1<<SWITCH_1_GMSK);
+	PCMSK1 |= (1<<NRF_IRQ_PIN);
+#endif
+
 	// initialize pin and apply power to NRF
 	NRF_VCC_INIT();
 	NRF_VCC_ASSERT();
-	NRF_VCC_DLY_MS(10);
+	NRF_VCC_DLY_MS(100);
 
-	// init hardware pins for talking to radio
-	nrf24_init();
-    
 	// Initialize radio channel and payload length
 	nrf24_config(config.rf_chan, NRF24_PAYLOAD_LEN, config.spd_1M, config.rf_gain);
+
+	// Power off radio as we go into our first sleep
+	nrf24_powerDown();            
+//	DEASSERT_CE();
+//	NRF_VCC_DEASSERT();
 
 //    data_array[0] = config.nodeId;
 
@@ -299,11 +336,6 @@ int main(void)
 		_delay_ms(100);
 	}
 
-	// Power off radio as we go into our first sleep
-	nrf24_powerDown();            
-//	DEASSERT_CE();
-	NRF_VCC_DEASSERT();
-
 	// Clear the payload buffer and setup for next xmit
 	memset(data_array, 0, NRF24_PAYLOAD_LEN);
 	data_array[0] = config.nodeId;
@@ -321,28 +353,57 @@ int main(void)
 		system_sleep();
 
 
+#if 0
 		if (config.txDbg) {
             xprintf("%02X ", nrf24_rdReg(8));
+		}
+#endif
+
+		if (irqFlag) {
+			irqFlag = 0;
+//			PCMSK1 &= ~(1<<NRF_IRQ_PIN);
+			if (config.enLed) {
+				LED_DEASSERT(LED_GRN);
+			}
+			nrf24_powerDown();
+//			PCMSK1 |= (1<<NRF_IRQ_PIN);
+#if 0
+			if (config.enLed) {
+				LED_ASSERT(LED_GRN);
+        		_delay_us(100);
+				LED_DEASSERT(LED_GRN);
+			}
+#endif
 		}
 
 		if (wdFlag) {
 
             if (config.sw1_enb) {
-                sens_sw1.swtich_changed = 0; //xmitFlagPc;
-				if (config.sw1_nc)
-					sens_sw1.switch_closed = (PINB & (1<<2))?(1):(0);
-				else
-					sens_sw1.switch_closed = (PINB & (1<<2))?(0):(1);
+				uint8_t pinState;
+
+				pinState = (PINB>>SWITCH_1) & 1;
+                sens_sw1.changed = (sens_sw1.lastState == pinState)?0:1;
+				sens_sw1.closed = config.sw1_rev ^ pinState;
+//				if (config.sw1_nc)
+//					sens_sw1.switch_closed = (PINB & (1<<2))?(1):(0);
+//				else
+//					sens_sw1.switch_closed = (PINB & (1<<2))?(0):(1);
+				sens_sw1.lastState = pinState;
                 data_array[pay_idx] = *(uint8_t *)&sens_sw1;
                 pay_idx++;
             }
 
             if (config.sw2_enb) {
-                sens_sw2.swtich_changed = 0; //xmitFlagPc;
-				if (config.sw2_nc)
-					sens_sw2.switch_closed = (PINA & (1<<2))?(1):(0);
-				else
-					sens_sw2.switch_closed = (PINA & (1<<2))?(0):(1);
+				uint8_t pinState;
+
+				pinState = (PINA>>SWITCH_2) & 1;
+                sens_sw2.changed = (sens_sw2.lastState == pinState)?0:1;
+				sens_sw2.closed = config.sw2_rev ^ pinState;
+//				if (config.sw2_nc)
+//					sens_sw2.switch_closed = (PINA & (1<<2))?(1):(0);
+//				else
+//					sens_sw2.switch_closed = (PINA & (1<<2))?(0):(1);
+				sens_sw2.lastState = pinState;
                 data_array[pay_idx] = *(uint8_t *)&sens_sw2;
                 pay_idx++;
             }
@@ -375,41 +436,56 @@ int main(void)
 		} else {
 
 			if (sw1Flag && config.sw1_enb) {
-                sens_sw1.swtich_changed = 0; //xmitFlagPc;
-				if (config.sw1_nc)
-					sens_sw1.switch_closed = (PINB & (1<<2))?(1):(0);
-				else
-					sens_sw1.switch_closed = (PINB & (1<<2))?(0):(1);
+				uint8_t pinState;
+
+				pinState = (PINB>>SWITCH_1) & 1;
+                sens_sw1.changed = (sens_sw1.lastState == pinState)?0:1;
+				sens_sw1.closed = config.sw1_rev ^ pinState;
+//				if (config.sw1_nc)
+//					sens_sw1.switch_closed = (PINB & (1<<2))?(1):(0);
+//				else
+//					sens_sw1.switch_closed = (PINB & (1<<2))?(0):(1);
+				sens_sw1.lastState = pinState;
                 data_array[pay_idx] = *(uint8_t *)&sens_sw1;
                 pay_idx++;
             }
 
 			if (sw2Flag && config.sw2_enb) {
-                sens_sw2.swtich_changed = 0; //xmitFlagPc;
-				if (config.sw2_nc)
-					sens_sw2.switch_closed = (PINA & (1<<2))?(1):(0);
-				else
-					sens_sw2.switch_closed = (PINA & (1<<2))?(0):(1);
+				uint8_t pinState;
+
+				pinState = (PINA>>SWITCH_2) & 1;
+                sens_sw2.changed = (sens_sw2.lastState == pinState)?0:1;
+				sens_sw2.closed = config.sw2_rev ^ pinState;
+//				if (config.sw2_nc)
+//					sens_sw2.switch_closed = (PINA & (1<<2))?(1):(0);
+//				else
+//					sens_sw2.switch_closed = (PINA & (1<<2))?(0):(1);
+				sens_sw2.lastState = pinState;
                 data_array[pay_idx] = *(uint8_t *)&sens_sw2;
                 pay_idx++;
             }
-
 		}
 
 		if (wdFlag || sw1Flag || sw2Flag) {
 			if (wdFlag) wdFlag = 0;
 			if (sw1Flag) sw1Flag = 0;
 			if (sw2Flag) sw2Flag = 0;
+//data_array[7] = nrf24_rdReg(8);
 
-			NRF_VCC_ASSERT();
+//			NRF_VCC_ASSERT();
 //			for (i = 0; i < 200; i++) _NOP();
-			NRF_VCC_DLY_MS(5);
+//			NRF_VCC_DLY_MS(5);
 //	nrf24_config(config.rf_chan, NRF24_PAYLOAD_LEN, config.spd_1M, config.rf_gain);
 //			ASSERT_CE();
 
 		    /* Automatically goes to TX mode */
-		    nrf24_send(data_array, NRF24_PAYLOAD_LEN);        
+			PCMSK1 &= ~(1<<NRF_IRQ_PIN);
+			nrf24_send(data_array, NRF24_PAYLOAD_LEN);        
+			GIFR |= (1<<5);
+			PCMSK1 |= (1<<NRF_IRQ_PIN);
         
+#if 1
+			/* Start the transmission */
 			ASSERT_CE();
 			_NOP();
 			_NOP();
@@ -421,32 +497,38 @@ int main(void)
 			_NOP();
 			_NOP();
 			_NOP();
-			_NOP();
 			DEASSERT_CE();
-			
+#endif
+
+			if (config.enLed) {
+				LED_ASSERT(LED_GRN);
+			}
 		    /* Wait for transmission to end */
-			i = 0;
-		    while (nrf24_isSending() && i++ < 10000);
-
-		    /* Make analysis on last tranmission attempt */
-//		    temp = nrf24_lastMessageStatus();
-
-		    /* Retranmission count indicates the tranmission quality */
-//		    temp = nrf24_retransmissionCount();
-//		    xprintf("> Retranmission count: %d\r\n",temp);
-
+//			i = 0;
+//			while (nrf24_isSending() && i++ < 10);
+#if 0
+			if (config.enLed) {
+				LED_ASSERT(LED_GRN);
+			}
+			_delay_us(500);
+			if (config.enLed) {
+				LED_DEASSERT(LED_GRN);
+			}
+			//			??? should clear TX_DS now???
 
 		    /* Or you might want to power down after TX */
 		    nrf24_powerDown();            
 //			DEASSERT_CE();
-			NRF_VCC_DEASSERT();
+//			NRF_VCC_DEASSERT();
+#endif
 
-
+#if 0
 			if (config.enLed) {
 				LED_ASSERT(LED_GRN);
         		_delay_us(100);
 				LED_DEASSERT(LED_GRN);
 			}
+#endif
 
             // Clear the payload buffer and setup for next xmit
             memset(data_array, 0, 8);
@@ -454,7 +536,6 @@ int main(void)
 			pay_idx = 1;
 
         } //endof: if (wdFlag || sw1Flag || sw2Flag) {
-
 
     }
 
@@ -465,11 +546,12 @@ int main(void)
 void printConfig(void)
 {
 	uint8_t  ta[8];
+	uint8_t  val;
 
     xprintf("\nHello\n");
-    xprintf("00:%02X", nrf24_rdReg(0));
-    xprintf("  01:%02X", nrf24_rdReg(1));
-    xprintf("  02:%02X", nrf24_rdReg(2));
+	val = nrf24_rdReg(0); xprintf("00:%02x", val); tempCrap = val;
+    val = nrf24_rdReg(1); xprintf("  01:%02x", val);
+    xprintf("  02:%02x", nrf24_rdReg(2));
     xprintf("  03:%02X", nrf24_rdReg(3));
     xprintf("  04:%02X", nrf24_rdReg(4));
     xprintf("  05:%02X", nrf24_rdReg(5));
@@ -477,14 +559,17 @@ void printConfig(void)
     xprintf("  07:%02X", nrf24_rdReg(7));
     xprintf("  08:%02X", nrf24_rdReg(8));
     xprintf("  09:%02X\n", nrf24_rdReg(9));
+	memset(ta, 0, 8);
 	nrf24_readRegister(0x0a, ta, 5);
 	xprintf("0A:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
+	memset(ta, 0, 8);
 	nrf24_readRegister(0x0b, ta, 5);
 	xprintf("0B:%02X %02X %02X %02X %02X", ta[4], ta[3], ta[2], ta[1], ta[0]);
     xprintf("  0C:%02X", nrf24_rdReg(0x0c));
     xprintf("  0D:%02X", nrf24_rdReg(0x0d));
     xprintf("  0E:%02X", nrf24_rdReg(0x0e));
     xprintf("  0F:%02X\n", nrf24_rdReg(0x0f));
+	memset(ta, 0, 8);
 	nrf24_readRegister(0x10, ta, 5);
 	xprintf("10:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
     xprintf("11:%02X", nrf24_rdReg(0x11));

@@ -45,6 +45,7 @@ void uartbb_init(void)
     SET_TX();
 
 	// initialize timer
+	PRR &= ~(1<<2);
     OCR0A = UARTBB_TIMERTOP;
     TCNT0 = 0;
 

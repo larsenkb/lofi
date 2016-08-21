@@ -296,7 +296,7 @@ main.o: main.c uartbb.h nrf24.h lofi.h xprintf.h
 
 uartbb.o: uartbb.c uartbb.h
 
-nrf24.o: nrf24.c nrf24.h nRF24L01.h
+nrf24.o: nrf24.c nrf24.h nRF24L01.h lofi.h
 
 xprintf.o: xprintf.c xprintf.h
 
@@ -325,6 +325,10 @@ pgmeeprom: $(TARGET).eep
 # Program the fuses.  
 pgmfuses: 
 	sudo $(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_FUSES)
+
+# Start up avrdude in interactive mode.  
+dude: 
+	sudo $(AVRDUDE) $(AVRDUDE_FLAGS) -t
 
 
 # Create final output files (.hex, .eep) from ELF output file.

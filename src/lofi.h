@@ -1,6 +1,7 @@
 #ifndef __LOFI_H__
 #define __LOFI_H__
 
+#define EN_ENH_SWAVE	1
 
 typedef enum {
 	SENID_NONE = 0,
@@ -22,17 +23,11 @@ typedef enum {
 
 
 typedef struct {
-    uint8_t     swtich_changed  :1;
-    uint8_t     switch_closed   :1;
-    uint8_t     rsvd            :1;
+    uint8_t     changed         :1;
+    uint8_t     closed          :1;
+    uint8_t     lastState       :1;
     uint8_t     sensorId        :5;
 } sensor_switch_t;
-
-typedef struct {
-    uint8_t     ctr_hi          :3;
-    uint8_t     sensorId        :5;
-    uint8_t     ctr_lo;
-} sensor_ctr_t;
 
 typedef struct {
     uint8_t     ctr				:1;
@@ -58,10 +53,10 @@ typedef struct {
 	uint8_t		nodeId;
 
 	// byte 1
-	uint8_t		sw1_nc			:1;
+	uint8_t		sw1_rev			:1;
 	uint8_t		sw1_pc			:1;
 	uint8_t		sw1_enb			:1;
-	uint8_t		sw2_nc			:1;
+	uint8_t		sw2_rev			:1;
 	uint8_t		sw2_pc			:1;
 	uint8_t		sw2_enb			:1;
 	uint8_t		rsvd_1			:2;
@@ -104,6 +99,12 @@ typedef struct {
     uint8_t     sensorId		:5;
     uint8_t     temp_lo;
 } sensor_temp_t;
+
+typedef struct {
+    uint8_t     ctr_hi          :3;
+    uint8_t     sensorId        :5;
+    uint8_t     ctr_lo;
+} sensor_ctr_t;
 
 
 #endif  /* __LOFI_H__ */
