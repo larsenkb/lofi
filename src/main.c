@@ -44,7 +44,7 @@
 #undef F_CPU
 #define F_CPU 1000000UL
 
-#define EN_NRF_IRQ		1
+#define EN_NRF_IRQ		0
 #define	NRF_IRQ_PIN		0
 
 #define SWITCH_1        2       /* PORTB bit2 */
@@ -87,7 +87,9 @@ uint8_t data_array[NRF24_PAYLOAD_LEN];
 volatile uint8_t sw1Flag;
 volatile uint8_t sw2Flag;
 volatile uint8_t wdFlag;
+#if EN_NRF_IRQ
 volatile uint8_t irqFlag;
+#endif
 
 uint8_t tempCrap;
 
@@ -173,8 +175,9 @@ ISR(WATCHDOG_vect)
 //
 ISR(PCINT1_vect)
 {
-	uint8_t pinb;
 	uint8_t pinState;
+#if EN_NRF_IRQ
+	uint8_t pinb;
 
 	pinb = PINB;
 	if ((pinb & NRF_IRQ_PIN) == 0) {
@@ -183,6 +186,9 @@ ISR(PCINT1_vect)
 	}
 
 	pinState = (pinb>>SWITCH_1) & 1;
+#else
+	pinState = (PINB>>SWITCH_1) & 1;
+#endif
     sw1Flag = (sens_sw1.lastState == pinState)?0:1;
 }
 
@@ -359,6 +365,7 @@ int main(void)
 		}
 #endif
 
+#if EN_NRF_IRQ
 		if (irqFlag) {
 			irqFlag = 0;
 //			PCMSK1 &= ~(1<<NRF_IRQ_PIN);
@@ -375,6 +382,7 @@ int main(void)
 			}
 #endif
 		}
+#endif
 
 		if (wdFlag) {
 
@@ -479,11 +487,15 @@ int main(void)
 //			ASSERT_CE();
 
 		    /* Automatically goes to TX mode */
+#if EN_NRF_IRQ
 			PCMSK1 &= ~(1<<NRF_IRQ_PIN);
+#endif
 			nrf24_send(data_array, NRF24_PAYLOAD_LEN);        
+#if EN_NRF_IRQ
 			GIFR |= (1<<5);
 			PCMSK1 |= (1<<NRF_IRQ_PIN);
-        
+#endif
+
 #if 1
 			/* Start the transmission */
 			ASSERT_CE();
@@ -500,13 +512,15 @@ int main(void)
 			DEASSERT_CE();
 #endif
 
+#if EN_NRF_IRQ
 			if (config.enLed) {
 				LED_ASSERT(LED_GRN);
 			}
-		    /* Wait for transmission to end */
+#endif
+			/* Wait for transmission to end */
 //			i = 0;
 //			while (nrf24_isSending() && i++ < 10);
-#if 0
+#if !EN_NRF_IRQ
 			if (config.enLed) {
 				LED_ASSERT(LED_GRN);
 			}
