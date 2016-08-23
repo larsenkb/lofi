@@ -16,7 +16,7 @@
 
 /* the tx/rx buffer sizes are this power of two */
 /* always need to be a power of two */
-#define UARTBB_TX_PWR		5
+#define UARTBB_TX_PWR		4
 
 enum { UARTBB_STATE_IDLE = 0,
 	   UARTBB_STATE_START,

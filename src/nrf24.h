@@ -51,6 +51,7 @@ uint8_t nrf24_rxFifoEmpty(void);
 /* core TX / RX functions */
 void    nrf24_send(uint8_t* value, uint8_t pay_length);
 void    nrf24_getData(uint8_t* data);
+void    nrf24_pulseCE(void);
 
 /* use in dynamic length mode */
 uint8_t nrf24_payloadLength(void);

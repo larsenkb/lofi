@@ -234,61 +234,41 @@ void nrf24_powerUpRx()
 // amount of bytes as configured as payload on the receiver.
 void nrf24_send(uint8_t* value, uint8_t pay_length) 
 {    
-//	volatile int i;
-
-    /* Go to Standby-I first */
-//	DEASSERT_CE();
      
     /* Set to transmitter mode , Power up if needed */
     nrf24_powerUpTx();
-//    _delay_us(1500);	// we don't need the delay because what follows is more than enough delay
 
     /* Do we really need to flush TX fifo each time ? */
 #if 1
-        /* Pull down chip select */
-    ASSERT_CSN();
-
     /* Write cmd to flush transmit FIFO */
+    ASSERT_CSN();
     spi_transfer(FLUSH_TX);     
-
-    /* Pull up chip select */
     DEASSERT_CSN();
 #endif 
-//    _delay_ms(10);
 
-    /* Pull down chip select */
+    /* Write payload cmd and write payload */
 	ASSERT_CSN();
-
-    /* Write cmd to write payload */
     spi_transfer(W_TX_PAYLOAD);
-//    spi_transfer(W_TX_PAYLOAD_NOACK);
-
-    /* Write payload */
     nrf24_transmitSync(value, pay_length);   
-
-    /* Pull up chip select */
     DEASSERT_CSN();
 
-//    _delay_ms(10);
+}
 
-#if 0
+void nrf24_pulseCE(void)
+{
 	/* Start the transmission */
 	ASSERT_CE();
-//    _delay_ms(10);
-//    for (i = 0; i < 4; i++ ) {
-        _NOP();
-        _NOP();
-        _NOP();
-        _NOP();
-        _NOP();
-        _NOP();
-        _NOP();
-        _NOP();
-        _NOP();
-        _NOP();
-//    }
+	_NOP();
+	_NOP();
+	_NOP();
+	_NOP();
+	_NOP();
+	_NOP();
+	_NOP();
+	_NOP();
+	_NOP();
+	_NOP();
 	DEASSERT_CE();
-#endif
 }
 
 uint8_t nrf24_isSending()
@@ -320,7 +300,6 @@ uint8_t nrf24_getStatus(void)
 void nrf24_powerUpTx(void)
 {
     nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
-
     nrf24_configRegister(CONFIG,nrf24_CONFIG|((1<<PWR_UP)|(0<<PRIM_RX)));
 }
 
@@ -385,7 +364,7 @@ void nrf24_powerDown()
 }
 
 
-#if 1
+#if 0
 /* Returns the number of retransmissions occured for the last message */
 uint8_t nrf24_retransmissionCount()
 {

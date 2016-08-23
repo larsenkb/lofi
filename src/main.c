@@ -20,7 +20,7 @@
 // which will trigger a transmission. Otherwise, they are only polled
 // and switch state will be transmitted at the polling frequency.
 // The polling period is configured in eeprom.
-// A 10-bit incrementing count is sent on each transmission.
+// A 10-bit incrementing count is sent on polled transmissions.
 //
 // Configuration is stored in the eeprom starting at addr 0.
 // See config_t structure for details.
@@ -44,9 +44,6 @@
 #undef F_CPU
 #define F_CPU 1000000UL
 
-#define EN_NRF_IRQ		0
-#define	NRF_IRQ_PIN		0
-
 #define SWITCH_1        2       /* PORTB bit2 */
 #define SWITCH_1_MSK    2
 #define SWITCH_1_GMSK   5
@@ -55,7 +52,6 @@
 #define SWITCH_2_GMSK   4
 
 #define EEPROM_NODEID_ADR        ((uint8_t *)0)
-//#define EEPROM_CAPABILITY_ADR    ((uint8_t *)1)
 
 #define NRF24_CHANNEL            2
 #define NRF24_PAYLOAD_LEN        8
@@ -82,16 +78,10 @@
 volatile uint8_t wdTick;
 uint8_t wdSec, wdMin, wdHour;
 uint16_t wdDay;
-//uint8_t nodeId;
 uint8_t data_array[NRF24_PAYLOAD_LEN];
 volatile uint8_t sw1Flag;
 volatile uint8_t sw2Flag;
 volatile uint8_t wdFlag;
-#if EN_NRF_IRQ
-volatile uint8_t irqFlag;
-#endif
-
-uint8_t tempCrap;
 
 config_t		config;
 sensor_ctr_t    sens_ctr;
@@ -107,6 +97,9 @@ sensor_temp_t   sens_temp;
 uint16_t readVccVoltage(void);
 uint16_t readTemperature(void);
 void printConfig(void);
+void blinkLed(void);
+void getSw1(uint8_t *payload);
+void getSw2(uint8_t *payload);
 
 
 //****************************************************************  
@@ -176,19 +169,8 @@ ISR(WATCHDOG_vect)
 ISR(PCINT1_vect)
 {
 	uint8_t pinState;
-#if EN_NRF_IRQ
-	uint8_t pinb;
 
-	pinb = PINB;
-	if ((pinb & NRF_IRQ_PIN) == 0) {
-		irqFlag = 1;
-//		PCMSK1 &= ~(1<<NRF_IRQ_PIN);
-	}
-
-	pinState = (pinb>>SWITCH_1) & 1;
-#else
 	pinState = (PINB>>SWITCH_1) & 1;
-#endif
     sw1Flag = (sens_sw1.lastState == pinState)?0:1;
 }
 
@@ -207,8 +189,7 @@ ISR(PCINT0_vect)
 //
 int main(void)
 {
-//	uint16_t i;
-	uint8_t pay_idx = 1;
+	uint8_t pay_idx;
 
 	// Set Divide by 8 for 8MHz RC oscillator 
 	CLKPR = (1<<CLKPCE);
@@ -219,6 +200,9 @@ int main(void)
 
 	// turn off analog comparator
 	ACSR = 0x80;
+
+	// reduce power on TIMER1
+	PRR |= (1<<PRTIM1);
 
 	// read the config params from eeprom
 	eeprom_read_block(&config, 0, sizeof(config));
@@ -236,6 +220,8 @@ int main(void)
 	if (config.txDbg) {
 		uartbb_init();
 		xfunc_out = uartbb_putchar;
+	} else {
+		PRR |= (1<<PRTIM0);
 	}
 
 	// Initialize counter capability/structure if eeprom configured
@@ -260,14 +246,9 @@ int main(void)
 		sens_sw1.sensorId = SENID_SW1;
 		pinState = (PINB>>SWITCH_1) & 1;
 		sens_sw1.closed = config.sw1_rev ^ pinState;
-//		if (config.sw1_nc)
-//			sens_sw1.closed = (PINB & (1<<SWITCH_1))?(1):(0);
-//		else
-//			sens_sw1.closed = (PINB & (1<<SWITCH_1))?(0):(1);
         sens_sw1.changed = pinState;
         sens_sw1.lastState = pinState;
 		if (config.sw1_pc) {
-			// enable pin change functionality
 			GIMSK = (1<<SWITCH_1_GMSK);
 			PCMSK1 = (1<<SWITCH_1_MSK);
 			sw1Flag = 0;
@@ -286,14 +267,9 @@ int main(void)
         sens_sw2.sensorId = SENID_SW2;
 		pinState = (PINA>>SWITCH_2) & 1;
 		sens_sw2.closed = config.sw2_rev ^ pinState;
-//		if (config.sw2_nc)
-//			sens_sw2.switch_closed = (PINA & (1<<SWITCH_2))?(1):(0);
-//		else
-//			sens_sw2.switch_closed = (PINA & (1<<SWITCH_2))?(0):(1);
         sens_sw2.changed = pinState;
         sens_sw2.lastState = pinState;
 		if (config.sw2_pc) {
-			// enable pin change functionality
 			GIMSK |= (1<<SWITCH_2_GMSK);
 			PCMSK0 = (1<<SWITCH_2_MSK);
 			sw2Flag = 0;
@@ -307,12 +283,6 @@ int main(void)
 		PORTA &= ~(1<<SWITCH_2);
     }
 
-#if EN_NRF_IRQ
-	DDRB &= ~(1<<NRF_IRQ_PIN);
-	GIMSK |= (1<<SWITCH_1_GMSK);
-	PCMSK1 |= (1<<NRF_IRQ_PIN);
-#endif
-
 	// initialize pin and apply power to NRF
 	NRF_VCC_INIT();
 	NRF_VCC_ASSERT();
@@ -323,10 +293,7 @@ int main(void)
 
 	// Power off radio as we go into our first sleep
 	nrf24_powerDown();            
-//	DEASSERT_CE();
 //	NRF_VCC_DEASSERT();
-
-//    data_array[0] = config.nodeId;
 
     // initialize watchdog and associated variables
     wdTick = 0;
@@ -339,6 +306,7 @@ int main(void)
 	// Enable interrupts
     sei();
 
+	// must be called after global interrupts are enabled
 	if (config.txDbg) {
 		printConfig();
 		_delay_ms(100);
@@ -354,69 +322,18 @@ int main(void)
 	//
 	while (1) {
 
-		// clear MOSI
-//		PORTA &= ~(1<<5);
-  
 		// go to sleep and wait for interrupt (watchdog or pin change)
 		system_sleep();
 
-
-#if 0
-		if (config.txDbg) {
-            xprintf("%02X ", nrf24_rdReg(8));
-		}
-#endif
-
-#if EN_NRF_IRQ
-		if (irqFlag) {
-			irqFlag = 0;
-//			PCMSK1 &= ~(1<<NRF_IRQ_PIN);
-			if (config.enLed) {
-				LED_DEASSERT(LED_GRN);
-			}
-			nrf24_powerDown();
-//			PCMSK1 |= (1<<NRF_IRQ_PIN);
-#if 0
-			if (config.enLed) {
-				LED_ASSERT(LED_GRN);
-        		_delay_us(100);
-				LED_DEASSERT(LED_GRN);
-			}
-#endif
-		}
-#endif
-
 		if (wdFlag) {
 
-            if (config.sw1_enb) {
-				uint8_t pinState;
+			if (config.sw1_enb) {
+				getSw1(&data_array[pay_idx++]);
+			}
 
-				pinState = (PINB>>SWITCH_1) & 1;
-                sens_sw1.changed = (sens_sw1.lastState == pinState)?0:1;
-				sens_sw1.closed = config.sw1_rev ^ pinState;
-//				if (config.sw1_nc)
-//					sens_sw1.switch_closed = (PINB & (1<<2))?(1):(0);
-//				else
-//					sens_sw1.switch_closed = (PINB & (1<<2))?(0):(1);
-				sens_sw1.lastState = pinState;
-                data_array[pay_idx] = *(uint8_t *)&sens_sw1;
-                pay_idx++;
-            }
-
-            if (config.sw2_enb) {
-				uint8_t pinState;
-
-				pinState = (PINA>>SWITCH_2) & 1;
-                sens_sw2.changed = (sens_sw2.lastState == pinState)?0:1;
-				sens_sw2.closed = config.sw2_rev ^ pinState;
-//				if (config.sw2_nc)
-//					sens_sw2.switch_closed = (PINA & (1<<2))?(1):(0);
-//				else
-//					sens_sw2.switch_closed = (PINA & (1<<2))?(0):(1);
-				sens_sw2.lastState = pinState;
-                data_array[pay_idx] = *(uint8_t *)&sens_sw2;
-                pay_idx++;
-            }
+			if (config.sw2_enb) {
+				getSw2(&data_array[pay_idx++]);
+			}
 
             if (config.ctr) {
                 memcpy(&data_array[pay_idx], &sens_ctr, sizeof(sens_ctr));
@@ -446,34 +363,12 @@ int main(void)
 		} else {
 
 			if (sw1Flag && config.sw1_enb) {
-				uint8_t pinState;
-
-				pinState = (PINB>>SWITCH_1) & 1;
-                sens_sw1.changed = (sens_sw1.lastState == pinState)?0:1;
-				sens_sw1.closed = config.sw1_rev ^ pinState;
-//				if (config.sw1_nc)
-//					sens_sw1.switch_closed = (PINB & (1<<2))?(1):(0);
-//				else
-//					sens_sw1.switch_closed = (PINB & (1<<2))?(0):(1);
-				sens_sw1.lastState = pinState;
-                data_array[pay_idx] = *(uint8_t *)&sens_sw1;
-                pay_idx++;
-            }
+				getSw1(&data_array[pay_idx++]);
+			}
 
 			if (sw2Flag && config.sw2_enb) {
-				uint8_t pinState;
-
-				pinState = (PINA>>SWITCH_2) & 1;
-                sens_sw2.changed = (sens_sw2.lastState == pinState)?0:1;
-				sens_sw2.closed = config.sw2_rev ^ pinState;
-//				if (config.sw2_nc)
-//					sens_sw2.switch_closed = (PINA & (1<<2))?(1):(0);
-//				else
-//					sens_sw2.switch_closed = (PINA & (1<<2))?(0):(1);
-				sens_sw2.lastState = pinState;
-                data_array[pay_idx] = *(uint8_t *)&sens_sw2;
-                pay_idx++;
-            }
+				getSw2(&data_array[pay_idx++]);
+			}
 		}
 
 		if (wdFlag || sw1Flag || sw2Flag) {
@@ -481,74 +376,18 @@ int main(void)
 			if (wdFlag) wdFlag = 0;
 			if (sw1Flag) sw1Flag = 0;
 			if (sw2Flag) sw2Flag = 0;
-//data_array[7] = nrf24_rdReg(8);
-
-//			NRF_VCC_ASSERT();
-//			for (i = 0; i < 200; i++) _NOP();
-//			NRF_VCC_DLY_MS(5);
-//	nrf24_config(config.rf_chan, NRF24_PAYLOAD_LEN, config.spd_1M, config.rf_gain);
-//			ASSERT_CE();
 
 		    /* Automatically goes to TX mode */
-#if EN_NRF_IRQ
-			PCMSK1 &= ~(1<<NRF_IRQ_PIN);
-#endif
 			nrf24_send(data_array, NRF24_PAYLOAD_LEN);        
-#if EN_NRF_IRQ
-			GIFR |= (1<<5);
-			PCMSK1 |= (1<<NRF_IRQ_PIN);
-#endif
 
-#if 1
 			/* Start the transmission */
-			ASSERT_CE();
-			_NOP();
-			_NOP();
-			_NOP();
-			_NOP();
-			_NOP();
-			_NOP();
-			_NOP();
-			_NOP();
-			_NOP();
-			_NOP();
-			DEASSERT_CE();
-#endif
+			nrf24_pulseCE();
 
-#if EN_NRF_IRQ
-			if (config.enLed) {
-				LED_ASSERT(LED_GRN);
-			}
-#endif
-			/* Wait for transmission to end */
-//			i = 0;
-//			while (nrf24_isSending());
-#if 0
-#if !EN_NRF_IRQ
+		    nrf24_powerDown();            
+
 			if (config.enLed) { LED_ASSERT(LED_GRN); }
 			_delay_us(100);
 			if (config.enLed) { LED_DEASSERT(LED_GRN); }
-			_delay_us(400);
-			//			??? should clear TX_DS now???
-
-		    /* Or you might want to power down after TX */
-		    nrf24_powerDown();            
-//			DEASSERT_CE();
-//			NRF_VCC_DEASSERT();
-#endif
-#else
-		    nrf24_powerDown();            
-			if (config.enLed) { LED_ASSERT(LED_GRN); }
-			_delay_us(100);
-			if (config.enLed) { LED_DEASSERT(LED_GRN); }
-#endif
-#if 0
-			if (config.enLed) {
-				LED_ASSERT(LED_GRN);
-        		_delay_us(100);
-				LED_DEASSERT(LED_GRN);
-			}
-#endif
 
             // Clear the payload buffer and setup for next xmit
             memset(data_array, 0, 8);
@@ -562,18 +401,45 @@ int main(void)
     return 0;
 }
 
+void getSw1(uint8_t *payload)
+{
+	uint8_t pinState;
+
+	pinState = (PINB>>SWITCH_1) & 1;
+	sens_sw1.changed = (sens_sw1.lastState == pinState)?0:1;
+	sens_sw1.closed = config.sw1_rev ^ pinState;
+	sens_sw1.lastState = pinState;
+	*payload = *(uint8_t *)&sens_sw1;
+}
+
+void getSw2(uint8_t *payload)
+{
+	uint8_t pinState;
+
+	pinState = (PINA>>SWITCH_2) & 1;
+	sens_sw2.changed = (sens_sw2.lastState == pinState)?0:1;
+	sens_sw2.closed = config.sw2_rev ^ pinState;
+	sens_sw2.lastState = pinState;
+	*payload = *(uint8_t *)&sens_sw2;
+}
+
+void blinkLed(void)
+{
+	if (config.enLed) { LED_ASSERT(LED_GRN); }
+	_delay_us(100);
+	if (config.enLed) { LED_DEASSERT(LED_GRN); }
+}
 
 void printConfig(void)
 {
 	uint8_t  ta[8];
-	uint8_t  val;
 
     xprintf("\nHello\n");
-	val = nrf24_rdReg(0); xprintf("00:%02x", val); tempCrap = val;
-    val = nrf24_rdReg(1); xprintf("  01:%02x", val);
+	xprintf("00:%02x", nrf24_rdReg(0));
+    xprintf("  01:%02x", nrf24_rdReg(1));
     xprintf("  02:%02x", nrf24_rdReg(2));
     xprintf("  03:%02X", nrf24_rdReg(3));
-    xprintf("  04:%02X", nrf24_rdReg(4));
+	xprintf("  04:%02X", nrf24_rdReg(4));
     xprintf("  05:%02X", nrf24_rdReg(5));
     xprintf("  06:%02X", nrf24_rdReg(6));
     xprintf("  07:%02X", nrf24_rdReg(7));
@@ -599,9 +465,9 @@ void printConfig(void)
     xprintf("  15:%02X", nrf24_rdReg(0x15));
     xprintf("  16:%02X", nrf24_rdReg(0x16));
     xprintf("  17:%02X\n", nrf24_rdReg(0x17));
+//	xprintf("              ?\n");
     xprintf("1C:%02X", nrf24_rdReg(0x1c));
     xprintf("  1D:%02X\n", nrf24_rdReg(0x1d));
-		//void nrf24_transferSync(uint8_t* dataout, uint8_t* datain, uint8_t len)
 }
 
 
