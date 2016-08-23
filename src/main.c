@@ -217,6 +217,7 @@ int main(void)
 	nrf24_init();
     
     // initialize uart if eeprom configured
+//	config.txDbg = 0;
 	if (config.txDbg) {
 		uartbb_init();
 		xfunc_out = uartbb_putchar;
@@ -309,7 +310,7 @@ int main(void)
 	// must be called after global interrupts are enabled
 	if (config.txDbg) {
 		printConfig();
-		_delay_ms(100);
+		_delay_ms(1000);
 	}
 
 	// Clear the payload buffer and setup for next xmit
@@ -372,6 +373,9 @@ int main(void)
 		}
 
 		if (wdFlag || sw1Flag || sw2Flag) {
+	// Set Divide by 8 for 8MHz RC oscillator 
+	CLKPR = (1<<CLKPCE);
+	CLKPR = 3;
 
 			if (wdFlag) wdFlag = 0;
 			if (sw1Flag) sw1Flag = 0;
@@ -379,11 +383,15 @@ int main(void)
 
 		    /* Automatically goes to TX mode */
 			nrf24_send(data_array, NRF24_PAYLOAD_LEN);        
+//	_delay_us(1000);
 
 			/* Start the transmission */
 			nrf24_pulseCE();
+//	_delay_us(1000);
 
 		    nrf24_powerDown();            
+	CLKPR = (1<<CLKPCE);
+	CLKPR = 3;
 
 			if (config.enLed) { LED_ASSERT(LED_GRN); }
 			_delay_us(100);
