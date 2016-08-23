@@ -302,6 +302,9 @@ int main(void)
 		// if we leave pin as input, it will draw more current if it oscillates
 		// but if we pgm pin as output and there REALLY is a switch connected
 		// we are going to do damage
+		// Suggest that I install a series resistor on input pin...
+		DDRA |= (1<<SWITCH_2);
+		PORTA &= ~(1<<SWITCH_2);
     }
 
 #if EN_NRF_IRQ
