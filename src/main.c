@@ -332,7 +332,6 @@ int main(void)
     wdHour = 0;
     wdDay = 0;
 	setup_watchdog(config.wd_timeout + 5);
-//	setup_watchdog(3);
 
 	// Enable interrupts
     sei();
@@ -353,7 +352,7 @@ int main(void)
 	while (1) {
 
 		// clear MOSI
-		PORTA &= ~(1<<5);
+//		PORTA &= ~(1<<5);
   
 		// go to sleep and wait for interrupt (watchdog or pin change)
 		system_sleep();
@@ -475,6 +474,7 @@ int main(void)
 		}
 
 		if (wdFlag || sw1Flag || sw2Flag) {
+
 			if (wdFlag) wdFlag = 0;
 			if (sw1Flag) sw1Flag = 0;
 			if (sw2Flag) sw2Flag = 0;
@@ -519,15 +519,13 @@ int main(void)
 #endif
 			/* Wait for transmission to end */
 //			i = 0;
-//			while (nrf24_isSending() && i++ < 10);
+//			while (nrf24_isSending());
+#if 0
 #if !EN_NRF_IRQ
-			if (config.enLed) {
-				LED_ASSERT(LED_GRN);
-			}
-			_delay_us(500);
-			if (config.enLed) {
-				LED_DEASSERT(LED_GRN);
-			}
+			if (config.enLed) { LED_ASSERT(LED_GRN); }
+			_delay_us(100);
+			if (config.enLed) { LED_DEASSERT(LED_GRN); }
+			_delay_us(400);
 			//			??? should clear TX_DS now???
 
 		    /* Or you might want to power down after TX */
@@ -535,7 +533,12 @@ int main(void)
 //			DEASSERT_CE();
 //			NRF_VCC_DEASSERT();
 #endif
-
+#else
+		    nrf24_powerDown();            
+			if (config.enLed) { LED_ASSERT(LED_GRN); }
+			_delay_us(100);
+			if (config.enLed) { LED_DEASSERT(LED_GRN); }
+#endif
 #if 0
 			if (config.enLed) {
 				LED_ASSERT(LED_GRN);

@@ -25,7 +25,10 @@ void spi_init(void)
 #undef MISO
 #define MOSI 5
 #define MISO 6
-    DDRA |= (1<<CSN) | (1<<SCK) | (1<<MOSI) | (1<<CE);	// OUTPUTs
+    DDRA |= (1<<CSN);	// OUTPUTs
+    DDRA |= (1<<SCK);	// OUTPUTs
+    DDRA |= (1<<MOSI);	// OUTPUTs
+    DDRA |= (1<<CE);	// OUTPUTs
     DDRA &= ~(1<<MISO);	// INPUT
 	DEASSERT_CE();
 	DEASSERT_CSN();
@@ -49,6 +52,7 @@ uint8_t spi_transfer(uint8_t _data)
 	} while ((USISR & (1<<USIOIF)) == 0);
 #endif
 	return USIDR;
+//	return USIBR;
 }
 #endif
 
@@ -177,7 +181,7 @@ void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed_1M, uint8_t
 //    nrf24_configRegister(EN_AA,0);
 #if EN_ENH_SWAVE
 	nrf24_configRegister(EN_AA,(1<<ENAA_P0)|(1<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
-    nrf24_configRegister(SETUP_RETR,(0x01<<ARD)|(0x02<<ARC));
+    nrf24_configRegister(SETUP_RETR,(0x00<<ARD)|(0x01<<ARC));
 #else
 	nrf24_configRegister(EN_AA, 0);
     nrf24_configRegister(SETUP_RETR, 0);
@@ -195,7 +199,7 @@ void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed_1M, uint8_t
 #endif
 
 	// enable W_TX_PAYLOAD_NOACK feature
-    nrf24_configRegister(0x1d,1);
+    //nrf24_configRegister(0x1d,1);
 
     // Dynamic length configurations: No dynamic length
 //    nrf24_configRegister(DYNPD,(0<<DPL_P0)|(0<<DPL_P1)|(0<<DPL_P2)|(0<<DPL_P3)|(0<<DPL_P4)|(0<<DPL_P5));
@@ -240,7 +244,7 @@ void nrf24_send(uint8_t* value, uint8_t pay_length)
 //    _delay_us(1500);	// we don't need the delay because what follows is more than enough delay
 
     /* Do we really need to flush TX fifo each time ? */
-#if 0
+#if 1
         /* Pull down chip select */
     ASSERT_CSN();
 
@@ -256,8 +260,8 @@ void nrf24_send(uint8_t* value, uint8_t pay_length)
 	ASSERT_CSN();
 
     /* Write cmd to write payload */
-//    spi_transfer(W_TX_PAYLOAD);
-    spi_transfer(W_TX_PAYLOAD_NOACK);
+    spi_transfer(W_TX_PAYLOAD);
+//    spi_transfer(W_TX_PAYLOAD_NOACK);
 
     /* Write payload */
     nrf24_transmitSync(value, pay_length);   
@@ -376,7 +380,7 @@ void nrf24_transferSync(uint8_t *dataout, uint8_t *datain, uint8_t len)
 
 void nrf24_powerDown()
 {
-    nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
+//    nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
     nrf24_configRegister(CONFIG, nrf24_CONFIG);
 }
 
