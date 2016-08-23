@@ -36,24 +36,66 @@ void spi_init(void)
 
 //	USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK);
 }
+#if 0
 uint8_t spi_transfer(uint8_t _data)
 {
 	USIDR = _data;
 	USISR = (1<<USIOIF);
 
-#if 1
 	while ((USISR & (1<<USIOIF)) == 0) {
+		_NOP();
+		_NOP();
 		USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK) | (1<<USITC);
+		_NOP();
 	}
+	return USIDR;
+}
 #endif
 #if 0
+uint8_t spi_transfer(uint8_t _data)
+{
+	USIDR = _data;
+	USISR = (1<<USIOIF);
+
 	do {
 		USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK) | (1<<USITC);
 	} while ((USISR & (1<<USIOIF)) == 0);
-#endif
 	return USIDR;
-//	return USIBR;
 }
+#endif
+#if 1
+uint8_t spi_transfer(uint8_t _data)
+{
+	register uint8_t r16 = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
+	register uint8_t r17 = (1<<USIWM0) | (0<<USICS0) | (1<<USICLK) | (1<<USITC);
+	USIDR = _data;
+
+	// Set Divide by 8 for 8MHz RC oscillator 
+//	CLKPR = (1<<CLKPCE);
+//	CLKPR = 1;
+
+	USICR = r16;
+	USICR = r17;
+	USICR = r16;
+	USICR = r17;
+	USICR = r16;
+	USICR = r17;
+	USICR = r16;
+	USICR = r17;
+	USICR = r16;
+	USICR = r17;
+	USICR = r16;
+	USICR = r17;
+	USICR = r16;
+	USICR = r17;
+	USICR = r16;
+	USICR = r17;
+	// Set Divide by 8 for 8MHz RC oscillator 
+//	CLKPR = (1<<CLKPCE);
+//	CLKPR = 3;
+	return USIDR;
+}
+#endif
 #endif
 
 #if 1  // this bit-bang method works
@@ -109,10 +151,60 @@ uint8_t spi_transfer(uint8_t tx)
 #else
 uint8_t spi_transfer(uint8_t tx)
 {
-    uint8_t i = 0;
-    uint8_t rx = 0;    
+#if 0
+//	register uint8_t i = 0x80;
+//    register uint8_t rx = 0;    
+	USICR = 0x10;
 
-	PORTA &= ~(1<<SCK);
+	USIDR = tx;
+
+	PORTA |= (1<<SCK);
+	if (PINA & (1<<MISO)) USIDR |= 1;
+    PORTA &= ~(1<<SCK);
+	USIDR <<= 1;
+
+	PORTA |= (1<<SCK);
+	if (PINA & (1<<MISO)) USIDR |= 1;
+    PORTA &= ~(1<<SCK);
+	USIDR <<= 1;
+
+	PORTA |= (1<<SCK);
+	if (PINA & (1<<MISO)) USIDR |= 1;
+    PORTA &= ~(1<<SCK);
+	USIDR <<= 1;
+
+	PORTA |= (1<<SCK);
+	if (PINA & (1<<MISO)) USIDR |= 1;
+    PORTA &= ~(1<<SCK);
+	USIDR <<= 1;
+
+	PORTA |= (1<<SCK);
+	if (PINA & (1<<MISO)) USIDR |= 1;
+    PORTA &= ~(1<<SCK);
+	USIDR <<= 1;
+
+	PORTA |= (1<<SCK);
+	if (PINA & (1<<MISO)) USIDR |= 1;
+    PORTA &= ~(1<<SCK);
+	USIDR <<= 1;
+
+	PORTA |= (1<<SCK);
+	if (PINA & (1<<MISO)) USIDR |= 1;
+    PORTA &= ~(1<<SCK);
+	USIDR <<= 1;
+
+	PORTA |= (1<<SCK);
+	if (PINA & (1<<MISO)) USIDR |= 1;
+    PORTA &= ~(1<<SCK);
+
+    return USIDR;
+//    return rx;
+
+#else
+	register uint8_t i = 0;
+    register uint8_t rx = 0;    
+
+//	PORTA &= ~(1<<SCK);
 
     for (i=0x80; i; i>>=1) {
 
@@ -124,18 +216,18 @@ uint8_t spi_transfer(uint8_t tx)
 
 	    PORTA |= (1<<SCK);
 
-        rx <<= 1;
-#if 0
-		rx |= ((PINA>>MISO) & 1);
-#else
+//        rx <<= 1;
+
 		if (PINA & (1<<MISO)) {
-            rx |= 0x01;
+//            rx |= 0x01;
+            rx |= i;
         }
-#endif
+
 	    PORTA &= ~(1<<SCK);
 
     }
     return rx;
+#endif
 }
 #endif
 #endif
@@ -234,61 +326,41 @@ void nrf24_powerUpRx()
 // amount of bytes as configured as payload on the receiver.
 void nrf24_send(uint8_t* value, uint8_t pay_length) 
 {    
-//	volatile int i;
-
-    /* Go to Standby-I first */
-//	DEASSERT_CE();
      
     /* Set to transmitter mode , Power up if needed */
     nrf24_powerUpTx();
-//    _delay_us(1500);	// we don't need the delay because what follows is more than enough delay
 
     /* Do we really need to flush TX fifo each time ? */
 #if 1
-        /* Pull down chip select */
-    ASSERT_CSN();
-
     /* Write cmd to flush transmit FIFO */
+    ASSERT_CSN();
     spi_transfer(FLUSH_TX);     
-
-    /* Pull up chip select */
     DEASSERT_CSN();
 #endif 
-//    _delay_ms(10);
 
-    /* Pull down chip select */
+    /* Write payload cmd and write payload */
 	ASSERT_CSN();
-
-    /* Write cmd to write payload */
     spi_transfer(W_TX_PAYLOAD);
-//    spi_transfer(W_TX_PAYLOAD_NOACK);
-
-    /* Write payload */
     nrf24_transmitSync(value, pay_length);   
-
-    /* Pull up chip select */
     DEASSERT_CSN();
 
-//    _delay_ms(10);
+}
 
-#if 0
+void nrf24_pulseCE(void)
+{
 	/* Start the transmission */
 	ASSERT_CE();
-//    _delay_ms(10);
-//    for (i = 0; i < 4; i++ ) {
-        _NOP();
-        _NOP();
-        _NOP();
-        _NOP();
-        _NOP();
-        _NOP();
-        _NOP();
-        _NOP();
-        _NOP();
-        _NOP();
-//    }
+	_NOP();
+	_NOP();
+	_NOP();
+	_NOP();
+	_NOP();
+	_NOP();
+	_NOP();
+	_NOP();
+	_NOP();
+	_NOP();
 	DEASSERT_CE();
-#endif
 }
 
 uint8_t nrf24_isSending()
@@ -310,6 +382,7 @@ uint8_t nrf24_isSending()
 uint8_t nrf24_getStatus(void)
 {
     uint8_t rv;
+
 	ASSERT_CSN();
     rv = spi_transfer(NOP);
 	DEASSERT_CSN();
@@ -320,13 +393,12 @@ uint8_t nrf24_getStatus(void)
 void nrf24_powerUpTx(void)
 {
     nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
-
     nrf24_configRegister(CONFIG,nrf24_CONFIG|((1<<PWR_UP)|(0<<PRIM_RX)));
 }
 
 
 /* send multiple bytes over SPI */
-void nrf24_transmitSync(uint8_t* dataout, uint8_t len)
+void nrf24_transmitSync(uint8_t *dataout, uint8_t len)
 {
     uint8_t i;
     
@@ -385,7 +457,7 @@ void nrf24_powerDown()
 }
 
 
-#if 1
+#if 0
 /* Returns the number of retransmissions occured for the last message */
 uint8_t nrf24_retransmissionCount()
 {
