@@ -18,7 +18,7 @@
 #include "lofi.h"
 
 
-#if 0
+#if 1
 void spi_init(void)
 {
 #undef MOSI
@@ -36,17 +36,14 @@ void spi_init(void)
 
 //	USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK);
 }
-#if 0
+#if 1
 uint8_t spi_transfer(uint8_t _data)
 {
 	USIDR = _data;
 	USISR = (1<<USIOIF);
 
 	while ((USISR & (1<<USIOIF)) == 0) {
-		_NOP();
-		_NOP();
 		USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK) | (1<<USITC);
-		_NOP();
 	}
 	return USIDR;
 }
@@ -63,7 +60,7 @@ uint8_t spi_transfer(uint8_t _data)
 	return USIDR;
 }
 #endif
-#if 1
+#if 0
 uint8_t spi_transfer(uint8_t _data)
 {
 	register uint8_t r16 = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
@@ -98,7 +95,7 @@ uint8_t spi_transfer(uint8_t _data)
 #endif
 #endif
 
-#if 1  // this bit-bang method works
+#if 0  // this bit-bang method works
 void spi_init(void)
 {
 #undef MOSI
@@ -352,11 +349,11 @@ void nrf24_pulseCE(void)
 	ASSERT_CE();
 	_NOP();
 	_NOP();
-	_NOP();
-	_NOP();
-	_NOP();
-	_NOP();
-	_NOP();
+//	_NOP();
+//	_NOP();
+//	_NOP();
+//	_NOP();
+//	_NOP();
 	_NOP();
 	_NOP();
 	_NOP();
@@ -452,7 +449,7 @@ void nrf24_transferSync(uint8_t *dataout, uint8_t *datain, uint8_t len)
 
 void nrf24_powerDown()
 {
-//    nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
+    nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
     nrf24_configRegister(CONFIG, nrf24_CONFIG);
 }
 

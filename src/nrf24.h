@@ -31,7 +31,7 @@
 #define ASSERT_CSN()    (PORTA &= ~(1<<CSN))
 
 #define nrf24_ADDR_LEN 5
-#define nrf24_CONFIG ((1<<MASK_RX_DR) | (1<<MASK_MAX_RT) | (1<<EN_CRC) | (0<<CRCO))
+#define nrf24_CONFIG ((1<<MASK_RX_DR) | (0<<MASK_TX_DS) | (0<<MASK_MAX_RT) | (1<<EN_CRC) | (0<<CRCO))
 
 #define NRF24_TRANSMISSON_OK 0
 #define NRF24_MESSAGE_LOST   1

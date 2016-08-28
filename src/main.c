@@ -57,12 +57,12 @@
 #define NRF24_PAYLOAD_LEN        8
 
 // ---------  LED MACROS  ----------
-//#define LED_RED                  (1<<0)  // PORTB bit0
-#define LED_GRN                  (1<<1)  // PORTB bit1
+#define LED_RED					(1<<0)  // PORTB bit0
+#define LED_GRN					(1<<1)  // PORTB bit1
 
-#define LED_INIT(x)              (DDRB |= (x))
-#define LED_ASSERT(x)            (PORTB |= (x))
-#define LED_DEASSERT(x)          (PORTB &= ~(x))
+#define LED_INIT()				{(DDRB |= LED_RED); (DDRB |= LED_GRN);}
+#define LED_ASSERT(x)			(PORTB |= (x))
+#define LED_DEASSERT(x)			(PORTB &= ~(x))
 
 #define NRF_VCC_PIN				(1<<3)
 #define NRF_VCC_INIT()			(DDRA |= NRF_VCC_PIN)
@@ -92,7 +92,7 @@ sensor_vcc_t    sens_vcc;
 sensor_temp_t   sens_temp;
 
 
-/* ------------------------------------------------------------------------- */
+/* FORWARD DECLARATIONS ---------------------------------------- */
 
 uint16_t readVccVoltage(void);
 uint16_t readTemperature(void);
@@ -208,9 +208,9 @@ int main(void)
 	eeprom_read_block(&config, 0, sizeof(config));
 
     // init LED pins as OUTPUT
-	LED_INIT(LED_GRN);		// set as output even if not used
+	LED_INIT();				// set as output even if not used
 	LED_DEASSERT(LED_GRN);	// turn them both off
-	DDRB &= ~1;
+	LED_DEASSERT(LED_RED);	// turn them both off
 
 
 	// init hardware pins for talking to radio
@@ -258,6 +258,8 @@ int main(void)
 		// if we leave pin as input, it will draw more current if it oscillates
 		// but if we pgm pin as output and there REALLY is a switch connected
 		// we are going to do damage
+		DDRB |= (1<<SWITCH_1);
+		PORTB &= ~(1<<SWITCH_1);
 	}
 
 	// Initialize switch 2 capability/structure if eeprom configured
@@ -310,7 +312,7 @@ int main(void)
 	// must be called after global interrupts are enabled
 	if (config.txDbg) {
 		printConfig();
-		_delay_ms(1000);
+		_delay_ms(100);
 	}
 
 	// Clear the payload buffer and setup for next xmit
@@ -373,9 +375,11 @@ int main(void)
 		}
 
 		if (wdFlag || sw1Flag || sw2Flag) {
+			int i;
+
 	// Set Divide by 8 for 8MHz RC oscillator 
 	CLKPR = (1<<CLKPCE);
-	CLKPR = 3;
+	CLKPR = 4;
 
 			if (wdFlag) wdFlag = 0;
 			if (sw1Flag) sw1Flag = 0;
@@ -383,22 +387,26 @@ int main(void)
 
 		    /* Automatically goes to TX mode */
 			nrf24_send(data_array, NRF24_PAYLOAD_LEN);        
-//	_delay_us(1000);
 
 			/* Start the transmission */
 			nrf24_pulseCE();
-//	_delay_us(1000);
+
+			i = 0;
+			while(nrf24_isSending() && i < 10)
+				i++;
 
 		    nrf24_powerDown();            
+
 	CLKPR = (1<<CLKPCE);
 	CLKPR = 3;
 
+#if 1
 			if (config.enLed) { LED_ASSERT(LED_GRN); }
 			_delay_us(100);
 			if (config.enLed) { LED_DEASSERT(LED_GRN); }
-
+#endif
             // Clear the payload buffer and setup for next xmit
-            memset(data_array, 0, 8);
+            memset(data_array, 0, NRF24_PAYLOAD_LEN);
 		    data_array[0] = config.nodeId;
 			pay_idx = 1;
 
