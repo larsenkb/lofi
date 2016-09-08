@@ -106,6 +106,11 @@ typedef struct {
     uint8_t     ctr_lo;
 } sensor_ctr_t;
 
+typedef enum {
+	speed_1M = 0,
+	speed_2M = 1,
+	speed_250K = 2
+} speed_t;
 
 #endif  /* __LOFI_H__ */
 

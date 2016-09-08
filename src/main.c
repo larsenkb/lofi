@@ -82,7 +82,7 @@ uint8_t data_array[NRF24_PAYLOAD_LEN];
 volatile uint8_t sw1Flag;
 volatile uint8_t sw2Flag;
 volatile uint8_t wdFlag;
-
+speed_t speed = speed_2M;
 config_t		config;
 sensor_ctr_t    sens_ctr;
 sensors_t       sensors;
@@ -212,6 +212,10 @@ int main(void)
 	LED_DEASSERT(LED_GRN);	// turn them both off
 	LED_DEASSERT(LED_RED);	// turn them both off
 
+	if (config.spd_1M)
+		speed = speed_1M;
+	else if (config.spd_250K)
+		speed = speed_250K;
 
 	// init hardware pins for talking to radio
 	nrf24_init();
@@ -291,12 +295,16 @@ int main(void)
 	NRF_VCC_ASSERT();
 	NRF_VCC_DLY_MS(100);
 
+	CLKPR = (1<<CLKPCE);
+	CLKPR = 4;
 	// Initialize radio channel and payload length
-	nrf24_config(config.rf_chan, NRF24_PAYLOAD_LEN, config.spd_1M, config.rf_gain);
+	nrf24_config(config.rf_chan, NRF24_PAYLOAD_LEN, speed, config.rf_gain);
 
 	// Power off radio as we go into our first sleep
 	nrf24_powerDown();            
 //	NRF_VCC_DEASSERT();
+	CLKPR = (1<<CLKPCE);
+	CLKPR = 3;
 
     // initialize watchdog and associated variables
     wdTick = 0;
@@ -392,7 +400,7 @@ int main(void)
 			nrf24_pulseCE();
 
 			i = 0;
-			while(nrf24_isSending() && i < 10)
+			while(nrf24_isSending() && i < 100)
 				i++;
 
 		    nrf24_powerDown();            
@@ -401,8 +409,15 @@ int main(void)
 	CLKPR = 3;
 
 #if 1
+	extern uint8_t gstatus;
+    if (gstatus & (1 << MAX_RT)) {        
+			if (config.enLed) { LED_ASSERT(LED_RED); }
+	}
 			if (config.enLed) { LED_ASSERT(LED_GRN); }
 			_delay_us(100);
+    if (gstatus & (1 << MAX_RT)) {        
+			if (config.enLed) { LED_DEASSERT(LED_RED); }
+	}
 			if (config.enLed) { LED_DEASSERT(LED_GRN); }
 #endif
             // Clear the payload buffer and setup for next xmit

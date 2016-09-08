@@ -18,7 +18,7 @@
 #include "lofi.h"
 
 
-#if 1
+#if 0
 void spi_init(void)
 {
 #undef MOSI
@@ -95,14 +95,16 @@ uint8_t spi_transfer(uint8_t _data)
 #endif
 #endif
 
-#if 0  // this bit-bang method works
+#if 1  // this bit-bang method works
 void spi_init(void)
 {
+#if 0
 #undef MOSI
 #undef MISO
 #define MOSI 5
 #define MISO 6
-    DDRA |= (1<<CSN);	// OUTPUT
+#endif
+	DDRA |= (1<<CSN);	// OUTPUT
     DDRA |= (1<<SCK);	// OUTPUT
     DDRA |= (1<<MOSI);	// OUTPUT
     DDRA &= ~(1<<MISO);	// INPUT
@@ -237,7 +239,7 @@ void nrf24_init(void)
 
 
 /* configure the module */
-void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed_1M, uint8_t rf_gain)
+void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed, uint8_t rf_gain)
 {
 
     // Set RF channel
@@ -257,9 +259,11 @@ void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed_1M, uint8_t
 #endif
 
     // configure RF speed and power gain
-	if (speed_1M)
+	if (speed == speed_1M)
 		nrf24_configRegister(RF_SETUP, 0x00 | ((rf_gain & 0x3) << 1));
-	else
+	else if (speed == speed_250K)
+		nrf24_configRegister(RF_SETUP, 0x20 | ((rf_gain & 0x3) << 1));
+	else 
 		nrf24_configRegister(RF_SETUP, 0x08 | ((rf_gain & 0x3) << 1));
 
     // CRC enable, 1 byte CRC length
@@ -270,7 +274,7 @@ void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed_1M, uint8_t
 //    nrf24_configRegister(EN_AA,0);
 #if EN_ENH_SWAVE
 	nrf24_configRegister(EN_AA,(1<<ENAA_P0)|(1<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
-    nrf24_configRegister(SETUP_RETR,(0x00<<ARD)|(0x01<<ARC));
+    nrf24_configRegister(SETUP_RETR,(0x01<<ARD)|(0x03<<ARC));
 #else
 	nrf24_configRegister(EN_AA, 0);
     nrf24_configRegister(SETUP_RETR, 0);
@@ -360,15 +364,17 @@ void nrf24_pulseCE(void)
 	DEASSERT_CE();
 }
 
+uint8_t gstatus;
+
 uint8_t nrf24_isSending()
 {
-    uint8_t status;
+//    uint8_t status;
 
     /* read the current status */
-    status = nrf24_getStatus();
+    gstatus = nrf24_getStatus();
                 
     /* if sending successful (TX_DS) or max retries exceded (MAX_RT). */
-    if ((status & ((1 << TX_DS)  | (1 << MAX_RT)))) {        
+    if ((gstatus & ((1 << TX_DS)  | (1 << MAX_RT)))) {        
         return 0; /* false */
     }
 
