@@ -44,6 +44,8 @@
 #undef F_CPU
 #define F_CPU 1000000UL
 
+#define HI_AMPS			1		/* pwr on/off nrf due to damaged chip and high current drain */
+
 #define SWITCH_1        2       /* PORTB bit2 */
 #define SWITCH_1_MSK    2
 #define SWITCH_1_GMSK   5
@@ -64,7 +66,7 @@
 #define LED_ASSERT(x)			(PORTB |= (x))
 #define LED_DEASSERT(x)			(PORTB &= ~(x))
 
-#define NRF_VCC_PIN				(1<<3)
+#define NRF_VCC_PIN				((1<<3) | (1<<7))
 #define NRF_VCC_INIT()			(DDRA |= NRF_VCC_PIN)
 #define NRF_VCC_ASSERT()		(PORTA |= NRF_VCC_PIN)
 #if 0
@@ -297,12 +299,14 @@ int main(void)
 
 	CLKPR = (1<<CLKPCE);
 	CLKPR = 4;
+
 	// Initialize radio channel and payload length
 	nrf24_config(config.rf_chan, NRF24_PAYLOAD_LEN, speed, config.rf_gain);
 
 	// Power off radio as we go into our first sleep
 	nrf24_powerDown();            
-//	NRF_VCC_DEASSERT();
+	NRF_VCC_DEASSERT();
+
 	CLKPR = (1<<CLKPCE);
 	CLKPR = 3;
 
@@ -385,13 +389,21 @@ int main(void)
 		if (wdFlag || sw1Flag || sw2Flag) {
 			int i;
 
-	// Set Divide by 8 for 8MHz RC oscillator 
-	CLKPR = (1<<CLKPCE);
-	CLKPR = 4;
-
 			if (wdFlag) wdFlag = 0;
 			if (sw1Flag) sw1Flag = 0;
 			if (sw2Flag) sw2Flag = 0;
+
+			// Set Divide by 8 for 8MHz RC oscillator 
+			CLKPR = (1<<CLKPCE);
+			CLKPR = 4;
+
+			if (config.nrfVccCtrl) {
+				NRF_VCC_ASSERT();
+				NRF_VCC_DLY_MS(10);
+
+				// Initialize radio channel and payload length
+				nrf24_reconfig(config.rf_chan, NRF24_PAYLOAD_LEN, speed, config.rf_gain);
+			}
 
 		    /* Automatically goes to TX mode */
 			nrf24_send(data_array, NRF24_PAYLOAD_LEN);        
@@ -405,8 +417,12 @@ int main(void)
 
 		    nrf24_powerDown();            
 
-	CLKPR = (1<<CLKPCE);
-	CLKPR = 3;
+			if (config.nrfVccCtrl) {
+				NRF_VCC_DEASSERT();
+			}
+
+			CLKPR = (1<<CLKPCE);
+			CLKPR = 3;
 
 #if 1
 	extern uint8_t gstatus;

@@ -66,7 +66,7 @@ typedef struct {
     uint8_t     vcc				:1;
 	uint8_t		temp			:1;
 	uint8_t		enLed			:1;
-	uint8_t		rsvd_2			:1;		//fastTrack		:1;
+	uint8_t		nrfVccCtrl		:1;
 	uint8_t		txDbg			:1;
 	uint8_t		spd_1M			:1;
 	uint8_t		spd_250K		:1;

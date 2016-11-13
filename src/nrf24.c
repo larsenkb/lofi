@@ -245,18 +245,10 @@ void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed, uint8_t rf
     // Set RF channel
     nrf24_configRegister(RF_CH, channel);
 
-#if 1
 	// Set length of incoming payload 
     // Use static payload length ...
 	nrf24_configRegister(RX_PW_P0, pay_length); // Auto-ACK pipe ...
     nrf24_configRegister(RX_PW_P1, pay_length); // Data payload pipe
-#endif
-#if 0
-    nrf24_configRegister(RX_PW_P2, 0x00); // Pipe not used 
-    nrf24_configRegister(RX_PW_P3, 0x00); // Pipe not used 
-    nrf24_configRegister(RX_PW_P4, 0x00); // Pipe not used 
-    nrf24_configRegister(RX_PW_P5, 0x00); // Pipe not used 
-#endif
 
     // configure RF speed and power gain
 	if (speed == speed_1M)
@@ -272,9 +264,9 @@ void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed, uint8_t rf
     // Auto Acknowledgment
 	// I think this is for PTX only
 //    nrf24_configRegister(EN_AA,0);
-#if EN_ENH_SWAVE
+#if 1 //EN_ENH_SWAVE
 	nrf24_configRegister(EN_AA,(1<<ENAA_P0)|(1<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
-    nrf24_configRegister(SETUP_RETR,(0x01<<ARD)|(0x03<<ARC));
+    nrf24_configRegister(SETUP_RETR,(0x03<<ARD)|(0x03<<ARC));
 #else
 	nrf24_configRegister(EN_AA, 0);
     nrf24_configRegister(SETUP_RETR, 0);
@@ -298,6 +290,39 @@ void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed, uint8_t rf
 //    nrf24_configRegister(DYNPD,(0<<DPL_P0)|(0<<DPL_P1)|(0<<DPL_P2)|(0<<DPL_P3)|(0<<DPL_P4)|(0<<DPL_P5));
 }
 
+/* re-configure the module */
+void nrf24_reconfig(uint8_t channel, uint8_t pay_length, uint8_t speed, uint8_t rf_gain)
+{
+
+    // Set RF channel
+    nrf24_configRegister(RF_CH, channel);
+
+	// Set length of incoming payload 
+    // Use static payload length ...
+	nrf24_configRegister(RX_PW_P0, pay_length); // Auto-ACK pipe ...
+    nrf24_configRegister(RX_PW_P1, pay_length); // Data payload pipe
+
+    // configure RF speed and power gain
+	if (speed == speed_1M)
+		nrf24_configRegister(RF_SETUP, 0x00 | ((rf_gain & 0x3) << 1));
+	else if (speed == speed_250K)
+		nrf24_configRegister(RF_SETUP, 0x20 | ((rf_gain & 0x3) << 1));
+	else 
+		nrf24_configRegister(RF_SETUP, 0x08 | ((rf_gain & 0x3) << 1));
+
+    // Auto Acknowledgment
+#if 1 //EN_ENH_SWAVE
+	nrf24_configRegister(EN_AA,(1<<ENAA_P0)|(1<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
+    nrf24_configRegister(SETUP_RETR,(0x03<<ARD)|(0x03<<ARC));
+#else
+	nrf24_configRegister(EN_AA, 0);
+    nrf24_configRegister(SETUP_RETR, 0);
+#endif
+
+    // Enable RX addresses
+    nrf24_configRegister(EN_RXADDR,(1<<ERX_P0)|(1<<ERX_P1)|(0<<ERX_P2)|(0<<ERX_P3)|(0<<ERX_P4)|(0<<ERX_P5));
+
+}
 
 /* Clocks only one byte into the given nrf24 register */
 void nrf24_configRegister(uint8_t reg, uint8_t value)
@@ -356,8 +381,8 @@ void nrf24_pulseCE(void)
 //	_NOP();
 //	_NOP();
 //	_NOP();
-//	_NOP();
-//	_NOP();
+	_NOP();
+	_NOP();
 	_NOP();
 	_NOP();
 	_NOP();
