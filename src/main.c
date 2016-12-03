@@ -311,7 +311,7 @@ int main(void)
 	CLKPR = 3;
 
     // initialize watchdog and associated variables
-    wdTick = 0;
+    wdTick = config.wdCnts-1; //0;
     wdSec = 0;
     wdMin = 0;
     wdHour = 0;
