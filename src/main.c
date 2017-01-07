@@ -77,22 +77,27 @@
 #define NRF_VCC_DLY_MS(x)		_delay_ms((x))
 
 /* ------------------------------------------------------------------------- */
-volatile uint8_t wdTick;
-uint8_t wdSec, wdMin, wdHour;
-uint16_t wdDay;
-uint8_t data_array[NRF24_PAYLOAD_LEN];
-volatile uint8_t sw1Flag;
-volatile uint8_t sw2Flag;
-volatile uint8_t wdFlag;
-speed_t speed = speed_2M;
-config_t		config;
-sensor_ctr_t    sens_ctr;
-sensors_t       sensors;
-sensor_switch_t sens_sw1;
-sensor_switch_t sens_sw2;
-sensor_vcc_t    sens_vcc;
-sensor_temp_t   sens_temp;
-
+volatile uint8_t	wdTick;
+uint8_t				wdSec, wdMin, wdHour;
+uint16_t			wdDay;
+uint8_t				data_array[NRF24_PAYLOAD_LEN];
+volatile uint8_t	sw1Flag = 0;
+volatile uint8_t	sw2Flag = 0;
+volatile uint8_t	wdFlag;
+speed_t				speed = speed_2M;
+config_t			config;
+sensor_ctr_t		sens_ctr;
+sensors_t			sensors;
+sensor_switch_t		sens_sw1;
+sensor_switch_t		sens_sw2;
+sensor_vcc_t		sens_vcc;
+sensor_temp_t		sens_temp;
+uint16_t			vccCntsMax;
+uint16_t			vccCnts;
+uint16_t			tempCntsMax;
+uint16_t			tempCnts;
+uint8_t				wdCntsMax;
+uint8_t				wdCnts;
 
 /* FORWARD DECLARATIONS ---------------------------------------- */
 
@@ -156,12 +161,15 @@ void setup_watchdog(int val)
 // interrupt occured so that we can xmit.
 ISR(WATCHDOG_vect)
 {
+	wdFlag = 1;
+#if 0
 	if (config.wdCnts) {
 		if (++wdTick >= config.wdCnts) {
 			wdTick = 0;
 			wdFlag = 1;
 		}
 	}
+#endif
 }
 
 
@@ -192,6 +200,12 @@ ISR(PCINT0_vect)
 int main(void)
 {
 	uint8_t pay_idx;
+	uint8_t txFlag, swFlag, vccFlag, tempFlag;
+
+	txFlag = 0;
+	swFlag = 0;
+	vccFlag = 0;
+	tempFlag = 0;
 
 	// Set Divide by 8 for 8MHz RC oscillator 
 	CLKPR = (1<<CLKPCE);
@@ -214,6 +228,9 @@ int main(void)
 	LED_DEASSERT(LED_GRN);	// turn them both off
 	LED_DEASSERT(LED_RED);	// turn them both off
 
+	wdCntsMax = config.wdCnts;
+	wdCnts = 0;
+
 	if (config.spd_1M)
 		speed = speed_1M;
 	else if (config.spd_250K)
@@ -232,17 +249,32 @@ int main(void)
 	}
 
 	// Initialize counter capability/structure if eeprom configured
-    if (config.ctr) {
+    if (config.enCtr) {
         sens_ctr.sensorId = SENID_CTR;
         sens_ctr.ctr_lo = 0;
         sens_ctr.ctr_hi = 0;
     }
 
+	// Initialize Temp capability/structure if eeprom configured
+	if (config.enTemp) {
+        sens_temp.sensorId = SENID_TEMP;
+        sens_temp.temp_lo = 0;
+        sens_temp.temp_hi = 0;
+		tempCnts = 0;
+		tempCntsMax = config.tempCntsMsb;
+		tempCntsMax <<= 8;
+		tempCntsMax += config.tempCntsLsb;
+    }
+
 	// Initialize Vcc capability/structure if eeprom configured
-    if (config.vcc) {
+    if (config.enVcc) {
         sens_vcc.sensorId = SENID_VCC;
         sens_vcc.vcc_lo = 0;
         sens_vcc.vcc_hi = 0;
+		vccCnts = 0;
+		vccCntsMax = config.vccCntsMsb;
+		vccCntsMax <<= 8;
+		vccCntsMax += config.vccCntsLsb;
     }
 
 	// Initialize switch 1 capability/structure if eeprom configured
@@ -341,57 +373,86 @@ int main(void)
 		system_sleep();
 
 		if (wdFlag) {
+			wdFlag = 0;
+			if (wdCntsMax) {
+				if (++wdTick >= wdCntsMax) {
+					wdTick = 0;
+					swFlag = 1;
+				}
+			}
+			if (config.enVcc) {
+				if (++vccCnts >= vccCntsMax) {
+					vccCnts = 0;
+					vccFlag = 1;
+				}
+			}
+			if (config.enTemp) {
+				if (++tempCnts >= tempCntsMax) {
+					tempCnts = 0;
+					tempFlag = 1;
+				}
+			}
+		}
 
+		if (swFlag) {
+			swFlag = 0;
 			if (config.sw1_enb) {
 				getSw1(&data_array[pay_idx++]);
+				txFlag = 1;
 			}
 
 			if (config.sw2_enb) {
 				getSw2(&data_array[pay_idx++]);
+				txFlag = 1;
 			}
 
-            if (config.ctr) {
+			if (config.enCtr) {
+				txFlag = 1;
                 memcpy(&data_array[pay_idx], &sens_ctr, sizeof(sens_ctr));
                 pay_idx += sizeof(sens_ctr);
                 if (++sens_ctr.ctr_lo == 0)
                     sens_ctr.ctr_hi++;
             }
-
-            if (config.vcc) {
-                uint16_t vcc = readVccVoltage();
-                sens_vcc.sensorId = SENID_VCC;
-                sens_vcc.vcc_lo = vcc & 0xFF;
-                sens_vcc.vcc_hi = (vcc>>8) & 0x3;
-                memcpy(&data_array[pay_idx], &sens_vcc, sizeof(sens_vcc));
-                pay_idx += sizeof(sens_vcc);
-            }
-
-            if (config.temp) {
-                uint16_t temp = readTemperature();
-                sens_temp.sensorId = SENID_TEMP;
-                sens_temp.temp_lo = temp & 0xFF;
-                sens_temp.temp_hi = (temp>>8) & 0x3;
-                memcpy(&data_array[pay_idx], &sens_temp, sizeof(sens_temp));
-                pay_idx += sizeof(sens_temp);
-            }
-
 		} else {
 
-			if (sw1Flag && config.sw1_enb) {
+			if (sw1Flag) { // && config.sw1_enb) {
 				getSw1(&data_array[pay_idx++]);
+				txFlag = 1;
 			}
 
-			if (sw2Flag && config.sw2_enb) {
+			if (sw2Flag) { // && config.sw2_enb) {
 				getSw2(&data_array[pay_idx++]);
+				txFlag = 1;
 			}
 		}
 
-		if (wdFlag || sw1Flag || sw2Flag) {
+	   	if (vccFlag) {
+            uint16_t vcc = readVccVoltage();
+			vccFlag = 0;
+			txFlag = 1;
+            sens_vcc.sensorId = SENID_VCC;
+            sens_vcc.vcc_lo = vcc & 0xFF;
+            sens_vcc.vcc_hi = (vcc>>8) & 0x3;
+            memcpy(&data_array[pay_idx], &sens_vcc, sizeof(sens_vcc));
+            pay_idx += sizeof(sens_vcc);
+
+		}
+		if (tempFlag) {
+            uint16_t temp = readTemperature();
+			tempFlag = 0;
+			txFlag = 1;
+            sens_temp.sensorId = SENID_TEMP;
+            sens_temp.temp_lo = temp & 0xFF;
+            sens_temp.temp_hi = (temp>>8) & 0x3;
+            memcpy(&data_array[pay_idx], &sens_temp, sizeof(sens_temp));
+            pay_idx += sizeof(sens_temp);
+
+		}
+
+		if (txFlag) {
 			int i;
 
-			if (wdFlag) wdFlag = 0;
-			if (sw1Flag) sw1Flag = 0;
-			if (sw2Flag) sw2Flag = 0;
+			txFlag = 0;
 
 			// Set Divide by 8 for 8MHz RC oscillator 
 			CLKPR = (1<<CLKPCE);

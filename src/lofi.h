@@ -7,17 +7,9 @@ typedef enum {
 	SENID_NONE = 0,
 	SENID_CTR,
 	SENID_SW1,
-//	SENID_SW1_NC_PC,
 	SENID_VCC,
 	SENID_TEMP,
 	SENID_SW2
-//	SENID_SW1_NC_POLL,
-//	SENID_SW1_NO_PC,
-//	SENID_SW1_NO_POLL,
-//	SENID_SW2_NC_PC,
-//	SENID_SW2_NC_POLL,
-//	SENID_SW2_NO_PC,
-//	SENID_SW2_NO_POLL,
 } senId_t;
 
 
@@ -62,9 +54,9 @@ typedef struct {
 	uint8_t		rsvd_1			:2;
 
 	// byte 2
-    uint8_t     ctr				:1;
-    uint8_t     vcc				:1;
-	uint8_t		temp			:1;
+    uint8_t     enCtr			:1;
+    uint8_t     enVcc			:1;
+	uint8_t		enTemp			:1;
 	uint8_t		enLed			:1;
 	uint8_t		nrfVccCtrl		:1;
 	uint8_t		txDbg			:1;
@@ -83,8 +75,13 @@ typedef struct {
 	// byte 5
 	uint8_t		wdCnts;					// nbr of wd events before xmitting
 
-	// byte 5
-	uint8_t		rsvd_5;
+	// bytes 6 & 7
+	uint8_t		vccCntsMsb;
+	uint8_t		vccCntsLsb;
+
+	// bytes 8 & 9
+	uint8_t		tempCntsMsb;
+	uint8_t		tempCntsLsb;
 
 } config_t;
 
