@@ -17,93 +17,11 @@
 #include "nrf24.h"
 #include "lofi.h"
 
+extern uint8_t gstatus;
 
-#if 0
+
 void spi_init(void)
 {
-#undef MOSI
-#undef MISO
-#define MOSI 5
-#define MISO 6
-    DDRA |= (1<<CSN);	// OUTPUTs
-    DDRA |= (1<<SCK);	// OUTPUTs
-    DDRA |= (1<<MOSI);	// OUTPUTs
-    DDRA |= (1<<CE);	// OUTPUTs
-    DDRA &= ~(1<<MISO);	// INPUT
-	DEASSERT_CE();
-	DEASSERT_CSN();
-	PORTA &= ~(1<<SCK);
-
-//	USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK);
-}
-#if 1
-uint8_t spi_transfer(uint8_t _data)
-{
-	USIDR = _data;
-	USISR = (1<<USIOIF);
-
-	while ((USISR & (1<<USIOIF)) == 0) {
-		USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK) | (1<<USITC);
-	}
-	return USIDR;
-}
-#endif
-#if 0
-uint8_t spi_transfer(uint8_t _data)
-{
-	USIDR = _data;
-	USISR = (1<<USIOIF);
-
-	do {
-		USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK) | (1<<USITC);
-	} while ((USISR & (1<<USIOIF)) == 0);
-	return USIDR;
-}
-#endif
-#if 0
-uint8_t spi_transfer(uint8_t _data)
-{
-	register uint8_t r16 = (1<<USIWM0) | (0<<USICS0) | (1<<USITC);
-	register uint8_t r17 = (1<<USIWM0) | (0<<USICS0) | (1<<USICLK) | (1<<USITC);
-	USIDR = _data;
-
-	// Set Divide by 8 for 8MHz RC oscillator 
-//	CLKPR = (1<<CLKPCE);
-//	CLKPR = 1;
-
-	USICR = r16;
-	USICR = r17;
-	USICR = r16;
-	USICR = r17;
-	USICR = r16;
-	USICR = r17;
-	USICR = r16;
-	USICR = r17;
-	USICR = r16;
-	USICR = r17;
-	USICR = r16;
-	USICR = r17;
-	USICR = r16;
-	USICR = r17;
-	USICR = r16;
-	USICR = r17;
-	// Set Divide by 8 for 8MHz RC oscillator 
-//	CLKPR = (1<<CLKPCE);
-//	CLKPR = 3;
-	return USIDR;
-}
-#endif
-#endif
-
-#if 1  // this bit-bang method works
-void spi_init(void)
-{
-#if 0
-#undef MOSI
-#undef MISO
-#define MOSI 5
-#define MISO 6
-#endif
 	DDRA |= (1<<CSN);	// OUTPUT
     DDRA |= (1<<SCK);	// OUTPUT
     DDRA |= (1<<MOSI);	// OUTPUT
@@ -113,97 +31,13 @@ void spi_init(void)
 	DEASSERT_CSN();
 	PORTA &= ~(1<<SCK);
 
-//	USICR = (1<<USIWM0) | (1<<USICS1) | (1<<USICLK);
 }
+
 /* software spi routine */
-#if 0
 uint8_t spi_transfer(uint8_t tx)
 {
-    uint8_t i = 0;
-    uint8_t rx = 0;    
-
-	PORTA &= ~(1<<SCK);
-
-    for (i=0; i<8; i++) {
-
-        if (tx & (1<<(7-i))) {
-			PORTA |= (1<<MOSI);
-        } else {
-			PORTA &= ~(1<<MOSI);
-        }
-
-	    PORTA |= (1<<SCK);
-
-        rx = rx << 1;
-#if 0
-		rx |= (PINA>>MISO) & 1;
-#else
-		if (PINA & (1<<MISO)) {
-            rx |= 0x01;
-        }
-#endif
-	    PORTA &= ~(1<<SCK);
-
-    }
-    return rx;
-}
-#else
-uint8_t spi_transfer(uint8_t tx)
-{
-#if 0
-//	register uint8_t i = 0x80;
-//    register uint8_t rx = 0;    
-	USICR = 0x10;
-
-	USIDR = tx;
-
-	PORTA |= (1<<SCK);
-	if (PINA & (1<<MISO)) USIDR |= 1;
-    PORTA &= ~(1<<SCK);
-	USIDR <<= 1;
-
-	PORTA |= (1<<SCK);
-	if (PINA & (1<<MISO)) USIDR |= 1;
-    PORTA &= ~(1<<SCK);
-	USIDR <<= 1;
-
-	PORTA |= (1<<SCK);
-	if (PINA & (1<<MISO)) USIDR |= 1;
-    PORTA &= ~(1<<SCK);
-	USIDR <<= 1;
-
-	PORTA |= (1<<SCK);
-	if (PINA & (1<<MISO)) USIDR |= 1;
-    PORTA &= ~(1<<SCK);
-	USIDR <<= 1;
-
-	PORTA |= (1<<SCK);
-	if (PINA & (1<<MISO)) USIDR |= 1;
-    PORTA &= ~(1<<SCK);
-	USIDR <<= 1;
-
-	PORTA |= (1<<SCK);
-	if (PINA & (1<<MISO)) USIDR |= 1;
-    PORTA &= ~(1<<SCK);
-	USIDR <<= 1;
-
-	PORTA |= (1<<SCK);
-	if (PINA & (1<<MISO)) USIDR |= 1;
-    PORTA &= ~(1<<SCK);
-	USIDR <<= 1;
-
-	PORTA |= (1<<SCK);
-	if (PINA & (1<<MISO)) USIDR |= 1;
-    PORTA &= ~(1<<SCK);
-
-    return USIDR;
-//    return rx;
-
-#else
 	register uint8_t i = 0;
     register uint8_t rx = 0;    
-
-//	PORTA &= ~(1<<SCK);
 
     for (i=0x80; i; i>>=1) {
 
@@ -215,10 +49,7 @@ uint8_t spi_transfer(uint8_t tx)
 
 	    PORTA |= (1<<SCK);
 
-//        rx <<= 1;
-
 		if (PINA & (1<<MISO)) {
-//            rx |= 0x01;
             rx |= i;
         }
 
@@ -226,10 +57,7 @@ uint8_t spi_transfer(uint8_t tx)
 
     }
     return rx;
-#endif
 }
-#endif
-#endif
 
 
 void nrf24_init(void) 
@@ -389,11 +217,9 @@ void nrf24_pulseCE(void)
 	DEASSERT_CE();
 }
 
-uint8_t gstatus;
 
 uint8_t nrf24_isSending()
 {
-//    uint8_t status;
 
     /* read the current status */
     gstatus = nrf24_getStatus();
@@ -439,7 +265,6 @@ void nrf24_transmitSync(uint8_t *dataout, uint8_t len)
 /* Read single register from nrf24 */
 uint8_t nrf24_rdReg(uint8_t reg)
 {
-#if 1
 	uint8_t spiBuf[2];
 
 	spiBuf[0] = reg & 0x1f;
@@ -448,15 +273,6 @@ uint8_t nrf24_rdReg(uint8_t reg)
 	nrf24_transferSync(spiBuf, spiBuf, 2);
     DEASSERT_CSN();
 	return spiBuf[1];
-#else
-	uint8_t val;
-
-    ASSERT_CSN();
-    spi_transfer(R_REGISTER | (REGISTER_MASK & reg));
-    val = spi_transfer(0);
-    DEASSERT_CSN();
-    return val;
-#endif
 }
 
 /* Read multiple register(s) from nrf24 */
@@ -483,39 +299,3 @@ void nrf24_powerDown()
     nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
     nrf24_configRegister(CONFIG, nrf24_CONFIG);
 }
-
-
-#if 0
-/* Returns the number of retransmissions occured for the last message */
-uint8_t nrf24_retransmissionCount()
-{
-    uint8_t rv;
-    nrf24_readRegister(OBSERVE_TX, &rv, 1);
-    rv = rv & 0x0F;
-    return rv;
-}
-
-uint8_t nrf24_lastMessageStatus()
-{
-    uint8_t rv;
-
-    rv = nrf24_getStatus();
-
-    /* Transmission went OK */
-    if ((rv & ((1 << TX_DS)))) {
-        return NRF24_TRANSMISSON_OK;
-    }
-    /* Maximum retransmission count is reached */
-    /* Last message probably went missing ... */
-    else if ((rv & ((1 << MAX_RT)))) {
-        return NRF24_MESSAGE_LOST;
-    }  
-    /* Probably still sending ... */
-    else {
-        return 0xFF;
-    }
-}
-#endif
-
-
-

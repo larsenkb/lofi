@@ -76,12 +76,10 @@ typedef struct {
 	uint8_t		wdCnts;					// nbr of wd events before xmitting
 
 	// bytes 6 & 7
-	uint8_t		vccCntsMsb;
-	uint8_t		vccCntsLsb;
+	uint16_t	vccCntsMax;				// little-endian
 
 	// bytes 8 & 9
-	uint8_t		tempCntsMsb;
-	uint8_t		tempCntsLsb;
+	uint16_t	tempCntsMax;			// little-endian
 
 } config_t;
 

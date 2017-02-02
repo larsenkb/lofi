@@ -7,7 +7,7 @@
 // I have mated the lofi board with a nrf24l01+ instead of using
 // the 433 MHz transmitter described at the above link.
 //
-// I'm using the nrf24 in its very basic form, using miminal
+// I'm using the nrf24 in its very basic form, using minimal
 // features.
 //
 // I am using parts of xprintf.[ch] by ChaN (see xprintf.c for copyright)
@@ -55,16 +55,23 @@
 
 #define EEPROM_NODEID_ADR        ((uint8_t *)0)
 
-#define NRF24_CHANNEL            2
+//#define NRF24_CHANNEL            2
 #define NRF24_PAYLOAD_LEN        8
 
 // ---------  LED MACROS  ----------
 #define LED_RED					(1<<0)  // PORTB bit0
 #define LED_GRN					(1<<1)  // PORTB bit1
 
-#define LED_INIT()				{(DDRB |= LED_RED); (DDRB |= LED_GRN);}
-#define LED_ASSERT(x)			(PORTB |= (x))
-#define LED_DEASSERT(x)			(PORTB &= ~(x))
+#define LED_INIT(x)				{DDRB |= (x); PORTB &= ~(x);}
+#define LED_ASSERT(x)	\
+	if (config.enLed) {	\
+		PORTB |= (x);	\
+	}
+#define LED_DEASSERT(x)	\
+	if (config.enLed) {	\
+		PORTB &= ~(x);	\
+	}
+
 
 #define NRF_VCC_PIN				((1<<3) | (1<<7))
 #define NRF_VCC_INIT()			(DDRA |= NRF_VCC_PIN)
@@ -76,15 +83,20 @@
 #endif
 #define NRF_VCC_DLY_MS(x)		_delay_ms((x))
 
+#define CORE_CLK_SET(x)  {	\
+	CLKPR = (1<<CLKPCE);	\
+	CLKPR = (x); }
+
+/* ------------------------------------------------------------------------- */
+uint8_t				gstatus;
+
 /* ------------------------------------------------------------------------- */
 volatile uint8_t	wdTick;
-uint8_t				wdSec, wdMin, wdHour;
-uint16_t			wdDay;
 uint8_t				data_array[NRF24_PAYLOAD_LEN];
 volatile uint8_t	sw1Flag = 0;
 volatile uint8_t	sw2Flag = 0;
 volatile uint8_t	wdFlag;
-speed_t				speed = speed_2M;
+speed_t				speed;
 config_t			config;
 sensor_ctr_t		sens_ctr;
 sensors_t			sensors;
@@ -92,11 +104,8 @@ sensor_switch_t		sens_sw1;
 sensor_switch_t		sens_sw2;
 sensor_vcc_t		sens_vcc;
 sensor_temp_t		sens_temp;
-uint16_t			vccCntsMax;
 uint16_t			vccCnts;
-uint16_t			tempCntsMax;
 uint16_t			tempCnts;
-uint8_t				wdCntsMax;
 uint8_t				wdCnts;
 
 /* FORWARD DECLARATIONS ---------------------------------------- */
@@ -104,7 +113,6 @@ uint8_t				wdCnts;
 uint16_t readVccVoltage(void);
 uint16_t readTemperature(void);
 void printConfig(void);
-void blinkLed(void);
 void getSw1(uint8_t *payload);
 void getSw2(uint8_t *payload);
 
@@ -162,14 +170,6 @@ void setup_watchdog(int val)
 ISR(WATCHDOG_vect)
 {
 	wdFlag = 1;
-#if 0
-	if (config.wdCnts) {
-		if (++wdTick >= config.wdCnts) {
-			wdTick = 0;
-			wdFlag = 1;
-		}
-	}
-#endif
 }
 
 
@@ -202,16 +202,17 @@ int main(void)
 	uint8_t pay_idx;
 	uint8_t txFlag, swFlag, vccFlag, tempFlag;
 
+	gstatus = 0;
+
 	txFlag = 0;
 	swFlag = 0;
 	vccFlag = 0;
 	tempFlag = 0;
 
 	// Set Divide by 8 for 8MHz RC oscillator 
-	CLKPR = (1<<CLKPCE);
-	CLKPR = 3;
+	CORE_CLK_SET(3);
 
-	// disable PUD
+	// disable Pullups
 	MCUCR &= ~(1<<PUD);
 
 	// turn off analog comparator
@@ -224,27 +225,27 @@ int main(void)
 	eeprom_read_block(&config, 0, sizeof(config));
 
     // init LED pins as OUTPUT
-	LED_INIT();				// set as output even if not used
-	LED_DEASSERT(LED_GRN);	// turn them both off
-	LED_DEASSERT(LED_RED);	// turn them both off
+	LED_INIT(LED_GRN | LED_RED);				// set as output even if not used
 
-	wdCntsMax = config.wdCnts;
 	wdCnts = 0;
 
+	// get desired xmit speed
 	if (config.spd_1M)
 		speed = speed_1M;
 	else if (config.spd_250K)
 		speed = speed_250K;
+	else
+		speed = speed_2M;
 
 	// init hardware pins for talking to radio
 	nrf24_init();
     
     // initialize uart if eeprom configured
-//	config.txDbg = 0;
 	if (config.txDbg) {
 		uartbb_init();
 		xfunc_out = uartbb_putchar;
 	} else {
+		// disable timer0 to reduce power
 		PRR |= (1<<PRTIM0);
 	}
 
@@ -261,9 +262,6 @@ int main(void)
         sens_temp.temp_lo = 0;
         sens_temp.temp_hi = 0;
 		tempCnts = 0;
-		tempCntsMax = config.tempCntsMsb;
-		tempCntsMax <<= 8;
-		tempCntsMax += config.tempCntsLsb;
     }
 
 	// Initialize Vcc capability/structure if eeprom configured
@@ -272,9 +270,6 @@ int main(void)
         sens_vcc.vcc_lo = 0;
         sens_vcc.vcc_hi = 0;
 		vccCnts = 0;
-		vccCntsMax = config.vccCntsMsb;
-		vccCntsMax <<= 8;
-		vccCntsMax += config.vccCntsLsb;
     }
 
 	// Initialize switch 1 capability/structure if eeprom configured
@@ -295,7 +290,8 @@ int main(void)
     } else {
 		// if we leave pin as input, it will draw more current if it oscillates
 		// but if we pgm pin as output and there REALLY is a switch connected
-		// we are going to do damage
+		// we are would  do damage. That is why there is a series resistor on
+		// switch pin.
 		DDRB |= (1<<SWITCH_1);
 		PORTB &= ~(1<<SWITCH_1);
 	}
@@ -318,19 +314,20 @@ int main(void)
     } else {
 		// if we leave pin as input, it will draw more current if it oscillates
 		// but if we pgm pin as output and there REALLY is a switch connected
-		// we are going to do damage
-		// Suggest that I install a series resistor on input pin...
+		// we are would  do damage. That is why there is a series resistor on
+		// switch pin.
 		DDRA |= (1<<SWITCH_2);
 		PORTA &= ~(1<<SWITCH_2);
     }
 
-	// initialize pin and apply power to NRF
+	// initialize pins and apply power to NRF
 	NRF_VCC_INIT();
 	NRF_VCC_ASSERT();
 	NRF_VCC_DLY_MS(100);
 
-	CLKPR = (1<<CLKPCE);
-	CLKPR = 4;
+	// switch to a lower clock rate while reading/writing NRF. For some
+	// reason NRF doesn't support anywhere near 10MHz SPI CLK rate.
+	CORE_CLK_SET(4);
 
 	// Initialize radio channel and payload length
 	nrf24_config(config.rf_chan, NRF24_PAYLOAD_LEN, speed, config.rf_gain);
@@ -339,16 +336,11 @@ int main(void)
 	nrf24_powerDown();            
 	NRF_VCC_DEASSERT();
 
-	CLKPR = (1<<CLKPCE);
-	CLKPR = 3;
-
     // initialize watchdog and associated variables
     wdTick = config.wdCnts-1; //0;
-    wdSec = 0;
-    wdMin = 0;
-    wdHour = 0;
-    wdDay = 0;
 	setup_watchdog(config.wd_timeout + 5);
+
+	CORE_CLK_SET(3);
 
 	// Enable interrupts
     sei();
@@ -374,20 +366,20 @@ int main(void)
 
 		if (wdFlag) {
 			wdFlag = 0;
-			if (wdCntsMax) {
-				if (++wdTick >= wdCntsMax) {
+			if (config.wdCnts) {
+				if (++wdTick >= config.wdCnts) {
 					wdTick = 0;
 					swFlag = 1;
 				}
 			}
 			if (config.enVcc) {
-				if (++vccCnts >= vccCntsMax) {
+				if (++vccCnts >= config.vccCntsMax) {
 					vccCnts = 0;
 					vccFlag = 1;
 				}
 			}
 			if (config.enTemp) {
-				if (++tempCnts >= tempCntsMax) {
+				if (++tempCnts >= config.tempCntsMax) {
 					tempCnts = 0;
 					tempFlag = 1;
 				}
@@ -455,8 +447,9 @@ int main(void)
 			txFlag = 0;
 
 			// Set Divide by 8 for 8MHz RC oscillator 
-			CLKPR = (1<<CLKPCE);
-			CLKPR = 4;
+			cli();
+			CORE_CLK_SET(4);
+			sei();
 
 			if (config.nrfVccCtrl) {
 				NRF_VCC_ASSERT();
@@ -482,21 +475,17 @@ int main(void)
 				NRF_VCC_DEASSERT();
 			}
 
-			CLKPR = (1<<CLKPCE);
-			CLKPR = 3;
+			cli();
+			CORE_CLK_SET(3);
+			sei();
 
-#if 1
-	extern uint8_t gstatus;
-    if (gstatus & (1 << MAX_RT)) {        
-			if (config.enLed) { LED_ASSERT(LED_RED); }
-	}
-			if (config.enLed) { LED_ASSERT(LED_GRN); }
+			if (gstatus & (1 << MAX_RT)) {        
+				LED_ASSERT(LED_RED);
+			}
+			LED_ASSERT(LED_GRN);
 			_delay_us(100);
-    if (gstatus & (1 << MAX_RT)) {        
-			if (config.enLed) { LED_DEASSERT(LED_RED); }
-	}
-			if (config.enLed) { LED_DEASSERT(LED_GRN); }
-#endif
+			LED_DEASSERT(LED_RED | LED_GRN);
+
             // Clear the payload buffer and setup for next xmit
             memset(data_array, 0, NRF24_PAYLOAD_LEN);
 		    data_array[0] = config.nodeId;
@@ -529,13 +518,6 @@ void getSw2(uint8_t *payload)
 	sens_sw2.closed = config.sw2_rev ^ pinState;
 	sens_sw2.lastState = pinState;
 	*payload = *(uint8_t *)&sens_sw2;
-}
-
-void blinkLed(void)
-{
-	if (config.enLed) { LED_ASSERT(LED_GRN); }
-	_delay_us(100);
-	if (config.enLed) { LED_DEASSERT(LED_GRN); }
 }
 
 void printConfig(void)
@@ -583,10 +565,13 @@ void printConfig(void)
 // readVccVoltage - read Vcc (indirectly) through ADC subsystem
 //
 // Returns the 10-bit ADC value.
-// On each reading we: enable the ADC, take the measurement, and then disable the ADC for power savings.
-// This takes >1ms becuase the internal reference voltage must stabilize each time the ADC is enabled.
-// For faster readings, you could initialize once, and then take multiple fast readings, just make sure to
-// disable the ADC before going to sleep so you don't waste power. 
+// On each reading we: enable the ADC, take the measurement,
+// and then disable the ADC for power savings.
+// This takes >1ms becuase the internal reference voltage must
+// stabilize each time the ADC is enabled.
+// For faster readings, you could initialize once, and then take
+// multiple fast readings, just make sure to disable the ADC
+// before going to sleep so you don't waste power. 
 // I got this technique from:
 //   http://wp.josh.com/2014/11/06/battery-fuel-guage-with-zero-parts-and-zero-pins-on-avr/
 //
@@ -602,21 +587,23 @@ uint16_t readVccVoltage(void)
 	
 	ADMUX = 0b00100001;
 	
-	// By default, the successive approximation circuitry requires an input clock frequency between 50
-	// kHz and 200 kHz to get maximum resolution.
+	// By default, the successive approximation circuitry requires an
+	// input clock frequency between 50 kHz and 200 kHz to get maximum resolution.
 				
 	// Enable ADC, set prescaller to /8 which will give a ADC clock of 1MHz/8 = 125KHz
 	
 	ADCSRA = _BV(ADEN) | _BV(ADPS1) | _BV(ADPS0);
 	
-	// After switching to internal voltage reference the ADC requires a settling time of 1ms before
-	// measurements are stable. Conversions starting before this may not be reliable. The ADC must
+	// After switching to internal voltage reference the ADC requires
+	// a settling time of 1ms before measurements are stable.
+	// Conversions starting before this may not be reliable. The ADC must
 	// be enabled during the settling time.
 		
 	_delay_ms(1);
 				
-	// The first conversion after switching voltage source may be inaccurate, and the user is advised to discard this result.
-	// first conversion after disable/enable will be an extended conversion
+	// The first conversion after switching voltage source may be inaccurate,
+	// and the user is advised to discard this result.
+	// First conversion after disable/enable will be an extended conversion.
 		
 	ADCSRA |= _BV(ADSC);				// Start a conversion
 	while( ADCSRA & _BV( ADSC) ) ;		// Wait for 1st conversion to be ready...
@@ -628,13 +615,15 @@ uint16_t readVccVoltage(void)
 	while( ADCSRA & _BV( ADSC) ) ;		// Wait for 1st conversion to be ready...
 						
 		
-	// After the conversion is complete (ADIF is high), the conversion result can be found in the ADC
+	// After the conversion is complete (ADIF is high), the conversion
+	// result can be found in the ADC.
 	// Result Registers (ADCL, ADCH).		
 		
 	// When an ADC conversion is complete, the result is found in these two registers.
 	// When ADCL is read, the ADC Data Register is not updated until ADCH is read.		
 	
-	// Note we could have used ADLAR left adjust mode and then only needed to read a single byte here
+	// Note we could have used ADLAR left adjust mode and then only needed
+	// to read a single byte here
 		
 	uint8_t low  = ADCL;
 	uint8_t high = ADCH;
@@ -644,13 +633,15 @@ uint16_t readVccVoltage(void)
 	// Compute a fixed point with 1 decimal place (i.e. 5v= 50)
 	//
 	// Vcc   =  (1.1v * 1024) / ADC
-	// Vcc10 = ((1.1v * 1024) / ADC ) * 10				->convert to 1 decimal fixed point
+	// Vcc10 = ((1.1v * 1024) / ADC ) * 10			->convert to 1 decimal fixed point
 	// Vcc10 = ((11   * 1024) / ADC )				->simplify to all 16-bit integer math
 				
 //	uint8_t vccx10 = (uint8_t) ( (11 * 1024) / adc); 
 	
-	// Note that the ADC will not automatically be turned off when entering other sleep modes than Idle
-	// mode and ADC Noise Reduction mode. The user is advised to write zero to ADEN before entering such
+	// Note that the ADC will not automatically be turned off when
+	// entering other sleep modes than Idle
+	// mode and ADC Noise Reduction mode. The user is advised to write
+	// zero to ADEN before entering such
 	// sleep modes to avoid excessive power consumption.
 	
 	ADCSRA &= ~_BV( ADEN );			// Disable ADC to save power
@@ -665,10 +656,13 @@ uint16_t readVccVoltage(void)
 // readTemperature - read internal temperature through ADC subsystem
 //
 // Returns the 10-bit ADC value.
-// On each reading we: enable the ADC, take the measurement, and then disable the ADC for power savings.
-// This takes >1ms becuase the internal reference voltage must stabilize each time the ADC is enabled.
-// For faster readings, you could initialize once, and then take multiple fast readings, just make sure to
-// disable the ADC before going to sleep so you don't waste power. 
+// On each reading we: enable the ADC, take the measurement,
+// and then disable the ADC for power savings.
+// This takes >1ms becuase the internal reference voltage must
+// stabilize each time the ADC is enabled.
+// For faster readings, you could initialize once, and then
+// take multiple fast readings, just make sure to disable the
+// ADC before going to sleep so you don't waste power. 
 
 uint16_t readTemperature(void)
 {
@@ -682,21 +676,24 @@ uint16_t readTemperature(void)
 	
 	ADMUX = 0b10100010;
 	
-	// By default, the successive approximation circuitry requires an input clock frequency between 50
+	// By default, the successive approximation circuitry requires
+	// an input clock frequency between 50
 	// kHz and 200 kHz to get maximum resolution.
 				
 	// Enable ADC, set prescaller to /8 which will give a ADC clock of 1MHz/8 = 125KHz
 	
 	ADCSRA = _BV(ADEN) | _BV(ADPS1) | _BV(ADPS0);
 	
-	// After switching to internal voltage reference the ADC requires a settling time of 1ms before
-	// measurements are stable. Conversions starting before this may not be reliable. The ADC must
+	// After switching to internal voltage reference the ADC requires
+	// a settling time of 1ms before measurements are stable.
+	// Conversions starting before this may not be reliable. The ADC must
 	// be enabled during the settling time.
 		
 	_delay_ms(1);
 				
-	// The first conversion after switching voltage source may be inaccurate, and the user is advised to discard this result.
-	// first conversion after disable/enable will be an extended conversion
+	// The first conversion after switching voltage source may be
+	// inaccurate, and the user is advised to discard this result.
+	// First conversion after disable/enable will be an extended conversion.
 		
 	ADCSRA |= _BV(ADSC);				// Start a conversion
 	while( ADCSRA & _BV( ADSC) ) ;		// Wait for 1st conversion to be ready...
@@ -708,13 +705,15 @@ uint16_t readTemperature(void)
 	while( ADCSRA & _BV( ADSC) ) ;		// Wait for 1st conversion to be ready...
 						
 		
-	// After the conversion is complete (ADIF is high), the conversion result can be found in the ADC
+	// After the conversion is complete (ADIF is high), the conversion
+	// result can be found in the ADC.
 	// Result Registers (ADCL, ADCH).		
 		
 	// When an ADC conversion is complete, the result is found in these two registers.
 	// When ADCL is read, the ADC Data Register is not updated until ADCH is read.		
 	
-	// Note we could have used ADLAR left adjust mode and then only needed to read a single byte here
+	// Note we could have used ADLAR left adjust mode and then only
+	// needed to read a single byte here
 		
 	uint8_t low  = ADCL;
 	uint8_t high = ADCH;
@@ -724,12 +723,14 @@ uint16_t readTemperature(void)
 	// Compute a fixed point with 1 decimal place (i.e. 5v= 50)
 	//
 	// Vcc   =  (1.1v * 1024) / ADC
-	// Vcc10 = ((1.1v * 1024) / ADC ) * 10				->convert to 1 decimal fixed point
+	// Vcc10 = ((1.1v * 1024) / ADC ) * 10			->convert to 1 decimal fixed point
 	// Vcc10 = ((11   * 1024) / ADC )				->simplify to all 16-bit integer math
 				
 	
-	// Note that the ADC will not automatically be turned off when entering other sleep modes than Idle
-	// mode and ADC Noise Reduction mode. The user is advised to write zero to ADEN before entering such
+	// Note that the ADC will not automatically be turned off
+	// when entering other sleep modes than Idle
+	// mode and ADC Noise Reduction mode. The user is advised
+	// to write zero to ADEN before entering such
 	// sleep modes to avoid excessive power consumption.
 	
 	ADCSRA &= ~_BV( ADEN );			// Disable ADC to save power
