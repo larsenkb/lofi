@@ -55,7 +55,6 @@
 
 #define EEPROM_NODEID_ADR        ((uint8_t *)0)
 
-//#define NRF24_CHANNEL            2
 #define NRF24_PAYLOAD_LEN        8
 
 // ---------  LED MACROS  ----------
@@ -99,7 +98,7 @@ volatile uint8_t	wdFlag;
 speed_t				speed;
 config_t			config;
 sensor_ctr_t		sens_ctr;
-sensors_t			sensors;
+//sensors_t			sensors;
 sensor_switch_t		sens_sw1;
 sensor_switch_t		sens_sw2;
 sensor_vcc_t		sens_vcc;
@@ -113,8 +112,8 @@ uint8_t				wdCnts;
 uint16_t readVccVoltage(void);
 uint16_t readTemperature(void);
 void printConfig(void);
-void getSw1(uint8_t *payload);
-void getSw2(uint8_t *payload);
+uint8_t getSw1(void);
+uint8_t getSw2(void);
 
 
 //****************************************************************  
@@ -254,6 +253,7 @@ int main(void)
         sens_ctr.sensorId = SENID_CTR;
         sens_ctr.ctr_lo = 0;
         sens_ctr.ctr_hi = 0;
+		sens_ctr.seq = 0;
     }
 
 	// Initialize Temp capability/structure if eeprom configured
@@ -261,6 +261,7 @@ int main(void)
         sens_temp.sensorId = SENID_TEMP;
         sens_temp.temp_lo = 0;
         sens_temp.temp_hi = 0;
+		sens_temp.seq = 0;
 		tempCnts = 0;
     }
 
@@ -269,19 +270,15 @@ int main(void)
         sens_vcc.sensorId = SENID_VCC;
         sens_vcc.vcc_lo = 0;
         sens_vcc.vcc_hi = 0;
+		sens_vcc.seq = 0;
 		vccCnts = 0;
     }
 
 	// Initialize switch 1 capability/structure if eeprom configured
     if (config.sw1_enb) {
-		uint8_t pinState;
-
 		DDRB &= ~(1<<SWITCH_1);
 		sens_sw1.sensorId = SENID_SW1;
-		pinState = (PINB>>SWITCH_1) & 1;
-		sens_sw1.closed = config.sw1_rev ^ pinState;
-        sens_sw1.changed = pinState;
-        sens_sw1.lastState = pinState;
+		getSw1();
 		if (config.sw1_pc) {
 			GIMSK = (1<<SWITCH_1_GMSK);
 			PCMSK1 = (1<<SWITCH_1_MSK);
@@ -298,14 +295,9 @@ int main(void)
 
 	// Initialize switch 2 capability/structure if eeprom configured
     if (config.sw2_enb) {
-		uint8_t pinState;
-
 		DDRA &= ~(1<<SWITCH_2);
         sens_sw2.sensorId = SENID_SW2;
-		pinState = (PINA>>SWITCH_2) & 1;
-		sens_sw2.closed = config.sw2_rev ^ pinState;
-        sens_sw2.changed = pinState;
-        sens_sw2.lastState = pinState;
+		getSw2();
 		if (config.sw2_pc) {
 			GIMSK |= (1<<SWITCH_2_GMSK);
 			PCMSK0 = (1<<SWITCH_2_MSK);
@@ -389,18 +381,19 @@ int main(void)
 		if (swFlag) {
 			swFlag = 0;
 			if (config.sw1_enb) {
-				getSw1(&data_array[pay_idx++]);
+				data_array[pay_idx++] = getSw1();
 				txFlag = 1;
 			}
 
 			if (config.sw2_enb) {
-				getSw2(&data_array[pay_idx++]);
+				data_array[pay_idx++] = getSw2();
 				txFlag = 1;
 			}
 
 			if (config.enCtr) {
 				txFlag = 1;
                 memcpy(&data_array[pay_idx], &sens_ctr, sizeof(sens_ctr));
+				sens_ctr.seq++;
                 pay_idx += sizeof(sens_ctr);
                 if (++sens_ctr.ctr_lo == 0)
                     sens_ctr.ctr_hi++;
@@ -408,13 +401,15 @@ int main(void)
 		} else {
 
 			if (sw1Flag) { // && config.sw1_enb) {
-				getSw1(&data_array[pay_idx++]);
+				data_array[pay_idx++] = getSw1();
 				txFlag = 1;
+				sw1Flag = 0;
 			}
 
 			if (sw2Flag) { // && config.sw2_enb) {
-				getSw2(&data_array[pay_idx++]);
+				data_array[pay_idx++] = getSw2();
 				txFlag = 1;
+				sw2Flag = 0;
 			}
 		}
 
@@ -498,26 +493,26 @@ int main(void)
     return 0;
 }
 
-void getSw1(uint8_t *payload)
+uint8_t  getSw1(void)
 {
 	uint8_t pinState;
 
 	pinState = (PINB>>SWITCH_1) & 1;
-	sens_sw1.changed = (sens_sw1.lastState == pinState)?0:1;
 	sens_sw1.closed = config.sw1_rev ^ pinState;
 	sens_sw1.lastState = pinState;
-	*payload = *(uint8_t *)&sens_sw1;
+	sens_sw1.seq++;
+	return (*(uint8_t *)&sens_sw1);
 }
 
-void getSw2(uint8_t *payload)
+uint8_t getSw2(void)
 {
 	uint8_t pinState;
 
 	pinState = (PINA>>SWITCH_2) & 1;
-	sens_sw2.changed = (sens_sw2.lastState == pinState)?0:1;
 	sens_sw2.closed = config.sw2_rev ^ pinState;
 	sens_sw2.lastState = pinState;
-	*payload = *(uint8_t *)&sens_sw2;
+	sens_sw2.seq++;
+	return (*(uint8_t *)&sens_sw2);
 }
 
 void printConfig(void)
