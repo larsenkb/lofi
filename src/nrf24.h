@@ -50,8 +50,8 @@ uint8_t nrf24_getStatus(void);
 uint8_t nrf24_rxFifoEmpty(void);
 
 /* core TX / RX functions */
-void    nrf24_send(uint8_t* value, uint8_t pay_length);
-void    nrf24_getData(uint8_t* data);
+void    nrf24_send(uint8_t nodeId, uint8_t *buf, uint8_t buf_length);
+void    nrf24_getData(uint8_t *data);
 void    nrf24_pulseCE(void);
 
 /* use in dynamic length mode */
@@ -91,40 +91,40 @@ uint8_t nrf24_rdReg(uint8_t reg);
  *    - Set CSN pin output
  *    - Set CE pin output     */
 /* -------------------------------------------------------------------------- */
-extern void nrf24_setupPins(void);
+//extern void nrf24_setupPins(void);
 
 /* -------------------------------------------------------------------------- */
 /* nrf24 CE pin control function
  *    - state:1 => Pin HIGH
  *    - state:0 => Pin LOW     */
 /* -------------------------------------------------------------------------- */
-extern void nrf24_ce_digitalWrite(uint8_t state);
+//extern void nrf24_ce_digitalWrite(uint8_t state);
 
 /* -------------------------------------------------------------------------- */
 /* nrf24 CE pin control function
  *    - state:1 => Pin HIGH
  *    - state:0 => Pin LOW     */
 /* -------------------------------------------------------------------------- */
-extern void nrf24_csn_digitalWrite(uint8_t state);
+//extern void nrf24_csn_digitalWrite(uint8_t state);
 
 /* -------------------------------------------------------------------------- */
 /* nrf24 SCK pin control function
  *    - state:1 => Pin HIGH
  *    - state:0 => Pin LOW     */
 /* -------------------------------------------------------------------------- */
-extern void nrf24_sck_digitalWrite(uint8_t state);
+//extern void nrf24_sck_digitalWrite(uint8_t state);
 
 /* -------------------------------------------------------------------------- */
 /* nrf24 MOSI pin control function
  *    - state:1 => Pin HIGH
  *    - state:0 => Pin LOW     */
 /* -------------------------------------------------------------------------- */
-extern void nrf24_mosi_digitalWrite(uint8_t state);
+//extern void nrf24_mosi_digitalWrite(uint8_t state);
 
 /* -------------------------------------------------------------------------- */
 /* nrf24 MISO pin read function */
 /* - returns: Non-zero if the pin is high */
 /* -------------------------------------------------------------------------- */
-extern uint8_t nrf24_miso_digitalRead(void);
+//extern uint8_t nrf24_miso_digitalRead(void);
 
 #endif /* __NRF24_H__ */

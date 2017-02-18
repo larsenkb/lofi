@@ -55,7 +55,7 @@
 
 #define EEPROM_NODEID_ADR        ((uint8_t *)0)
 
-#define NRF24_PAYLOAD_LEN        8
+#define NRF24_PAYLOAD_LEN        3
 
 // ---------  LED MACROS  ----------
 #define LED_RED					(1<<0)  // PORTB bit0
@@ -86,25 +86,28 @@
 	CLKPR = (1<<CLKPCE);	\
 	CLKPR = (x); }
 
+#define TXBUF_SIZE		8	// must be a power of 2!!!
+
 /* ------------------------------------------------------------------------- */
 uint8_t				gstatus;
 
 /* ------------------------------------------------------------------------- */
 volatile uint8_t	wdTick;
-uint8_t				data_array[NRF24_PAYLOAD_LEN];
+uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
+uint8_t				txBufWr, txBufRd;
 volatile uint8_t	sw1Flag = 0;
 volatile uint8_t	sw2Flag = 0;
 volatile uint8_t	wdFlag;
 speed_t				speed;
 config_t			config;
 sensor_ctr_t		sens_ctr;
-//sensors_t			sensors;
 sensor_switch_t		sens_sw1;
 sensor_switch_t		sens_sw2;
 sensor_vcc_t		sens_vcc;
 sensor_temp_t		sens_temp;
 uint16_t			vccCnts;
 uint16_t			tempCnts;
+uint16_t			ctrCnts;
 uint8_t				wdCnts;
 
 /* FORWARD DECLARATIONS ---------------------------------------- */
@@ -198,15 +201,17 @@ ISR(PCINT0_vect)
 //
 int main(void)
 {
-	uint8_t pay_idx;
-	uint8_t txFlag, swFlag, vccFlag, tempFlag;
+	uint8_t swFlag, ctrFlag, vccFlag, tempFlag;
 
 	gstatus = 0;
 
-	txFlag = 0;
 	swFlag = 0;
+	ctrFlag = 0;
 	vccFlag = 0;
 	tempFlag = 0;
+
+	txBufRd = 0;
+	txBufWr = 0;
 
 	// Set Divide by 8 for 8MHz RC oscillator 
 	CORE_CLK_SET(3);
@@ -254,6 +259,7 @@ int main(void)
         sens_ctr.ctr_lo = 0;
         sens_ctr.ctr_hi = 0;
 		sens_ctr.seq = 0;
+		ctrCnts = 0;
     }
 
 	// Initialize Temp capability/structure if eeprom configured
@@ -343,11 +349,6 @@ int main(void)
 		_delay_ms(100);
 	}
 
-	// Clear the payload buffer and setup for next xmit
-	memset(data_array, 0, NRF24_PAYLOAD_LEN);
-	data_array[0] = config.nodeId;
-	pay_idx = 1;
-
 	//
 	// Start of main loop
 	//
@@ -362,6 +363,12 @@ int main(void)
 				if (++wdTick >= config.wdCnts) {
 					wdTick = 0;
 					swFlag = 1;
+				}
+			}
+			if (config.enCtr) {
+				if (++ctrCnts >= config.ctrCntsMax) {
+					ctrCnts = 0;
+					ctrFlag = 1;
 				}
 			}
 			if (config.enVcc) {
@@ -379,67 +386,81 @@ int main(void)
 		}
 
 		if (swFlag) {
+			uint8_t jj = 0;
+
 			swFlag = 0;
+
 			if (config.sw1_enb) {
-				data_array[pay_idx++] = getSw1();
-				txFlag = 1;
+				txBuf[txBufWr][jj++] = getSw1();
 			}
+
 
 			if (config.sw2_enb) {
-				data_array[pay_idx++] = getSw2();
-				txFlag = 1;
+				txBuf[txBufWr][jj++] = getSw2();
 			}
 
-			if (config.enCtr) {
-				txFlag = 1;
-                memcpy(&data_array[pay_idx], &sens_ctr, sizeof(sens_ctr));
-				sens_ctr.seq++;
-                pay_idx += sizeof(sens_ctr);
-                if (++sens_ctr.ctr_lo == 0)
-                    sens_ctr.ctr_hi++;
-            }
+			if (jj) {
+				if (jj == 1) {
+					txBuf[txBufWr][jj] = 0;
+				}
+				txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+			}
+
 		} else {
+			uint8_t jj = 0;
 
-			if (sw1Flag) { // && config.sw1_enb) {
-				data_array[pay_idx++] = getSw1();
-				txFlag = 1;
+			if (sw1Flag) {
 				sw1Flag = 0;
+				txBuf[txBufWr][jj++] = getSw1();
 			}
 
-			if (sw2Flag) { // && config.sw2_enb) {
-				data_array[pay_idx++] = getSw2();
-				txFlag = 1;
+			if (sw2Flag) {
 				sw2Flag = 0;
+				txBuf[txBufWr][jj++] = getSw2();
 			}
+
+			if (jj) {
+				if (jj == 1) {
+					txBuf[txBufWr][jj] = 0;
+				}
+				txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+			}
+
 		}
+
+		if (ctrFlag) {
+			ctrFlag = 0;
+            memcpy(&txBuf[txBufWr][0], &sens_ctr, sizeof(sens_ctr));
+			sens_ctr.seq++;
+            if (++sens_ctr.ctr_lo == 0)
+                sens_ctr.ctr_hi++;
+			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+        }
 
 	   	if (vccFlag) {
             uint16_t vcc = readVccVoltage();
 			vccFlag = 0;
-			txFlag = 1;
             sens_vcc.sensorId = SENID_VCC;
             sens_vcc.vcc_lo = vcc & 0xFF;
             sens_vcc.vcc_hi = (vcc>>8) & 0x3;
-            memcpy(&data_array[pay_idx], &sens_vcc, sizeof(sens_vcc));
-            pay_idx += sizeof(sens_vcc);
+            memcpy(&txBuf[txBufWr][0], &sens_vcc, sizeof(sens_vcc));
+			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
 
 		}
+
 		if (tempFlag) {
             uint16_t temp = readTemperature();
 			tempFlag = 0;
-			txFlag = 1;
             sens_temp.sensorId = SENID_TEMP;
             sens_temp.temp_lo = temp & 0xFF;
             sens_temp.temp_hi = (temp>>8) & 0x3;
-            memcpy(&data_array[pay_idx], &sens_temp, sizeof(sens_temp));
-            pay_idx += sizeof(sens_temp);
-
+            memcpy(&txBuf[txBufWr][0], &sens_temp, sizeof(sens_temp));
+			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
 		}
 
-		if (txFlag) {
+//		while (txBufRd != txBufWr) {
+		if (txBufRd != txBufWr) {
 			int i;
-
-			txFlag = 0;
 
 			// Set Divide by 8 for 8MHz RC oscillator 
 			cli();
@@ -455,7 +476,7 @@ int main(void)
 			}
 
 		    /* Automatically goes to TX mode */
-			nrf24_send(data_array, NRF24_PAYLOAD_LEN);        
+			nrf24_send(config.nodeId, &txBuf[txBufRd][0], NRF24_PAYLOAD_LEN-1);        
 
 			/* Start the transmission */
 			nrf24_pulseCE();
@@ -481,12 +502,10 @@ int main(void)
 			_delay_us(100);
 			LED_DEASSERT(LED_RED | LED_GRN);
 
-            // Clear the payload buffer and setup for next xmit
-            memset(data_array, 0, NRF24_PAYLOAD_LEN);
-		    data_array[0] = config.nodeId;
-			pay_idx = 1;
+            // Bump the read index
+			txBufRd = (txBufRd + 1) & (TXBUF_SIZE - 1);
 
-        } //endof: if (wdFlag || sw1Flag || sw2Flag) {
+        } //endof: while (txBufRd != TxBufWr) {
 
     }
 

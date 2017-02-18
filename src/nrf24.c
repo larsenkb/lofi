@@ -178,7 +178,7 @@ void nrf24_powerUpRx()
 
 // Sends a data package to the default address. Be sure to send the correct
 // amount of bytes as configured as payload on the receiver.
-void nrf24_send(uint8_t* value, uint8_t pay_length) 
+void nrf24_send(uint8_t nodeId, uint8_t *buf, uint8_t buf_length) 
 {    
      
     /* Set to transmitter mode , Power up if needed */
@@ -195,7 +195,8 @@ void nrf24_send(uint8_t* value, uint8_t pay_length)
     /* Write payload cmd and write payload */
 	ASSERT_CSN();
     spi_transfer(W_TX_PAYLOAD);
-    nrf24_transmitSync(value, pay_length);   
+    spi_transfer(nodeId);
+    nrf24_transmitSync(buf, buf_length);   
     DEASSERT_CSN();
 
 }

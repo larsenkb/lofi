@@ -63,6 +63,9 @@ typedef struct {
 	// bytes 8 & 9
 	uint16_t	tempCntsMax;			// little-endian
 
+	// bytes 10 & 11
+	uint16_t	ctrCntsMax;				// little-endian
+
 } config_t;
 
 typedef struct {
