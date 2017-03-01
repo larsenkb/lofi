@@ -88,16 +88,26 @@
 
 #define TXBUF_SIZE		8	// must be a power of 2!!!
 
+#define FLAGS       GPIOR0
+#define wdFlag      (1<<GPIOR00)
+#define sw1Flag     (1<<GPIOR01)
+#define sw2Flag     (1<<GPIOR02)
+#define swFlag      (1<<GPIOR03)
+#define ctrFlag     (1<<GPIOR04)
+#define vccFlag     (1<<GPIOR05)
+#define tempFlag    (1<<GPIOR06)
+
 /* ------------------------------------------------------------------------- */
 uint8_t				gstatus;
 
 /* ------------------------------------------------------------------------- */
+/* move these to main??? */
 volatile uint8_t	wdTick;
 uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
 uint8_t				txBufWr, txBufRd;
-volatile uint8_t	sw1Flag = 0;
-volatile uint8_t	sw2Flag = 0;
-volatile uint8_t	wdFlag;
+//volatile uint8_t	sw1Flag = 0;
+//volatile uint8_t	sw2Flag = 0;
+//volatile uint8_t	wdFlag;
 speed_t				speed;
 config_t			config;
 sensor_ctr_t		sens_ctr;
@@ -118,7 +128,7 @@ void printConfig(void);
 uint8_t getSw1(void);
 uint8_t getSw2(void);
 
-
+#if 0
 //****************************************************************  
 // system_sleep - go to sleep
 //
@@ -129,7 +139,7 @@ void system_sleep(void)
 	set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
 	sleep_enable();
 
-	sleep_bod_disable();
+//	sleep_bod_disable();
 
 //  PRR |= 0x0D;
 
@@ -137,6 +147,7 @@ void system_sleep(void)
 
 //  sleep_disable();                     // System continues execution here when watchdog timed out 
 }
+#endif
 
 //****************************************************************
 // setup_watchdog - configure watchdog timeout
@@ -171,7 +182,7 @@ void setup_watchdog(int val)
 // interrupt occured so that we can xmit.
 ISR(WATCHDOG_vect)
 {
-	wdFlag = 1;
+	FLAGS |= wdFlag;
 }
 
 
@@ -183,16 +194,25 @@ ISR(PCINT1_vect)
 	uint8_t pinState;
 
 	pinState = (PINB>>SWITCH_1) & 1;
-    sw1Flag = (sens_sw1.lastState == pinState)?0:1;
+    if (sens_sw1.lastState == pinState)
+        FLAGS &= ~sw1Flag;
+    else
+        FLAGS |= sw1Flag;
 }
 
 
+//****************************************************************
+// pinChange_isr
+//
 ISR(PCINT0_vect)
 {
 	uint8_t pinState;
 
 	pinState = (PINA>>SWITCH_2) & 1;
-    sw2Flag = (sens_sw2.lastState == pinState)?0:1;
+    if (sens_sw2.lastState == pinState)
+        FLAGS &= ~sw2Flag;
+    else
+        FLAGS |= sw2Flag;
 }
 
 
@@ -201,14 +221,9 @@ ISR(PCINT0_vect)
 //
 int main(void)
 {
-	uint8_t swFlag, ctrFlag, vccFlag, tempFlag;
 
 	gstatus = 0;
-
-	swFlag = 0;
-	ctrFlag = 0;
-	vccFlag = 0;
-	tempFlag = 0;
+    FLAGS = 0;
 
 	txBufRd = 0;
 	txBufWr = 0;
@@ -288,7 +303,6 @@ int main(void)
 		if (config.sw1_pc) {
 			GIMSK = (1<<SWITCH_1_GMSK);
 			PCMSK1 = (1<<SWITCH_1_MSK);
-			sw1Flag = 0;
 		}
     } else {
 		// if we leave pin as input, it will draw more current if it oscillates
@@ -307,7 +321,6 @@ int main(void)
 		if (config.sw2_pc) {
 			GIMSK |= (1<<SWITCH_2_GMSK);
 			PCMSK0 = (1<<SWITCH_2_MSK);
-			sw2Flag = 0;
 		}
     } else {
 		// if we leave pin as input, it will draw more current if it oscillates
@@ -340,6 +353,9 @@ int main(void)
 
 	CORE_CLK_SET(3);
 
+	// set sleep mode one time here
+    set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
+
 	// Enable interrupts
     sei();
 
@@ -355,40 +371,40 @@ int main(void)
 	while (1) {
 
 		// go to sleep and wait for interrupt (watchdog or pin change)
-		system_sleep();
+	    sleep_mode();                // System sleeps here
 
-		if (wdFlag) {
-			wdFlag = 0;
+		if (FLAGS & wdFlag) {
+			FLAGS &= ~wdFlag;
 			if (config.wdCnts) {
 				if (++wdTick >= config.wdCnts) {
 					wdTick = 0;
-					swFlag = 1;
+					FLAGS |= swFlag;
 				}
 			}
 			if (config.enCtr) {
 				if (++ctrCnts >= config.ctrCntsMax) {
 					ctrCnts = 0;
-					ctrFlag = 1;
+					FLAGS |= ctrFlag;
 				}
 			}
 			if (config.enVcc) {
 				if (++vccCnts >= config.vccCntsMax) {
 					vccCnts = 0;
-					vccFlag = 1;
+					FLAGS |= vccFlag;
 				}
 			}
 			if (config.enTemp) {
 				if (++tempCnts >= config.tempCntsMax) {
 					tempCnts = 0;
-					tempFlag = 1;
+					FLAGS |= tempFlag;
 				}
 			}
 		}
 
-		if (swFlag) {
+		if (FLAGS & swFlag) {
 			uint8_t jj = 0;
 
-			swFlag = 0;
+			FLAGS &= ~swFlag;
 
 			if (config.sw1_enb) {
 				txBuf[txBufWr][jj++] = getSw1();
@@ -409,13 +425,13 @@ int main(void)
 		} else {
 			uint8_t jj = 0;
 
-			if (sw1Flag) {
-				sw1Flag = 0;
+			if (FLAGS & sw1Flag) {
+				FLAGS &= ~sw1Flag;
 				txBuf[txBufWr][jj++] = getSw1();
 			}
 
-			if (sw2Flag) {
-				sw2Flag = 0;
+			if (FLAGS & sw2Flag) {
+				FLAGS &= ~sw2Flag;
 				txBuf[txBufWr][jj++] = getSw2();
 			}
 
@@ -428,8 +444,8 @@ int main(void)
 
 		}
 
-		if (ctrFlag) {
-			ctrFlag = 0;
+		if (FLAGS & ctrFlag) {
+			FLAGS &= ~ctrFlag;
             memcpy(&txBuf[txBufWr][0], &sens_ctr, sizeof(sens_ctr));
 			sens_ctr.seq++;
             if (++sens_ctr.ctr_lo == 0)
@@ -437,9 +453,9 @@ int main(void)
 			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
         }
 
-	   	if (vccFlag) {
+	   	if (FLAGS & vccFlag) {
             uint16_t vcc = readVccVoltage();
-			vccFlag = 0;
+			FLAGS &= ~vccFlag;
             sens_vcc.sensorId = SENID_VCC;
             sens_vcc.vcc_lo = vcc & 0xFF;
             sens_vcc.vcc_hi = (vcc>>8) & 0x3;
@@ -448,9 +464,9 @@ int main(void)
 
 		}
 
-		if (tempFlag) {
+		if (FLAGS & tempFlag) {
             uint16_t temp = readTemperature();
-			tempFlag = 0;
+			FLAGS &= ~tempFlag;
             sens_temp.sensorId = SENID_TEMP;
             sens_temp.temp_lo = temp & 0xFF;
             sens_temp.temp_hi = (temp>>8) & 0x3;
