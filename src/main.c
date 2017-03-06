@@ -74,11 +74,11 @@
 
 #define NRF_VCC_PIN				((1<<3) | (1<<7))
 #define NRF_VCC_INIT()			(DDRA |= NRF_VCC_PIN)
-#define NRF_VCC_ASSERT()		(PORTA |= NRF_VCC_PIN)
+#define NRF_VCC_ASSERT()		{DDRA |= NRF_VCC_PIN; PORTA |= NRF_VCC_PIN;}
 #if 0
 #define NRF_VCC_DEASSERT()		
 #else
-#define NRF_VCC_DEASSERT()		(PORTA &= ~NRF_VCC_PIN)
+#define NRF_VCC_DEASSERT()		{PORTA &= ~NRF_VCC_PIN; DDRA &= ~NRF_VCC_PIN;}
 #endif
 #define NRF_VCC_DLY_MS(x)		_delay_ms((x))
 
@@ -332,7 +332,8 @@ int main(void)
 
 	// Power off radio as we go into our first sleep
 	nrf24_powerDown();            
-	NRF_VCC_DEASSERT();
+	if (config.nrfVccCtrl)
+		NRF_VCC_DEASSERT();
 
     // initialize watchdog and associated variables
     wdTick = config.wdCnts-1; //0;
