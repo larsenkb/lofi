@@ -3,6 +3,16 @@
 
 #define EN_ENH_SWAVE	1
 
+#define FLAGS       GPIOR0
+#define wdFlag      (1<<GPIOR00)
+#define sw1Flag     (1<<GPIOR01)
+#define sw2Flag     (1<<GPIOR02)
+#define swFlag      (1<<GPIOR03)
+#define ctrFlag     (1<<GPIOR04)
+#define vccFlag     (1<<GPIOR05)
+#define tempFlag    (1<<GPIOR06)
+
+
 typedef enum {
 	SENID_NONE = 0,
 	SENID_SW1,

@@ -88,37 +88,15 @@
 
 #define TXBUF_SIZE		8	// must be a power of 2!!!
 
-#define FLAGS       GPIOR0
-#define wdFlag      (1<<GPIOR00)
-#define sw1Flag     (1<<GPIOR01)
-#define sw2Flag     (1<<GPIOR02)
-#define swFlag      (1<<GPIOR03)
-#define ctrFlag     (1<<GPIOR04)
-#define vccFlag     (1<<GPIOR05)
-#define tempFlag    (1<<GPIOR06)
 
 /* ------------------------------------------------------------------------- */
 uint8_t				gstatus;
 
 /* ------------------------------------------------------------------------- */
-/* move these to main??? */
-volatile uint8_t	wdTick;
-uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
-uint8_t				txBufWr, txBufRd;
-//volatile uint8_t	sw1Flag = 0;
-//volatile uint8_t	sw2Flag = 0;
-//volatile uint8_t	wdFlag;
-speed_t				speed;
-config_t			config;
-sensor_ctr_t		sens_ctr;
 sensor_switch_t		sens_sw1;
 sensor_switch_t		sens_sw2;
-sensor_vcc_t		sens_vcc;
-sensor_temp_t		sens_temp;
-uint16_t			vccCnts;
-uint16_t			tempCnts;
-uint16_t			ctrCnts;
-uint8_t				wdCnts;
+config_t			config;
+
 
 /* FORWARD DECLARATIONS ---------------------------------------- */
 
@@ -221,6 +199,17 @@ ISR(PCINT0_vect)
 //
 int main(void)
 {
+	volatile uint8_t	wdTick;
+	uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
+	uint8_t				txBufWr, txBufRd;
+	speed_t				speed;
+	sensor_ctr_t		sens_ctr;
+	sensor_vcc_t		sens_vcc;
+	sensor_temp_t		sens_temp;
+	uint16_t			vccCnts;
+	uint16_t			tempCnts;
+	uint16_t			ctrCnts;
+
 
 	gstatus = 0;
     FLAGS = 0;
@@ -245,8 +234,6 @@ int main(void)
 
     // init LED pins as OUTPUT
 	LED_INIT(LED_GRN | LED_RED);				// set as output even if not used
-
-	wdCnts = 0;
 
 	// get desired xmit speed
 	if (config.spd_1M)
