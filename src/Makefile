@@ -16,7 +16,7 @@ FORMAT = ihex
 
 
 # Target file name (without extension).
-TARGET = main
+TARGET = lofi
 
 
 # Object files directory
@@ -290,9 +290,9 @@ ALL_ASFLAGS = -mmcu=$(MCU) -I. -x assembler-with-cpp $(ASFLAGS)
 
 
 # Default target.
-all: main.hex
+all: lofi.hex
 
-main.o: main.c uartbb.h nrf24.h lofi.h xprintf.h
+lofi.o: lofi.c uartbb.h nrf24.h lofi.h xprintf.h
 
 uartbb.o: uartbb.c uartbb.h
 
@@ -300,7 +300,7 @@ nrf24.o: nrf24.c nrf24.h nRF24L01.h lofi.h
 
 xprintf.o: xprintf.c xprintf.h
 
-tags: main.c uartbb.c uartbb.h nrf24.c nrf24.h nRF24L01.h xprintf.c xprintf.h lofi.h
+tags: lofi.c uartbb.c uartbb.h nrf24.c nrf24.h nRF24L01.h xprintf.c xprintf.h lofi.h
 	ctags $^
 
 
