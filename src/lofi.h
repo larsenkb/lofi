@@ -12,6 +12,8 @@
 #define vccFlag     (1<<GPIOR05)
 #define tempFlag    (1<<GPIOR06)
 
+#define VCC_MUX		0b00100001
+#define TEMP_MUX	0b10100010
 
 typedef enum {
 	SENID_NONE = 0,
