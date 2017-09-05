@@ -319,7 +319,10 @@ int main(void)
 		NRF_VCC_DEASSERT();
 
     // initialize watchdog and associated variables
-    wdTick = config.wdCnts-1; //0;
+    wdTick = config.wdCnts - 1; //0;
+	ctrCnts = config.ctrCntsMax - 1;
+	vccCnts = config.vccCntsMax - 1;
+	tempCnts = config.tempCntsMax - 1;
 	setup_watchdog(config.wd_timeout + 5);
 
 	CORE_CLK_SET(3);
@@ -469,8 +472,9 @@ int main(void)
 			nrf24_pulseCE();
 
 			i = 0;
-			while(nrf24_isSending() && i < 100)
+			while (nrf24_isSending() && i < 100) {
 				i++;
+			}
 
 		    nrf24_powerDown();            
 
@@ -484,13 +488,15 @@ int main(void)
 
 			if (gstatus & (1 << MAX_RT)) {        
 				LED_ASSERT(LED_RED);
+			} else {
+				LED_ASSERT(LED_GRN);
+				// Bump the read index
+				txBufRd = (txBufRd + 1) & (TXBUF_SIZE - 1);
 			}
-			LED_ASSERT(LED_GRN);
+
 			_delay_us(100);
 			LED_DEASSERT(LED_RED | LED_GRN);
 
-            // Bump the read index
-			txBufRd = (txBufRd + 1) & (TXBUF_SIZE - 1);
 
         } //endof: while (txBufRd != TxBufWr) {
 
