@@ -323,7 +323,9 @@ int main(void)
 	ctrCnts = config.ctrCntsMax - 1;
 	vccCnts = config.vccCntsMax - 1;
 	tempCnts = config.tempCntsMax - 1;
-	setup_watchdog(config.wd_timeout + 5);
+	if (config.wdCnts) {
+		setup_watchdog(config.wd_timeout + 5);
+	}
 
 	CORE_CLK_SET(3);
 
