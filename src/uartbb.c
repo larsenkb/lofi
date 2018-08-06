@@ -61,7 +61,7 @@ void uartbb_init(void)
 //
 ISR( TIM0_COMPA_vect )
 {
-	// mote to next state
+	// move to next state
     uartbb_state = uartbb_next_state;
 
 	// execute code for current state
@@ -111,21 +111,27 @@ void uartbb_putchar(char val)
 {
 	uint8_t tidx;
 
-
+	// calculate where the write index will be after putting byte into buffer
+	// if calculated write index equals read index - buffer is full
+	// (buffer is full with one empty slot - this way we don't need a count
+	// variable and buffer wrap is simpler)
 	tidx = (uartbb_tx_widx + 1) & ((1<<UARTBB_TX_PWR)-1);
 #if 1
+	// delay until there is room in buffer
     while (tidx == uartbb_tx_ridx) {
         _delay_ms(1);
     }
 #else
+	// drop character and return
     if (tidx == uartbb_tx_ridx)
 		return;
 #endif
 
+	// put character in buffer and update write index
 	uartbb_tx[uartbb_tx_widx] = val;
 	uartbb_tx_widx = tidx;
 
-    // get the ball rolling if we are in idle state
+    // get the xmit ball rolling if we are in idle state
 	if (uartbb_next_state == UARTBB_STATE_IDLE) {
 		uartbb_next_state = UARTBB_STATE_START;
 		// clear timer
