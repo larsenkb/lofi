@@ -219,6 +219,7 @@ int main(void)
 	LED_INIT(LED_GRN | LED_RED);		// set as output even if not used
 
 	// get desired xmit speed
+	///KBL TODO move this to nrf24_config???
 	if (config.spd_1M)
 		speed = speed_1M;
 	else if (config.spd_250K)
@@ -269,6 +270,7 @@ int main(void)
     if (config.sw1_enb) {
 		DDRB &= ~(1<<SWITCH_1);
 		sens_sw1.sensorId = SENID_SW1;
+		sens_sw1.seq = 2; // init to 2 because it is called 2 times before first xmit
 		getSw1();
 		if (config.sw1_pc) {
 			GIMSK = (1<<SWITCH_1_GMSK);
@@ -287,6 +289,7 @@ int main(void)
     if (config.sw2_enb) {
 		DDRA &= ~(1<<SWITCH_2);
         sens_sw2.sensorId = SENID_SW2;
+		sens_sw2.seq = 2; // init to 2 because it is called 2 times before first xmit
 		getSw2();
 		if (config.sw2_pc) {
 			GIMSK |= (1<<SWITCH_2_GMSK);
@@ -311,7 +314,7 @@ int main(void)
 	CORE_CLK_SET(4);
 
 	// Initialize radio channel and payload length
-	nrf24_config(config.rf_chan, NRF24_PAYLOAD_LEN, speed, config.rf_gain);
+	nrf24_config(&config, NRF24_PAYLOAD_LEN, speed);
 
 	// Power off radio as we go into our first sleep
 	nrf24_powerDown();            
@@ -464,11 +467,11 @@ int main(void)
 				NRF_VCC_DLY_MS(10);
 
 				// Initialize radio channel and payload length
-				nrf24_reconfig(config.rf_chan, NRF24_PAYLOAD_LEN, speed, config.rf_gain);
+				nrf24_reconfig(&config, NRF24_PAYLOAD_LEN, speed);
 			}
 
 		    /* Automatically goes to TX mode */
-			nrf24_send(config.nodeId, &txBuf[txBufRd][0], NRF24_PAYLOAD_LEN-1);        
+			nrf24_send(&config, &txBuf[txBufRd][0], NRF24_PAYLOAD_LEN-1);        
 
 			/* Start the transmission */
 			nrf24_pulseCE();
@@ -488,17 +491,18 @@ int main(void)
 			CORE_CLK_SET(3);
 			sei();
 
-			if (gstatus & (1 << MAX_RT)) {        
-				LED_ASSERT(LED_RED);
-			} else {
-				LED_ASSERT(LED_GRN);
-				// Bump the read index
-				txBufRd = (txBufRd + 1) & (TXBUF_SIZE - 1);
-			}
+//			if (config.en_aa) {
+				if (gstatus & (1 << MAX_RT)) {        
+					LED_ASSERT(LED_RED);
+				} else {
+					LED_ASSERT(LED_GRN);
+					// Bump the read index
+					txBufRd = (txBufRd + 1) & (TXBUF_SIZE - 1);
+				}
 
-			_delay_us(100);
-			LED_DEASSERT(LED_RED | LED_GRN);
-
+				_delay_us(100);
+				LED_DEASSERT(LED_RED | LED_GRN);
+//			}
 
         } //endof: while (txBufRd != TxBufWr) {
 
@@ -533,7 +537,7 @@ void printConfig(void)
 {
 	uint8_t  ta[8];
 
-    xprintf("\nHello\n");
+    xprintf("\nnrf config:\n");
 	xprintf("00:%02x", nrf24_rdReg(0));
     xprintf("  01:%02x", nrf24_rdReg(1));
     xprintf("  02:%02x", nrf24_rdReg(2));

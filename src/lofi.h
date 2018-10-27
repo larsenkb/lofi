@@ -1,8 +1,7 @@
 #ifndef __LOFI_H__
 #define __LOFI_H__
 
-#define EN_ENH_SWAVE	1
-
+// use one of the unused internal I/O registers as a 1-clock access register
 #define FLAGS       GPIOR0
 #define wdFlag      (1<<GPIOR00)
 #define sw1Flag     (1<<GPIOR01)
@@ -59,12 +58,13 @@ typedef struct {
 
 	// byte 3
 	uint8_t		rf_chan			:7;		// use only even chan #s at 2Mbps
-	uint8_t		rsvd_3			:1;
+	uint8_t		en_aa			:1;
 
 	// byte 4
 	uint8_t		rf_gain			:2;
 	uint8_t		wd_timeout		:3;		// 0-0.5,1-1,2-2,3-4,4-8,567-off
-	uint8_t		rsvd_4			:3;
+	uint8_t		en_dyn_ack		:1;		// 0: tell receiver to NOT send an ACK
+	uint8_t		rsvd_4			:2;
 
 	// byte 5
 	uint8_t		wdCnts;					// nbr of wd events before xmitting

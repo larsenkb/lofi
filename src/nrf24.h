@@ -16,6 +16,7 @@
 
 #include "nRF24L01.h"
 #include <stdint.h>
+#include "lofi.h"
 
 #define LOW 0
 #define HIGH 1
@@ -31,7 +32,7 @@
 #define ASSERT_CSN()    (PORTA &= ~(1<<CSN))
 
 #define nrf24_ADDR_LEN 5
-#define nrf24_CONFIG ((1<<MASK_RX_DR) | (0<<MASK_TX_DS) | (0<<MASK_MAX_RT) | (1<<EN_CRC) | (0<<CRCO))
+#define nrf24_CONFIG ((1<<MASK_RX_DR) | (1<<MASK_TX_DS) | (1<<MASK_MAX_RT) | (1<<EN_CRC) | (0<<CRCO))
 
 #define NRF24_TRANSMISSON_OK 0
 #define NRF24_MESSAGE_LOST   1
@@ -40,8 +41,8 @@
 void    nrf24_init(void);
 void    nrf24_rx_address(uint8_t* adr);
 void    nrf24_tx_address(uint8_t* adr);
-void    nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t spd_1M, uint8_t rf_gain);
-void nrf24_reconfig(uint8_t channel, uint8_t pay_length, uint8_t speed, uint8_t rf_gain);
+void    nrf24_config(config_t *config, uint8_t pay_length, uint8_t spd_1M);
+void nrf24_reconfig(config_t *config, uint8_t pay_length, uint8_t speed);
 
 /* state check functions */
 uint8_t nrf24_dataReady(void);
@@ -50,7 +51,7 @@ uint8_t nrf24_getStatus(void);
 uint8_t nrf24_rxFifoEmpty(void);
 
 /* core TX / RX functions */
-void    nrf24_send(uint8_t nodeId, uint8_t *buf, uint8_t buf_length);
+void    nrf24_send(config_t *config, uint8_t *buf, uint8_t buf_length);
 void    nrf24_getData(uint8_t *data);
 void    nrf24_pulseCE(void);
 

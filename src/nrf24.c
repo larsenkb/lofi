@@ -15,7 +15,6 @@
 #include <avr/cpufunc.h>
 #include <util/delay.h>
 #include "nrf24.h"
-#include "lofi.h"
 
 extern uint8_t gstatus;
 
@@ -67,97 +66,101 @@ void nrf24_init(void)
 
 
 /* configure the module */
-void nrf24_config(uint8_t channel, uint8_t pay_length, uint8_t speed, uint8_t rf_gain)
+void nrf24_config(config_t *config, uint8_t pay_length, uint8_t speed)
 {
-
     // Set RF channel
-    nrf24_configRegister(RF_CH, channel);
+    nrf24_configRegister(RF_CH, config->rf_chan);
 
 	// Set length of incoming payload 
     // Use static payload length ...
+	///KBL TODO: only write next reg if en_aa set???
 	nrf24_configRegister(RX_PW_P0, pay_length); // Auto-ACK pipe ...
     nrf24_configRegister(RX_PW_P1, pay_length); // Data payload pipe
 
     // configure RF speed and power gain
 	if (speed == speed_1M)
-		nrf24_configRegister(RF_SETUP, 0x00 | ((rf_gain & 0x3) << 1));
+		nrf24_configRegister(RF_SETUP, 0x00 | ((config->rf_gain & 0x3) << 1));
 	else if (speed == speed_250K)
-		nrf24_configRegister(RF_SETUP, 0x20 | ((rf_gain & 0x3) << 1));
+		nrf24_configRegister(RF_SETUP, 0x20 | ((config->rf_gain & 0x3) << 1));
 	else 
-		nrf24_configRegister(RF_SETUP, 0x08 | ((rf_gain & 0x3) << 1));
+		nrf24_configRegister(RF_SETUP, 0x08 | ((config->rf_gain & 0x3) << 1));
 
     // CRC enable, 1 byte CRC length
 //    nrf24_configRegister(CONFIG, nrf24_CONFIG);
 
     // Auto Acknowledgment
-	// I think this is for PTX only
-//    nrf24_configRegister(EN_AA,0);
-#if 1 //EN_ENH_SWAVE
-	nrf24_configRegister(EN_AA,(1<<ENAA_P0)|(1<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
-    nrf24_configRegister(SETUP_RETR,(0x03<<ARD)|(0x03<<ARC));
-#else
-	nrf24_configRegister(EN_AA, 0);
-    nrf24_configRegister(SETUP_RETR, 0);
-#endif
+	if (config->en_aa) {
+		nrf24_configRegister(EN_AA,(1<<ENAA_P0)|(1<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
+		nrf24_configRegister(SETUP_RETR,(0x03<<ARD)|(0x03<<ARC));
+	} else {
+		nrf24_configRegister(EN_AA, 0);
+		nrf24_configRegister(SETUP_RETR, 0);
+	}
 
     // Enable RX addresses
     nrf24_configRegister(EN_RXADDR,(1<<ERX_P0)|(1<<ERX_P1)|(0<<ERX_P2)|(0<<ERX_P3)|(0<<ERX_P4)|(0<<ERX_P5));
-
-#if 0
-	// turn OFF auto retransmit
-    nrf24_configRegister(SETUP_RETR,0);
-	// Auto retransmit delay: 1000 us and Up to 15 retransmit trials
-    nrf24_configRegister(SETUP_RETR,(0x01<<ARD)|(0x02<<ARC));
-//    nrf24_configRegister(SETUP_RETR,(0x04<<ARD)|(0x0F<<ARC));
-#endif
 
 	// enable W_TX_PAYLOAD_NOACK feature
     //nrf24_configRegister(0x1d,1);
 
     // Dynamic length configurations: No dynamic length
 //    nrf24_configRegister(DYNPD,(0<<DPL_P0)|(0<<DPL_P1)|(0<<DPL_P2)|(0<<DPL_P3)|(0<<DPL_P4)|(0<<DPL_P5));
+
+	// Dynamic NO ACK feature
+	if (config->en_dyn_ack) {
+		nrf24_configRegister(FEATURE, 0x00);
+	} else {
+		nrf24_configRegister(FEATURE, 0x01);
+	}
 }
 
 /* re-configure the module */
-void nrf24_reconfig(uint8_t channel, uint8_t pay_length, uint8_t speed, uint8_t rf_gain)
+void nrf24_reconfig(config_t *config, uint8_t pay_length, uint8_t speed)
 {
-
     // Set RF channel
-    nrf24_configRegister(RF_CH, channel);
+    nrf24_configRegister(RF_CH, config->rf_chan);
 
 	// Set length of incoming payload 
     // Use static payload length ...
+	///KBL TODO: only write next reg if en_aa set???
 	nrf24_configRegister(RX_PW_P0, pay_length); // Auto-ACK pipe ...
     nrf24_configRegister(RX_PW_P1, pay_length); // Data payload pipe
 
     // configure RF speed and power gain
 	if (speed == speed_1M)
-		nrf24_configRegister(RF_SETUP, 0x00 | ((rf_gain & 0x3) << 1));
+		nrf24_configRegister(RF_SETUP, 0x00 | ((config->rf_gain & 0x3) << 1));
 	else if (speed == speed_250K)
-		nrf24_configRegister(RF_SETUP, 0x20 | ((rf_gain & 0x3) << 1));
+		nrf24_configRegister(RF_SETUP, 0x20 | ((config->rf_gain & 0x3) << 1));
 	else 
-		nrf24_configRegister(RF_SETUP, 0x08 | ((rf_gain & 0x3) << 1));
+		nrf24_configRegister(RF_SETUP, 0x08 | ((config->rf_gain & 0x3) << 1));
 
     // Auto Acknowledgment
-#if 1 //EN_ENH_SWAVE
-	nrf24_configRegister(EN_AA,(1<<ENAA_P0)|(1<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
-    nrf24_configRegister(SETUP_RETR,(0x03<<ARD)|(0x03<<ARC));
-#else
-	nrf24_configRegister(EN_AA, 0);
-    nrf24_configRegister(SETUP_RETR, 0);
-#endif
+	if (config->en_aa) {
+		nrf24_configRegister(EN_AA,(1<<ENAA_P0)|(1<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
+	    nrf24_configRegister(SETUP_RETR,(0x03<<ARD)|(0x03<<ARC));
+	} else {
+		// zero these two registers to disable enhanced shockburst (and auto acknowledge)
+		nrf24_configRegister(EN_AA, 0);
+	    nrf24_configRegister(SETUP_RETR, 0);
+	}
 
     // Enable RX addresses
     nrf24_configRegister(EN_RXADDR,(1<<ERX_P0)|(1<<ERX_P1)|(0<<ERX_P2)|(0<<ERX_P3)|(0<<ERX_P4)|(0<<ERX_P5));
 
+	// Dynamic NO ACK feature
+	if (config->en_dyn_ack) {
+		nrf24_configRegister(FEATURE, 0x00);
+	} else {
+		nrf24_configRegister(FEATURE, 0x01);
+	}
 }
 
 /* Clocks only one byte into the given nrf24 register */
 void nrf24_configRegister(uint8_t reg, uint8_t value)
 {
-    ASSERT_CSN();
-    spi_transfer(W_REGISTER | (REGISTER_MASK & reg));
-    spi_transfer(value);
+	ASSERT_CSN();
+	spi_transfer(W_REGISTER | (REGISTER_MASK & reg));
+	spi_transfer(value);
 	DEASSERT_CSN();
 }
 
@@ -165,45 +168,48 @@ void nrf24_configRegister(uint8_t reg, uint8_t value)
 void nrf24_powerUpRx()
 {     
 	ASSERT_CSN();
-    spi_transfer(FLUSH_RX);
+	spi_transfer(FLUSH_RX);
 	DEASSERT_CSN();
 
-    nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
+	nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
 
-    DEASSERT_CE();
-    nrf24_configRegister(CONFIG,nrf24_CONFIG|((1<<PWR_UP)|(1<<PRIM_RX)));    
-    ASSERT_CE();
+	DEASSERT_CE();
+	nrf24_configRegister(CONFIG,nrf24_CONFIG|((1<<PWR_UP)|(1<<PRIM_RX)));    
+	ASSERT_CE();
 }
 
 
 // Sends a data package to the default address. Be sure to send the correct
 // amount of bytes as configured as payload on the receiver.
-void nrf24_send(uint8_t nodeId, uint8_t *buf, uint8_t buf_length) 
+void nrf24_send(config_t *config, uint8_t *buf, uint8_t buf_length) 
 {    
-     
-    /* Set to transmitter mode , Power up if needed */
-    nrf24_powerUpTx();
+	// Set to transmitter mode , Power up if needed
+	nrf24_powerUpTx();
 
-    /* Do we really need to flush TX fifo each time ? */
+	// Do we really need to flush TX fifo each time?
 #if 1
-    /* Write cmd to flush transmit FIFO */
-    ASSERT_CSN();
-    spi_transfer(FLUSH_TX);     
-    DEASSERT_CSN();
+	// Write cmd to flush transmit FIFO
+	ASSERT_CSN();
+	spi_transfer(FLUSH_TX);     
+	DEASSERT_CSN();
 #endif 
 
-    /* Write payload cmd and write payload */
+	// Write payload cmd and write payload
 	ASSERT_CSN();
-    spi_transfer(W_TX_PAYLOAD);
-    spi_transfer(nodeId);
-    nrf24_transmitSync(buf, buf_length);   
-    DEASSERT_CSN();
-
+	if (config->en_dyn_ack) {
+		spi_transfer(W_TX_PAYLOAD);
+	} else {
+	    spi_transfer(W_TX_PAYLOAD_NOACK);
+	}
+	spi_transfer(config->nodeId);
+	nrf24_transmitSync(buf, buf_length);   
+	DEASSERT_CSN();
 }
+
 
 void nrf24_pulseCE(void)
 {
-	/* Start the transmission */
+	// Start the transmission
 	ASSERT_CE();
 	_NOP();
 	_NOP();
@@ -221,45 +227,44 @@ void nrf24_pulseCE(void)
 
 uint8_t nrf24_isSending()
 {
+	// read the current status
+	gstatus = nrf24_getStatus();
+ 
+	// if sending successful (TX_DS) or max retries exceded (MAX_RT).
+	if ((gstatus & ((1 << TX_DS)  | (1 << MAX_RT)))) {        
+		return 0; // false
+	}
 
-    /* read the current status */
-    gstatus = nrf24_getStatus();
-                
-    /* if sending successful (TX_DS) or max retries exceded (MAX_RT). */
-    if ((gstatus & ((1 << TX_DS)  | (1 << MAX_RT)))) {        
-        return 0; /* false */
-    }
-
-    return 1; /* true */
-
+	return 1; // true
 }
+
 
 uint8_t nrf24_getStatus(void)
 {
-    uint8_t rv;
+	uint8_t rv;
 
 	ASSERT_CSN();
-    rv = spi_transfer(NOP);
+	rv = spi_transfer(NOP);
 	DEASSERT_CSN();
-    return rv;
+	return rv;
 }
 
 
 void nrf24_powerUpTx(void)
 {
-    nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
-    nrf24_configRegister(CONFIG,nrf24_CONFIG|((1<<PWR_UP)|(0<<PRIM_RX)));
+	nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
+	nrf24_configRegister(CONFIG,nrf24_CONFIG|((1<<PWR_UP)|(0<<PRIM_RX)));
 }
 
 
 /* send multiple bytes over SPI */
 void nrf24_transmitSync(uint8_t *dataout, uint8_t len)
 {
-    uint8_t i;
-    
-    for (i=0; i<len; i++) {
-        spi_transfer(dataout[i]);
-    }
+	uint8_t i;
+ 
+	for (i=0; i<len; i++) {
+		spi_transfer(dataout[i]);
+	}
 }
 
 
@@ -270,33 +275,33 @@ uint8_t nrf24_rdReg(uint8_t reg)
 
 	spiBuf[0] = reg & 0x1f;
 	spiBuf[1] = 0;
-    ASSERT_CSN();
+	ASSERT_CSN();
 	nrf24_transferSync(spiBuf, spiBuf, 2);
-    DEASSERT_CSN();
+	DEASSERT_CSN();
 	return spiBuf[1];
 }
 
 /* Read multiple register(s) from nrf24 */
 void nrf24_readRegister(uint8_t reg, uint8_t *value, uint8_t len)
 {
-    ASSERT_CSN();
-    spi_transfer(R_REGISTER | (REGISTER_MASK & reg));
-    nrf24_transferSync(value,value,len);
-    DEASSERT_CSN();
+	ASSERT_CSN();
+	spi_transfer(R_REGISTER | (REGISTER_MASK & reg));
+	nrf24_transferSync(value,value,len);
+	DEASSERT_CSN();
 }
 
 /* send and receive multiple bytes over SPI */
 void nrf24_transferSync(uint8_t *dataout, uint8_t *datain, uint8_t len)
 {
-    uint8_t i;
+	uint8_t i;
 
-    for (i=0; i<len; i++) {
-        datain[i] = spi_transfer(dataout[i]);
-    }
+	for (i=0; i<len; i++) {
+		datain[i] = spi_transfer(dataout[i]);
+	}
 }
 
 void nrf24_powerDown()
 {
-    nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
-    nrf24_configRegister(CONFIG, nrf24_CONFIG);
+	nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
+	nrf24_configRegister(CONFIG, nrf24_CONFIG);
 }
