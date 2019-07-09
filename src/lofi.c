@@ -23,6 +23,12 @@
 // The polling period is configured in eeprom.
 // A 10-bit incrementing count is sent on polled transmissions.
 //
+// I'm using spin loop delays. See util/delay_basic.h.
+// _delay_loop_1 loop is three cycles and takes an 8-bit
+// loop counter. 3us * 256 is max delay.
+// _delay_loop_2 loop is four cycles and takes a 16-bit
+// loop counter. 4us * 65536 is max delay.
+//
 // Configuration is stored in the eeprom starting at addr 0.
 // See config_t structure for details.
 //
@@ -33,7 +39,7 @@
 #include <avr/sleep.h>
 #include <avr/wdt.h>
 #include <avr/interrupt.h>
-#include <util/delay.h>
+#include <util/delay_basic.h>
 #include <avr/eeprom.h>
 #include <avr/cpufunc.h>
 #include <string.h>
@@ -76,14 +82,44 @@
 
 
 #define NRF_VCC_PIN				((1<<3) | (1<<7))
-#define NRF_VCC_INIT()			(DDRA |= NRF_VCC_PIN)
-#define NRF_VCC_ASSERT()		{DDRA |= NRF_VCC_PIN; PORTA |= NRF_VCC_PIN;}
+void NRF_VCC_INIT(config_t *config)
+{
+	if (config->nrfVccEnb) {
+		DDRA |= NRF_VCC_PIN;
+	}
+}
+
+void NRF_VCC_ASSERT(config_t *config)
+{
+	if (config->nrfVccEnb) {
+		DDRA |= NRF_VCC_PIN;
+		PORTA |= NRF_VCC_PIN;
+	}
+}
+
+void NRF_VCC_DEASSERT(config_t *config)
+{
+	if (config->nrfVccEnb) {
+		PORTA &= ~NRF_VCC_PIN;
+		DDRA &= ~NRF_VCC_PIN;
+	}
+}
+
+void NRF_VCC_DLY_MS(config_t *config, uint16_t ms)
+{
+	if (config->nrfVccEnb) {
+		_delay_loop_2(ms);
+	}
+}
+
+//#define NRF_VCC_INIT()			(DDRA |= NRF_VCC_PIN)
+//#define NRF_VCC_ASSERT()		{DDRA |= NRF_VCC_PIN; PORTA |= NRF_VCC_PIN;}
 #if 0
-#define NRF_VCC_DEASSERT()		
+//#define NRF_VCC_DEASSERT()		
 #else
-#define NRF_VCC_DEASSERT()		{PORTA &= ~NRF_VCC_PIN; DDRA &= ~NRF_VCC_PIN;}
+//#define NRF_VCC_DEASSERT()		{PORTA &= ~NRF_VCC_PIN; DDRA &= ~NRF_VCC_PIN;}
 #endif
-#define NRF_VCC_DLY_MS(x)		_delay_ms((x))
+//#define NRF_VCC_DLY_MS(x)		_delay_ms((x))
 
 #define CORE_CLK_SET(x)  {	\
 	CLKPR = (1<<CLKPCE);	\
@@ -305,9 +341,9 @@ int main(void)
     }
 
 	// initialize pins and apply power to NRF
-	NRF_VCC_INIT();
-	NRF_VCC_ASSERT();
-	NRF_VCC_DLY_MS(100);
+	NRF_VCC_INIT(&config);
+	NRF_VCC_ASSERT(&config);
+	NRF_VCC_DLY_MS(&config, 25000);
 
 	// switch to a lower clock rate while reading/writing NRF. For some
 	// reason I can't get anywhere near 10MHz SPI CLK rate.
@@ -315,11 +351,11 @@ int main(void)
 
 	// Initialize radio channel and payload length
 	nrf24_config(&config, NRF24_PAYLOAD_LEN, speed);
+	nrf24_flush_tx();
 
 	// Power off radio as we go into our first sleep
 	nrf24_powerDown();            
-	if (config.nrfVccCtrl)
-		NRF_VCC_DEASSERT();
+	NRF_VCC_DEASSERT(&config);
 
     // initialize watchdog and associated variables
     wdTick = config.wdCnts - 1; //0;
@@ -341,7 +377,7 @@ int main(void)
 	// must be called after global interrupts are enabled
 	if (config.txDbg) {
 		printConfig();
-		_delay_ms(100);
+		_delay_loop_2(25000); // ~100ms at 1MHz F_CPU
 	}
 
 	//
@@ -434,6 +470,7 @@ int main(void)
 
 	   	if (FLAGS & vccFlag) {
             uint16_t vcc = readVccTemp(VCC_MUX);
+			vcc += config.vccFudge;
 			FLAGS &= ~vccFlag;
             sens_vcc.sensorId = SENID_VCC;
             sens_vcc.vcc_lo = vcc & 0xFF;
@@ -445,6 +482,7 @@ int main(void)
 
 		if (FLAGS & tempFlag) {
             uint16_t temp = readVccTemp(TEMP_MUX);
+			temp += config.tempFudge;
 			FLAGS &= ~tempFlag;
             sens_temp.sensorId = SENID_TEMP;
             sens_temp.temp_lo = temp & 0xFF;
@@ -462,12 +500,11 @@ int main(void)
 			CORE_CLK_SET(4);
 			sei();
 
-			if (config.nrfVccCtrl) {
-				NRF_VCC_ASSERT();
-				NRF_VCC_DLY_MS(10);
-
+			NRF_VCC_ASSERT(&config);
+			NRF_VCC_DLY_MS(&config, 2500);
+			if (config.nrfVccEnb) {
 				// Initialize radio channel and payload length
-				nrf24_reconfig(&config, NRF24_PAYLOAD_LEN, speed);
+				nrf24_config(&config, NRF24_PAYLOAD_LEN, speed);
 			}
 
 		    /* Automatically goes to TX mode */
@@ -483,9 +520,7 @@ int main(void)
 
 		    nrf24_powerDown();            
 
-			if (config.nrfVccCtrl) {
-				NRF_VCC_DEASSERT();
-			}
+			NRF_VCC_DEASSERT(&config);
 
 			cli();
 			CORE_CLK_SET(3);
@@ -500,7 +535,7 @@ int main(void)
 					txBufRd = (txBufRd + 1) & (TXBUF_SIZE - 1);
 				}
 
-				_delay_us(100);
+				_delay_loop_1(33); // ~100us at 1MHz F_CPU
 				LED_DEASSERT(LED_RED | LED_GRN);
 //			}
 
@@ -616,7 +651,7 @@ uint16_t readVccTemp(uint8_t mux_select)
 	// Conversions starting before this may not be reliable. The ADC must
 	// be enabled during the settling time.
 		
-	_delay_ms(1);
+	_delay_loop_2(250); // ~1ms at 1MHz F_CPU
 				
 	// The first conversion after switching voltage source may be inaccurate,
 	// and the user is advised to discard this result.

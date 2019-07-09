@@ -42,13 +42,14 @@ void    nrf24_init(void);
 void    nrf24_rx_address(uint8_t* adr);
 void    nrf24_tx_address(uint8_t* adr);
 void    nrf24_config(config_t *config, uint8_t pay_length, uint8_t spd_1M);
-void nrf24_reconfig(config_t *config, uint8_t pay_length, uint8_t speed);
+//void nrf24_reconfig(config_t *config, uint8_t pay_length, uint8_t speed);
 
 /* state check functions */
 uint8_t nrf24_dataReady(void);
 uint8_t nrf24_isSending(void);
 uint8_t nrf24_getStatus(void);
 uint8_t nrf24_rxFifoEmpty(void);
+void nrf24_flush_tx(void);
 
 /* core TX / RX functions */
 void    nrf24_send(config_t *config, uint8_t *buf, uint8_t buf_length);

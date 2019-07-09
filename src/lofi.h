@@ -51,7 +51,7 @@ typedef struct {
     uint8_t     enVcc			:1;
 	uint8_t		enTemp			:1;
 	uint8_t		enLed			:1;
-	uint8_t		nrfVccCtrl		:1;
+	uint8_t		nrfVccEnb		:1;
 	uint8_t		txDbg			:1;
 	uint8_t		spd_1M			:1;
 	uint8_t		spd_250K		:1;
@@ -77,6 +77,15 @@ typedef struct {
 
 	// bytes 10 & 11
 	uint16_t	ctrCntsMax;				// little-endian
+
+	// bytes 12 & 13
+	int16_t		tempFudge;				// signed little-endian
+
+	// bytes 14 & 15
+	int16_t		vccFudge;				// signed little-endian
+
+	// byte 16
+	uint8_t		setup_retr;				// nrf SETUP_RETR register contents
 
 } config_t;
 
