@@ -13,7 +13,7 @@
 */
 #include <avr/io.h>
 #include <avr/cpufunc.h>
-#include <util/delay.h>
+//#include <util/delay.h>
 #include "nrf24.h"
 
 extern uint8_t gstatus;

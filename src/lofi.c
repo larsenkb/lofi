@@ -366,8 +366,6 @@ int main(void)
 		setup_watchdog(config.wd_timeout + 5);
 	}
 
-	CORE_CLK_SET(3);
-
 	// set sleep mode one time here
     set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
 
@@ -501,7 +499,7 @@ int main(void)
 			sei();
 
 			NRF_VCC_ASSERT(&config);
-			NRF_VCC_DLY_MS(&config, 2500);
+			NRF_VCC_DLY_MS(&config, 1250); // running at 500kHz
 			if (config.nrfVccEnb) {
 				// Initialize radio channel and payload length
 				nrf24_config(&config, NRF24_PAYLOAD_LEN, speed);

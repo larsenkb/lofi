@@ -11,7 +11,7 @@
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
-#include <util/delay.h>
+#include <util/delay_basic.h>
 
 #include "uartbb.h"
 
@@ -119,7 +119,7 @@ void uartbb_putchar(char val)
 #if 1
 	// delay until there is room in buffer
     while (tidx == uartbb_tx_ridx) {
-        _delay_ms(1);
+        _delay_loop_1(255);
     }
 #else
 	// drop character and return
