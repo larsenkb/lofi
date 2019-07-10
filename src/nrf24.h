@@ -50,6 +50,7 @@ uint8_t nrf24_isSending(void);
 uint8_t nrf24_getStatus(void);
 uint8_t nrf24_rxFifoEmpty(void);
 void nrf24_flush_tx(void);
+void nrf24_clearStatus(void);
 
 /* core TX / RX functions */
 void    nrf24_send(config_t *config, uint8_t *buf, uint8_t buf_length);

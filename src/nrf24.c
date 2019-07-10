@@ -13,7 +13,7 @@
 */
 #include <avr/io.h>
 #include <avr/cpufunc.h>
-//#include <util/delay.h>
+#include <util/delay_basic.h>
 #include "nrf24.h"
 
 extern uint8_t gstatus;
@@ -198,10 +198,10 @@ void nrf24_flush_tx(void)
 void nrf24_send(config_t *config, uint8_t *buf, uint8_t buf_length) 
 {    
 	// Set to transmitter mode , Power up if needed
-	nrf24_powerUpTx();
+//	nrf24_powerUpTx();
 
 	// Do we really need to flush TX fifo each time?
-#if 1
+#if 0
 	// Write cmd to flush transmit FIFO
 	ASSERT_CSN();
 	spi_transfer(FLUSH_TX);     
@@ -225,16 +225,17 @@ void nrf24_pulseCE(void)
 {
 	// Start the transmission
 	ASSERT_CE();
-	_NOP();
-	_NOP();
 //	_NOP();
 //	_NOP();
 //	_NOP();
-	_NOP();
-	_NOP();
-	_NOP();
-	_NOP();
-	_NOP();
+//	_NOP();
+//	_NOP();
+//	_NOP();
+//	_NOP();
+//	_NOP();
+//	_NOP();
+//	_NOP();
+	_delay_loop_1(30);
 	DEASSERT_CE();
 }
 
@@ -263,10 +264,14 @@ uint8_t nrf24_getStatus(void)
 	return rv;
 }
 
+void nrf24_clearStatus(void)
+{
+	nrf24_configRegister(STATUS, (1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT)); 
+}
 
 void nrf24_powerUpTx(void)
 {
-	nrf24_configRegister(STATUS, (1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT)); 
+//	nrf24_configRegister(STATUS, (1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT)); 
 	nrf24_configRegister(CONFIG, nrf24_CONFIG | ((1<<PWR_UP) | (0<<PRIM_RX)));
 }
 
@@ -316,6 +321,6 @@ void nrf24_transferSync(uint8_t *dataout, uint8_t *datain, uint8_t len)
 
 void nrf24_powerDown()
 {
-	nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
+//	nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
 	nrf24_configRegister(CONFIG, nrf24_CONFIG);
 }

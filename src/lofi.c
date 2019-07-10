@@ -121,9 +121,23 @@ void NRF_VCC_DLY_MS(config_t *config, uint16_t ms)
 #endif
 //#define NRF_VCC_DLY_MS(x)		_delay_ms((x))
 
+int clk_div = 3;
+#define CLK_DIV			3
+#define CORE_FAST		CLK_DIV
+#define CORE_SLOW		(CLK_DIV+1)	
 #define CORE_CLK_SET(x)  {	\
 	CLKPR = (1<<CLKPCE);	\
-	CLKPR = (x); }
+	CLKPR = (x);			\ 
+	clk_div = (x); }
+
+void dlyMS(uint16_t ms)
+{
+	uint16_t val = 2000>>clk_div;
+	val -= ms;
+	while(ms--) {
+		_delay_loop_2(val);
+	}
+}
 
 #define TXBUF_SIZE		8	// must be a power of 2!!!
 
@@ -237,7 +251,8 @@ int main(void)
 	txBufWr = 0;
 
 	// Set Divide by 8 for 8MHz RC oscillator 
-	CORE_CLK_SET(3);
+	// to get a 1MHz F_CPU
+	CORE_CLK_SET(CORE_FAST);
 
 	// disable Pullups
 	MCUCR &= ~(1<<PUD);
@@ -347,7 +362,7 @@ int main(void)
 
 	// switch to a lower clock rate while reading/writing NRF. For some
 	// reason I can't get anywhere near 10MHz SPI CLK rate.
-	CORE_CLK_SET(4);
+	CORE_CLK_SET(CORE_SLOW);
 
 	// Initialize radio channel and payload length
 	nrf24_config(&config, NRF24_PAYLOAD_LEN, speed);
@@ -495,11 +510,15 @@ int main(void)
 
 			// Set Divide by 8 for 8MHz RC oscillator 
 			cli();
-			CORE_CLK_SET(4);
+			CORE_CLK_SET(CORE_SLOW);
 			sei();
 
 			NRF_VCC_ASSERT(&config);
 			NRF_VCC_DLY_MS(&config, 1250); // running at 500kHz
+			nrf24_powerUpTx();
+			dlyMS(4);
+			nrf24_clearStatus();
+
 			if (config.nrfVccEnb) {
 				// Initialize radio channel and payload length
 				nrf24_config(&config, NRF24_PAYLOAD_LEN, speed);
@@ -510,18 +529,23 @@ int main(void)
 
 			/* Start the transmission */
 			nrf24_pulseCE();
+	//ASSERT_CE();
+//	nrf24_isSending();
+//	_delay_loop_2(250);
 
 			i = 0;
 			while (nrf24_isSending() && i < 100) {
 				i++;
 			}
+			
+	//DEASSERT_CE();
 
 		    nrf24_powerDown();            
 
 			NRF_VCC_DEASSERT(&config);
 
 			cli();
-			CORE_CLK_SET(3);
+			CORE_CLK_SET(CORE_FAST);
 			sei();
 
 //			if (config.en_aa) {
