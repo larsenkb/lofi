@@ -1,6 +1,7 @@
-# door/window OPEN/SHUT sensor project
+# lofi door/window sensor project
+![lofi](larsenkb.github.com/lofi/img/lofi.jpg)
 
-This project was derived from an incomplete project (LoFi) submitted by David Cook to hackaday.io. See https://hackaday.io/project/1552-lofi. He did not submitt software with his project.
+This project was derived from an incomplete project (LoFi) submitted by David Cook to hackaday.io. See https://hackaday.io/project/1552-lofi. He did not submit software with his project.
 
 My son ordered some boards and parts for me to play with. I decided to hack the original board to use an NRF24l01+ instead of the original 433 MHz transmitter.
 
@@ -21,7 +22,7 @@ My son ordered some boards and parts for me to play with. I decided to hack the 
 - Can select RF gain setting via eeprom.
 - Can enable Auto-Acknowledge and Dynamic Acknowledge via eeprom.
 
-There is a companion program (lofi_mqtt) that receives these packets and converts them to MQTT topics and publishes them to an MQTT broker. This companion program runs on Odroid or Raspberry Pi. 
+There is a companion program (lofi_mqtt) that receives these packets and converts them to MQTT topics and publishes them to an MQTT broker. This companion program runs on Odroid or Raspberry Pi hardware. 
  
 I am using parts of xprintf by ChaN (see xprintf.c for copyright)
 
@@ -35,7 +36,7 @@ Using the LIR2450 was a mistake. It has much less capacity that a CR2450 and req
 
 I use a 'usbtiny' or 'usbasp' to program the sensor. The Makefile is my friend, since I have a hard time remembering things.
 
-You first want to change the fuse settings so that the eeprom won't get erased every time you reflash the program onto the sensor.
+You first want to change the fuse settings so that the eeprom won't get erased every time you reflash the program onto the sensor. This only needs to be done once per sensor.
 ```
 $ make pgmfuses
 ```
@@ -50,9 +51,15 @@ Then you modify the eeprom to enable features you want. I would like to create a
 $ make dude
 ```
 
-then use "d eep 0 20" to dump the contents of the eeprom.
+then use `d eep 0 20` to dump the first 20 bytes of the eeprom.
+```
+avrdude> d eep 0 20
+```
 
-then use "w eep <addr> <bytes> to write to the eeprom.
+then use `w eep <addr> <bytes>` to write to the eeprom.
+```
+avrdude> w eep 0 0x11 0xc6 ...
+```
 
 
 
