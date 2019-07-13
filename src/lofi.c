@@ -563,7 +563,7 @@ int main(void)
 
         } //endof: while (txBufRd != TxBufWr) {
 
-    }
+    } //endof: while (1) {
 
     return 0;
 }
