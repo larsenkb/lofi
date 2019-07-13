@@ -38,7 +38,7 @@ I use a 'usbtiny' or 'usbasp' to program the sensor. The Makefile is my friend, 
 You first want to change the fuse settings so that the eeprom won't get erased every time you reflash the program onto the sensor.
 ```
 $ make pgmfuses
-'''
+```
 
 Then you flash the program to the sensor:
 ```
