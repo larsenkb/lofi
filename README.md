@@ -1,5 +1,5 @@
 # lofi door/window sensor project
-![lofi](larsenkb.github.com/lofi/img/lofi.jpg)
+![lofi](github.com/larsenkb/lofi/img/lofi.jpg)
 
 This project was derived from an incomplete project (LoFi) submitted by David Cook to hackaday.io. See https://hackaday.io/project/1552-lofi. He did not submit software with his project.
 
