@@ -1,25 +1,25 @@
 # door/window OPEN/SHUT sensor project
 
-This project was derived from an incomplete project (LoFi) submitted by David Cook to hackaday.io. See https://hackaday.io/project/1552-lofi. No software was submitted with the project.
+This project was derived from an incomplete project (LoFi) submitted by David Cook to hackaday.io. See https://hackaday.io/project/1552-lofi. He did not submitt software with his project.
 
 My son ordered some boards and parts for me to play with. I decided to hack the original board to use an NRF24l01+ instead of the original 433 MHz transmitter.
 
 ## Features
 
-Draws about 6uA in the 'idle' mode.
-Supports two reed switches.
-Uses Pin Change feature to report when a reed swith opens or closes.
-Uses the Watchdog feature to report switch state every N seconds. N is stored in eeprom.
-Reports the sensors battery voltage every M seconds. M is stored in eeprom.
-Reports the sensors temperature (rudamentary) every P seconds. P is stored in eeprom.
-Can report a 10-bit count that increments every R seconds. R is stored in eeprom. 
-Transmits a 3-byte packet. The packet contains the switch, Vcc, Temp, or Counter data.
-Can select transission bit rate (250kbps, 1Mbps, or 2Mbps) via eeprom setting.
-Can select to blink leds to indicate packet transmission and whether ACK was received or not.
-Can select channels 0..127 via eeprom.
-Can select Watchdog timeout period via eeprom.
-Can select RG gain setting via eeprom.
-Can enable Auto-Acknowledge and Dynamic Acknowledge via eeprom.
+- Draws about 6uA in the 'idle' mode.
+- Supports two reed switches.
+- Uses Pin Change feature to report when a reed swith opens or closes.
+- Uses the Watchdog feature to report switch state every N seconds. N is stored in eeprom.
+- Reports the sensors battery voltage every M seconds. M is stored in eeprom.
+- Reports the sensors temperature (rudamentary) every P seconds. P is stored in eeprom.
+- Can report a 10-bit count that increments every R seconds. R is stored in eeprom. 
+- Transmits a 3-byte packet. The packet contains the switch, Vcc, Temp, or Counter data.
+- Can select transission bit rate (250kbps, 1Mbps, or 2Mbps) via eeprom setting.
+- Can select to blink leds to indicate packet transmission and whether ACK was received or not.
+- Can select channels 0..127 via eeprom.
+- Can select Watchdog timeout period via eeprom.
+- Can select RG gain setting via eeprom.
+- Can enable Auto-Acknowledge and Dynamic Acknowledge via eeprom.
 
 There is a companion program (lofi_mqtt) that receives these packets and converts them to MQTT topics and publishes them to an MQTT broker.
  
