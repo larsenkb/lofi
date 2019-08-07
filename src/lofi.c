@@ -72,11 +72,11 @@
 
 #define LED_INIT(x)				{DDRB |= (x); PORTB &= ~(x);}
 #define LED_ASSERT(x)	\
-	if (config.enLed) {	\
+	if (config.en_led) {	\
 		PORTB |= (x);	\
 	}
 #define LED_DEASSERT(x)	\
-	if (config.enLed) {	\
+	if (config.en_led) {	\
 		PORTB &= ~(x);	\
 	}
 
@@ -84,14 +84,14 @@
 #define NRF_VCC_PIN				((1<<3) | (1<<7))
 void NRF_VCC_INIT(config_t *config)
 {
-	if (config->nrfVccEnb) {
+	if (config->en_nrfVcc) {
 		DDRA |= NRF_VCC_PIN;
 	}
 }
 
 void NRF_VCC_ASSERT(config_t *config)
 {
-	if (config->nrfVccEnb) {
+	if (config->en_nrfVcc) {
 		DDRA |= NRF_VCC_PIN;
 		PORTA |= NRF_VCC_PIN;
 	}
@@ -99,7 +99,7 @@ void NRF_VCC_ASSERT(config_t *config)
 
 void NRF_VCC_DEASSERT(config_t *config)
 {
-	if (config->nrfVccEnb) {
+	if (config->en_nrfVcc) {
 		PORTA &= ~NRF_VCC_PIN;
 		DDRA &= ~NRF_VCC_PIN;
 	}
@@ -107,7 +107,7 @@ void NRF_VCC_DEASSERT(config_t *config)
 
 void NRF_VCC_DLY_MS(config_t *config, uint16_t ms)
 {
-	if (config->nrfVccEnb) {
+	if (config->en_nrfVcc) {
 		_delay_loop_2(ms);
 	}
 }
@@ -127,7 +127,7 @@ int clk_div = 3;
 #define CORE_SLOW		(CLK_DIV+1)	
 #define CORE_CLK_SET(x)  {	\
 	CLKPR = (1<<CLKPCE);	\
-	CLKPR = (x);			\ 
+	CLKPR = (x);			\
 	clk_div = (x); }
 
 void dlyMS(uint16_t ms)
@@ -232,16 +232,17 @@ ISR(PCINT0_vect)
 //
 int main(void)
 {
-	volatile uint8_t	wdTick;
 	uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
 	uint8_t				txBufWr, txBufRd;
 	speed_t				speed;
 	sensor_ctr_t		sens_ctr;
 	sensor_vcc_t		sens_vcc;
 	sensor_temp_t		sens_temp;
+	uint16_t			swCnts;
 	uint16_t			vccCnts;
 	uint16_t			tempCnts;
 	uint16_t			ctrCnts;
+	uint8_t				jj;
 
 
 	gstatus = 0;
@@ -282,7 +283,7 @@ int main(void)
 	nrf24_init();
     
     // initialize uart if eeprom configured
-	if (config.txDbg) {
+	if (config.en_txDbg) {
 		uartbb_init();
 		xfunc_out = uartbb_putchar;
 	} else {
@@ -291,7 +292,7 @@ int main(void)
 	}
 
 	// Initialize counter capability/structure if eeprom configured
-    if (config.enCtr) {
+    if (config.en_ctr) {
         sens_ctr.sensorId = SENID_CTR;
         sens_ctr.ctr_lo = 0;
         sens_ctr.ctr_hi = 0;
@@ -300,7 +301,7 @@ int main(void)
     }
 
 	// Initialize Temp capability/structure if eeprom configured
-	if (config.enTemp) {
+	if (config.en_temp) {
         sens_temp.sensorId = SENID_TEMP;
         sens_temp.temp_lo = 0;
         sens_temp.temp_hi = 0;
@@ -309,7 +310,7 @@ int main(void)
     }
 
 	// Initialize Vcc capability/structure if eeprom configured
-    if (config.enVcc) {
+    if (config.en_vcc) {
         sens_vcc.sensorId = SENID_VCC;
         sens_vcc.vcc_lo = 0;
         sens_vcc.vcc_hi = 0;
@@ -318,7 +319,7 @@ int main(void)
     }
 
 	// Initialize switch 1 capability/structure if eeprom configured
-    if (config.sw1_enb) {
+    if (config.en_sw1) {
 		DDRB &= ~(1<<SWITCH_1);
 		sens_sw1.sensorId = SENID_SW1;
 		sens_sw1.seq = 2; // init to 2 because it is called 2 times before first xmit
@@ -337,7 +338,7 @@ int main(void)
 	}
 
 	// Initialize switch 2 capability/structure if eeprom configured
-    if (config.sw2_enb) {
+    if (config.en_sw2) {
 		DDRA &= ~(1<<SWITCH_2);
         sens_sw2.sensorId = SENID_SW2;
 		sens_sw2.seq = 2; // init to 2 because it is called 2 times before first xmit
@@ -373,11 +374,11 @@ int main(void)
 	NRF_VCC_DEASSERT(&config);
 
     // initialize watchdog and associated variables
-    wdTick = config.wdCnts - 1; //0;
+    swCnts = config.swCntsMax - 1; //0;
 	ctrCnts = config.ctrCntsMax - 1;
 	vccCnts = config.vccCntsMax - 1;
 	tempCnts = config.tempCntsMax - 1;
-	if (config.wdCnts) {
+	if (config.en_wd) {
 		setup_watchdog(config.wd_timeout + 5);
 	}
 
@@ -388,7 +389,7 @@ int main(void)
     sei();
 
 	// must be called after global interrupts are enabled
-	if (config.txDbg) {
+	if (config.en_txDbg) {
 		printConfig();
 		_delay_loop_2(25000); // ~100ms at 1MHz F_CPU
 	}
@@ -401,27 +402,27 @@ int main(void)
 		// go to sleep and wait for interrupt (watchdog or pin change)
 	    sleep_mode();                // System sleeps here
 
-		if (FLAGS & wdFlag) {
+		if (FLAGS & wdFlag)	{	// can only enter here if en_wd is true
 			FLAGS &= ~wdFlag;
-			if (config.wdCnts) {
-				if (++wdTick >= config.wdCnts) {
-					wdTick = 0;
-					FLAGS |= swFlag;
-				}
+//			if (config.wdCnts) {
+			if (++swCnts >= config.swCntsMax) {
+				swCnts = 0;
+				FLAGS |= swFlag;
 			}
-			if (config.enCtr) {
+//			}
+			if (config.en_ctr) {
 				if (++ctrCnts >= config.ctrCntsMax) {
 					ctrCnts = 0;
 					FLAGS |= ctrFlag;
 				}
 			}
-			if (config.enVcc) {
+			if (config.en_vcc) {
 				if (++vccCnts >= config.vccCntsMax) {
 					vccCnts = 0;
 					FLAGS |= vccFlag;
 				}
 			}
-			if (config.enTemp) {
+			if (config.en_temp) {
 				if (++tempCnts >= config.tempCntsMax) {
 					tempCnts = 0;
 					FLAGS |= tempFlag;
@@ -429,6 +430,7 @@ int main(void)
 			}
 		}
 
+#if 0
 		if (FLAGS & swFlag) {
 			uint8_t jj = 0;
 
@@ -451,17 +453,24 @@ int main(void)
 			}
 
 		} else {
-			uint8_t jj = 0;
+#endif
+			jj = 0;
 
-			if (FLAGS & sw1Flag) {
-				FLAGS &= ~sw1Flag;
-				txBuf[txBufWr][jj++] = getSw1();
+			if (config.en_sw1) {
+				if (FLAGS & (swFlag | sw1Flag)) {
+					FLAGS &= ~sw1Flag;
+					txBuf[txBufWr][jj++] = getSw1();
+				}
 			}
 
-			if (FLAGS & sw2Flag) {
-				FLAGS &= ~sw2Flag;
-				txBuf[txBufWr][jj++] = getSw2();
+			if (config.en_sw2) {
+				if (FLAGS & (swFlag | sw2Flag)) {
+					FLAGS &= ~sw2Flag;
+					txBuf[txBufWr][jj++] = getSw2();
+				}
 			}
+
+			FLAGS &= ~swFlag;
 
 			if (jj) {
 				if (jj == 1) {
@@ -470,7 +479,7 @@ int main(void)
 				txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
 			}
 
-		}
+//		}
 
 		if (FLAGS & ctrFlag) {
 			FLAGS &= ~ctrFlag;
@@ -519,7 +528,7 @@ int main(void)
 			dlyMS(4);
 			nrf24_clearStatus();
 
-			if (config.nrfVccEnb) {
+			if (config.en_nrfVcc) {
 				// Initialize radio channel and payload length
 				nrf24_config(&config, NRF24_PAYLOAD_LEN, speed);
 			}
