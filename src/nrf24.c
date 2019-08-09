@@ -235,7 +235,7 @@ void nrf24_pulseCE(void)
 //	_NOP();
 //	_NOP();
 //	_NOP();
-	_delay_loop_1(30);
+	_delay_loop_1(5);
 	DEASSERT_CE();
 }
 
