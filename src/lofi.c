@@ -158,6 +158,11 @@ uint16_t readVccTemp(uint8_t mux_select);
 void printConfig(void);
 uint8_t getSw1(void);
 uint8_t getSw2(void);
+void ctr_msg_init(config_t *config, sensor_ctr_t *sens_ctr);
+void temp_msg_init(config_t *config, sensor_temp_t *sens_temp);
+void vcc_msg_init(config_t *config, sensor_vcc_t *sens_vcc);
+void sw1_msg_init(config_t *config, sensor_switch_t *sens_sw1);
+void sw2_msg_init(config_t *config, sensor_switch_t *sens_sw2);
 
 
 //****************************************************************
@@ -165,7 +170,7 @@ uint8_t getSw2(void);
 //
 // 0=16ms, 1=32ms,2=64ms,3=128ms,4=250ms,5=500ms
 // 6=1 sec,7=2 sec, 8=4 sec, 9= 8sec
-#if 1
+#if 0
 void setup_watchdog(int val)
 {
 	uint8_t bb;
@@ -203,7 +208,7 @@ void watchdog_disable(void)
 // The system wakes up when any interrupt occurs. Setting this
 // flag lets background (main loop) know that the watchdog
 // interrupt occured so that we can xmit.
-#if 1
+#if 0
 ISR(WATCHDOG_vect)
 {
 	FLAGS |= wdFlag;
@@ -291,7 +296,7 @@ int main(void)
 	eeprom_read_block(&config, 0, sizeof(config));
 
 #if EN_TPL5111
-	config.en_nrfVcc = 0;
+	config.en_nrfVcc = 0;	// incase enabled...
 	// set DONE as output/low
 	DDRA |= (1<<3);
 	PORTA &= ~(1<<3);
@@ -321,77 +326,31 @@ int main(void)
 		PRR |= (1<<PRTIM0);
 	}
 
-	// Initialize counter capability/structure if eeprom configured
-    if (config.en_ctr) {
-        sens_ctr.sensorId = SENID_CTR;
-        sens_ctr.ctr_lo = 0;
-        sens_ctr.ctr_hi = 0;
-		sens_ctr.seq = 0;
-		ctrCnts = 0;
-    }
+	// Initialize counter message structure
+	ctr_msg_init(&config, &sens_ctr);
 
-	// Initialize Temp capability/structure if eeprom configured
-	if (config.en_temp) {
-        sens_temp.sensorId = SENID_TEMP;
-        sens_temp.temp_lo = 0;
-        sens_temp.temp_hi = 0;
-		sens_temp.seq = 0;
-		tempCnts = 0;
-    }
+	// Initialize Temperature message structure
+	temp_msg_init(&config, &sens_temp);
 
-	// Initialize Vcc capability/structure if eeprom configured
-    if (config.en_vcc) {
-        sens_vcc.sensorId = SENID_VCC;
-        sens_vcc.vcc_lo = 0;
-        sens_vcc.vcc_hi = 0;
-		sens_vcc.seq = 0;
-		vccCnts = 0;
-    }
+	// Initialize Vcc message structure
+	vcc_msg_init(&config, &sens_vcc);
 
-	// Initialize switch 1 capability/structure if eeprom configured
-    if (config.en_sw1) {
-		DDRB &= ~(1<<SWITCH_1);
-		sens_sw1.sensorId = SENID_SW1;
-		sens_sw1.seq = 2; // init to 2 because it is called 2 times before first xmit
-		getSw1();
-		if (config.sw1_pc) {
-			GIMSK = (1<<SWITCH_1_GMSK);
-			PCMSK1 = (1<<SWITCH_1_MSK);
-		}
-    } else {
-		// if we leave pin as input, it will draw more current if it oscillates
-		// but if we pgm pin as output and there REALLY is a switch connected
-		// we are would  do damage. That is why there is a series resistor on
-		// switch pin.
-		DDRB |= (1<<SWITCH_1);
-		PORTB &= ~(1<<SWITCH_1);
-	}
+	// Initialize switch 1 message structure
+	sw1_msg_init(&config, &sens_sw1);
+
 
 #if EN_TPL5111
-	config.en_sw2 = 0;
+
+	config.en_sw2 = 0;	// incase enabled...
 	DDRA &= ~(1<<SWITCH_2);
 	GIMSK |= (1<<SWITCH_2_GMSK);
 	PCMSK0 = (1<<SWITCH_2_MSK);
+
 #else
 
-	// Initialize switch 2 capability/structure if eeprom configured
-    if (config.en_sw2) {
-		DDRA &= ~(1<<SWITCH_2);
-        sens_sw2.sensorId = SENID_SW2;
-		sens_sw2.seq = 2; // init to 2 because it is called 2 times before first xmit
-		getSw2();
-		if (config.sw2_pc) {
-			GIMSK |= (1<<SWITCH_2_GMSK);
-			PCMSK0 = (1<<SWITCH_2_MSK);
-		}
-    } else {
-		// if we leave pin as input, it will draw more current if it oscillates
-		// but if we pgm pin as output and there REALLY is a switch connected
-		// we are would  do damage. That is why there is a series resistor on
-		// switch pin.
-		DDRA |= (1<<SWITCH_2);
-		PORTA &= ~(1<<SWITCH_2);
-    }
+	// Initialize switch 2 message structure
+	sw2_msg_init(&config, &sens_sw2);
+
 #endif
 
 	// initialize pins and apply power to NRF
@@ -418,8 +377,7 @@ int main(void)
 	tempCnts = config.tempCntsMax - 1;
 
 #if EN_TPL5111
-	config.en_wd = 0;
-	watchdog_disable();
+	config.en_wd = 0;	// incase enabled...
 #else
 	if (config.en_wd) {
 		setup_watchdog(config.wd_timeout + 5);
@@ -459,25 +417,29 @@ int main(void)
 		}
 #endif
 
-
-		if (FLAGS & wdFlag)	{	// can only enter here if en_wd is true
+		// can only execute this code if watchdog or TPL5111 DRVn asserted
+		if (FLAGS & wdFlag)	{
 			FLAGS &= ~wdFlag;
+			// inc count and set flag if time to xmit a message
 			if (++swCnts >= config.swCntsMax) {
 				swCnts = 0;
 				FLAGS |= swFlag;
 			}
+			// inc count and set flag if time to xmit a message
 			if (config.en_ctr) {
 				if (++ctrCnts >= config.ctrCntsMax) {
 					ctrCnts = 0;
 					FLAGS |= ctrFlag;
 				}
 			}
+			// inc count and set flag if time to xmit a message
 			if (config.en_vcc) {
 				if (++vccCnts >= config.vccCntsMax) {
 					vccCnts = 0;
 					FLAGS |= vccFlag;
 				}
 			}
+			// inc count and set flag if time to xmit a message
 			if (config.en_temp) {
 				if (++tempCnts >= config.tempCntsMax) {
 					tempCnts = 0;
@@ -486,6 +448,8 @@ int main(void)
 			}
 		}
 
+		// switch one or switch two might not be enabled, so this code
+		// packs messages in the three byte packet properly
 		jj = 0;
 
 		if (config.en_sw1) {
@@ -502,8 +466,11 @@ int main(void)
 			}
 		}
 
+		// we are done building switch messages, clear flag
 		FLAGS &= ~swFlag;
 
+		// if there is only one switch message in 3 byte packet, zero
+		// the third byte of the packet
 		if (jj) {
 			if (jj == 1) {
 				txBuf[txBufWr][jj] = 0;
@@ -511,7 +478,7 @@ int main(void)
 			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
 		}
 
-
+		// build a counter message if flag set
 		if (FLAGS & ctrFlag) {
 			FLAGS &= ~ctrFlag;
             memcpy(&txBuf[txBufWr][0], &sens_ctr, sizeof(sens_ctr));
@@ -521,6 +488,7 @@ int main(void)
 			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
         }
 
+		// build a Vcc message if flag set
 	   	if (FLAGS & vccFlag) {
             uint16_t vcc = readVccTemp(VCC_MUX);
 			vcc += config.vccFudge;
@@ -533,6 +501,7 @@ int main(void)
 
 		}
 
+		// build a Temperature message if flag set
 		if (FLAGS & tempFlag) {
             uint16_t temp = readVccTemp(TEMP_MUX);
 			temp += config.tempFudge;
@@ -603,7 +572,7 @@ int main(void)
 
         } //endof: while (txBufRd != TxBufWr) {
 
-		// go to sleep and wait for interrupt (watchdog or pin change)
+		// go to sleep and wait for interrupt (tpl5111 DRVn, watchdog or switch pin change)
 	    sleep_mode();                // System sleeps here
 
     } //endof: while (1) {
@@ -611,6 +580,7 @@ int main(void)
     return 0;
 }
 
+// read switch one and update state
 uint8_t  getSw1(void)
 {
 	uint8_t pinState;
@@ -622,6 +592,7 @@ uint8_t  getSw1(void)
 	return (*(uint8_t *)&sens_sw1);
 }
 
+// read switch two and update state
 uint8_t getSw2(void)
 {
 	uint8_t pinState;
@@ -633,6 +604,7 @@ uint8_t getSw2(void)
 	return (*(uint8_t *)&sens_sw2);
 }
 
+// print nrf24l01+ configuration out serial port
 void printConfig(void)
 {
 	uint8_t  ta[8];
@@ -764,4 +736,156 @@ uint16_t readVccTemp(uint8_t mux_select)
 	return ( adc );
 	
 }
+
+// initialze counter message structure
+void ctr_msg_init(config_t *config, sensor_ctr_t *sens_ctr)
+{
+	// Initialize counter capability/structure if eeprom configured
+    if (config->en_ctr) {
+        sens_ctr->sensorId = SENID_CTR;
+        sens_ctr->ctr_lo = 0;
+        sens_ctr->ctr_hi = 0;
+		sens_ctr->seq = 0;
+//		ctrCnts = 0;
+    }
+}
+
+// initialze Temperature message structure
+void temp_msg_init(config_t *config, sensor_temp_t *sens_temp)
+{
+	// Initialize Temp capability/structure if eeprom configured
+	if (config->en_temp) {
+        sens_temp->sensorId = SENID_TEMP;
+        sens_temp->temp_lo = 0;
+        sens_temp->temp_hi = 0;
+		sens_temp->seq = 0;
+//		tempCnts = 0;
+    }
+}
+
+// initialze Vcc message structure
+void vcc_msg_init(config_t *config, sensor_vcc_t *sens_vcc)
+{
+	// Initialize Vcc capability/structure if eeprom configured
+    if (config->en_vcc) {
+        sens_vcc->sensorId = SENID_VCC;
+        sens_vcc->vcc_lo = 0;
+        sens_vcc->vcc_hi = 0;
+		sens_vcc->seq = 0;
+//		vccCnts = 0;
+    }
+}
+
+// initialze switch 1 message structure
+void sw1_msg_init(config_t *config, sensor_switch_t *sens_sw1)
+{
+	// Initialize switch 1 capability/structure if eeprom configured
+    if (config->en_sw1) {
+		DDRB &= ~(1<<SWITCH_1);
+		sens_sw1->sensorId = SENID_SW1;
+		sens_sw1->seq = 2; // init to 2 because it is called 2 times before first xmit
+		getSw1();
+		if (config->sw1_pc) {
+			GIMSK = (1<<SWITCH_1_GMSK);
+			PCMSK1 = (1<<SWITCH_1_MSK);
+		}
+    } else {
+		// if we leave pin as input, it will draw more current if it oscillates
+		// but if we pgm pin as output and there REALLY is a switch connected
+		// we are would  do damage. That is why there is a series resistor on
+		// switch pin.
+		DDRB |= (1<<SWITCH_1);
+		PORTB &= ~(1<<SWITCH_1);
+	}
+}
+
+// initialze switch 2 message structure
+void sw2_msg_init(config_t *config, sensor_switch_t *sens_sw2)
+{
+	// Initialize switch 2 capability/structure if eeprom configured
+    if (config->en_sw2) {
+		DDRA &= ~(1<<SWITCH_2);
+        sens_sw2->sensorId = SENID_SW2;
+		sens_sw2->seq = 2; // init to 2 because it is called 2 times before first xmit
+		getSw2();
+		if (config->sw2_pc) {
+			GIMSK |= (1<<SWITCH_2_GMSK);
+			PCMSK0 = (1<<SWITCH_2_MSK);
+		}
+    } else {
+		// if we leave pin as input, it will draw more current if it oscillates
+		// but if we pgm pin as output and there REALLY is a switch connected
+		// we are would  do damage. That is why there is a series resistor on
+		// switch pin.
+		DDRA |= (1<<SWITCH_2);
+		PORTA &= ~(1<<SWITCH_2);
+    }
+}
+
+
+#if 0
+	// Initialize counter capability/structure if eeprom configured
+    if (config.en_ctr) {
+        sens_ctr.sensorId = SENID_CTR;
+        sens_ctr.ctr_lo = 0;
+        sens_ctr.ctr_hi = 0;
+		sens_ctr.seq = 0;
+		ctrCnts = 0;
+    }
+	// Initialize Temp capability/structure if eeprom configured
+	if (config.en_temp) {
+        sens_temp.sensorId = SENID_TEMP;
+        sens_temp.temp_lo = 0;
+        sens_temp.temp_hi = 0;
+		sens_temp.seq = 0;
+		tempCnts = 0;
+    }
+
+	// Initialize Vcc capability/structure if eeprom configured
+    if (config.en_vcc) {
+        sens_vcc.sensorId = SENID_VCC;
+        sens_vcc.vcc_lo = 0;
+        sens_vcc.vcc_hi = 0;
+		sens_vcc.seq = 0;
+		vccCnts = 0;
+    }
+
+	// Initialize switch 1 capability/structure if eeprom configured
+    if (config.en_sw1) {
+		DDRB &= ~(1<<SWITCH_1);
+		sens_sw1.sensorId = SENID_SW1;
+		sens_sw1.seq = 2; // init to 2 because it is called 2 times before first xmit
+		getSw1();
+		if (config.sw1_pc) {
+			GIMSK = (1<<SWITCH_1_GMSK);
+			PCMSK1 = (1<<SWITCH_1_MSK);
+		}
+    } else {
+		// if we leave pin as input, it will draw more current if it oscillates
+		// but if we pgm pin as output and there REALLY is a switch connected
+		// we are would  do damage. That is why there is a series resistor on
+		// switch pin.
+		DDRB |= (1<<SWITCH_1);
+		PORTB &= ~(1<<SWITCH_1);
+	}
+
+	// Initialize switch 2 capability/structure if eeprom configured
+    if (config.en_sw2) {
+		DDRA &= ~(1<<SWITCH_2);
+        sens_sw2.sensorId = SENID_SW2;
+		sens_sw2.seq = 2; // init to 2 because it is called 2 times before first xmit
+		getSw2();
+		if (config.sw2_pc) {
+			GIMSK |= (1<<SWITCH_2_GMSK);
+			PCMSK0 = (1<<SWITCH_2_MSK);
+		}
+    } else {
+		// if we leave pin as input, it will draw more current if it oscillates
+		// but if we pgm pin as output and there REALLY is a switch connected
+		// we are would  do damage. That is why there is a series resistor on
+		// switch pin.
+		DDRA |= (1<<SWITCH_2);
+		PORTA &= ~(1<<SWITCH_2);
+    }
+#endif
 
