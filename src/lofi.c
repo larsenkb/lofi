@@ -53,8 +53,6 @@
 #define F_CPU 1000000UL
 
 #define EN_TPL5111		1
-//#define HI_AMPS			1		/* pwr on/off nrf due to damaged chip */
-								/* and high current drain */
 
 #define SWITCH_1        2       /* PORTB bit2 */
 #define SWITCH_1_MSK    2
@@ -82,13 +80,15 @@
 	}
 
 #if EN_TPL5111
+
 #define NRF_VCC_INIT(x)
 #define NRF_VCC_ASSERT(x)
 #define NRF_VCC_DEASSERT(x)
 #define NRF_VCC_DLY_MS(x,y)
+
 #else
-//#define NRF_VCC_PIN				((1<<3) | (1<<7))
-#define NRF_VCC_PIN				((1<<7))
+
+#define NRF_VCC_PIN				((1<<3) | (1<<7))
 void NRF_VCC_INIT(config_t *config)
 {
 	if (config->en_nrfVcc) {
@@ -142,35 +142,38 @@ void dlyMS(uint16_t ms)
 #define TXBUF_SIZE		8	// must be a power of 2!!!
 
 
-/* ------------------------------------------------------------- */
+// GLOBAL VARIABLES --------------------------------------------
 uint8_t				gstatus;
 
-/* ------------------------------------------------------------- */
 sensor_switch_t		sens_sw1;
 sensor_switch_t		sens_sw2;
+sensor_ctr_t		sens_ctr;
+sensor_vcc_t		sens_vcc;
+sensor_temp_t		sens_temp;
 config_t			config;
 
+uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
+uint8_t				txBufWr, txBufRd;
 
-/* FORWARD DECLARATIONS ---------------------------------------- */
+// FORWARD DECLARATIONS ----------------------------------------
 
 uint16_t readVccTemp(uint8_t mux_select);
-//uint16_t readTemperature(void);
 void printConfig(void);
 uint8_t getSw1(void);
 uint8_t getSw2(void);
-void ctr_msg_init(config_t *config, sensor_ctr_t *sens_ctr);
-void temp_msg_init(config_t *config, sensor_temp_t *sens_temp);
-void vcc_msg_init(config_t *config, sensor_vcc_t *sens_vcc);
-void sw1_msg_init(config_t *config, sensor_switch_t *sens_sw1);
-void sw2_msg_init(config_t *config, sensor_switch_t *sens_sw2);
+void ctr_msg_init(void);
+void temp_msg_init(void);
+void vcc_msg_init(void);
+void sw1_msg_init(void);
+void sw2_msg_init(void);
 
 
+#if 0
 //****************************************************************
 // setup_watchdog - configure watchdog timeout
 //
 // 0=16ms, 1=32ms,2=64ms,3=128ms,4=250ms,5=500ms
 // 6=1 sec,7=2 sec, 8=4 sec, 9= 8sec
-#if 0
 void setup_watchdog(int val)
 {
 	uint8_t bb;
@@ -199,7 +202,6 @@ void watchdog_disable(void)
 	WDTCSR = bb;
 	WDTCSR = bb2;
 }
-#endif
 
 //****************************************************************
 // watchdog_isr
@@ -208,7 +210,6 @@ void watchdog_disable(void)
 // The system wakes up when any interrupt occurs. Setting this
 // flag lets background (main loop) know that the watchdog
 // interrupt occured so that we can xmit.
-#if 0
 ISR(WATCHDOG_vect)
 {
 	FLAGS |= wdFlag;
@@ -242,7 +243,7 @@ ISR(PCINT1_vect)
 ISR(PCINT0_vect)
 {
 #if EN_TPL5111
-//	FLAGS |= wdFlag;
+	FLAGS |= wdFlag;
 #else
 	uint8_t pinState;
 
@@ -260,17 +261,12 @@ ISR(PCINT0_vect)
 //
 int main(void)
 {
-	uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
-	uint8_t				txBufWr, txBufRd;
-	speed_t				speed;
-	sensor_ctr_t		sens_ctr;
-	sensor_vcc_t		sens_vcc;
-	sensor_temp_t		sens_temp;
-	uint16_t			swCnts;
-	uint16_t			vccCnts;
-	uint16_t			tempCnts;
-	uint16_t			ctrCnts;
-	uint8_t				jj;
+	speed_t		speed;
+	uint16_t	swCnts;
+	uint16_t	vccCnts;
+	uint16_t	tempCnts;
+	uint16_t	ctrCnts;
+	uint8_t		jj;
 
 
 	gstatus = 0;
@@ -314,8 +310,9 @@ int main(void)
 	else
 		speed = speed_2M;
 
-	// init hardware pins for talking to radio
+	// init hardware SPI pins for talking to radio
 	nrf24_init();
+	// KBL TODO, can I disable SPI peripheral to save power???
     
     // initialize uart if eeprom configured
 	if (config.en_txDbg) {
@@ -327,16 +324,16 @@ int main(void)
 	}
 
 	// Initialize counter message structure
-	ctr_msg_init(&config, &sens_ctr);
+	ctr_msg_init();
 
 	// Initialize Temperature message structure
-	temp_msg_init(&config, &sens_temp);
+	temp_msg_init();
 
 	// Initialize Vcc message structure
-	vcc_msg_init(&config, &sens_vcc);
+	vcc_msg_init();
 
 	// Initialize switch 1 message structure
-	sw1_msg_init(&config, &sens_sw1);
+	sw1_msg_init();
 
 
 #if EN_TPL5111
@@ -349,7 +346,7 @@ int main(void)
 #else
 
 	// Initialize switch 2 message structure
-	sw2_msg_init(&config, &sens_sw2);
+	sw2_msg_init();
 
 #endif
 
@@ -371,7 +368,7 @@ int main(void)
 	NRF_VCC_DEASSERT(&config);
 
     // initialize watchdog and associated variables
-    swCnts = config.swCntsMax - 1; //0;
+    swCnts = config.swCntsMax - 1;
 	ctrCnts = config.ctrCntsMax - 1;
 	vccCnts = config.vccCntsMax - 1;
 	tempCnts = config.tempCntsMax - 1;
@@ -401,9 +398,10 @@ int main(void)
 	//
 	while (1) {
 
+#if 0
 #if EN_TPL5111
 		if (PINA & (1<<SWITCH_2)) {
-			FLAGS |= wdFlag;
+//			FLAGS |= wdFlag;
 			// assert DONE for TPL5111
 //			GIMSK &= ~(1<<SWITCH_2_GMSK);
 //			PCMSK0 &= ~(1<<SWITCH_2_MSK);
@@ -416,8 +414,10 @@ int main(void)
 //			PCMSK0 = (1<<SWITCH_2_MSK);
 		}
 #endif
+#endif
 
 		// can only execute this code if watchdog or TPL5111 DRVn asserted
+		// check to see if it is time to xmit a pkt...
 		if (FLAGS & wdFlag)	{
 			FLAGS &= ~wdFlag;
 			// inc count and set flag if time to xmit a message
@@ -448,7 +448,9 @@ int main(void)
 			}
 		}
 
-		// switch one or switch two might not be enabled, so this code
+		// build messages to xmit
+
+		// switch 1 or switch 2 might not be enabled, so this code
 		// packs messages in the three byte packet properly
 		jj = 0;
 
@@ -478,6 +480,33 @@ int main(void)
 			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
 		}
 
+		// build a Vcc message if flag set
+	   	if (FLAGS & vccFlag) {
+            int16_t vcc = readVccTemp(VCC_MUX);
+			vcc += config.vccFudge;
+			FLAGS &= ~vccFlag;
+//            sens_vcc.sensorId = SENID_VCC;
+            sens_vcc.vcc_lo = vcc & 0xFF;
+            sens_vcc.vcc_hi = (vcc>>8) & 0x3;
+			sens_vcc.seq++;
+            memcpy(&txBuf[txBufWr][0], &sens_vcc, sizeof(sens_vcc));
+			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+
+		}
+
+		// build a Temperature message if flag set
+		if (FLAGS & tempFlag) {
+            int16_t temp = readVccTemp(TEMP_MUX);
+			temp += config.tempFudge;
+			FLAGS &= ~tempFlag;
+//            sens_temp.sensorId = SENID_TEMP;
+            sens_temp.temp_lo = temp & 0xFF;
+            sens_temp.temp_hi = (temp>>8) & 0x3;
+			sens_temp.seq++;
+            memcpy(&txBuf[txBufWr][0], &sens_temp, sizeof(sens_temp));
+			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+		}
+
 		// build a counter message if flag set
 		if (FLAGS & ctrFlag) {
 			FLAGS &= ~ctrFlag;
@@ -488,33 +517,8 @@ int main(void)
 			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
         }
 
-		// build a Vcc message if flag set
-	   	if (FLAGS & vccFlag) {
-            uint16_t vcc = readVccTemp(VCC_MUX);
-			vcc += config.vccFudge;
-			FLAGS &= ~vccFlag;
-            sens_vcc.sensorId = SENID_VCC;
-            sens_vcc.vcc_lo = vcc & 0xFF;
-            sens_vcc.vcc_hi = (vcc>>8) & 0x3;
-            memcpy(&txBuf[txBufWr][0], &sens_vcc, sizeof(sens_vcc));
-			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
-
-		}
-
-		// build a Temperature message if flag set
-		if (FLAGS & tempFlag) {
-            uint16_t temp = readVccTemp(TEMP_MUX);
-			temp += config.tempFudge;
-			FLAGS &= ~tempFlag;
-            sens_temp.sensorId = SENID_TEMP;
-            sens_temp.temp_lo = temp & 0xFF;
-            sens_temp.temp_hi = (temp>>8) & 0x3;
-            memcpy(&txBuf[txBufWr][0], &sens_temp, sizeof(sens_temp));
-			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
-		}
-
-//		while (txBufRd != txBufWr) {	// enable to send all pkts
-		if (txBufRd != txBufWr) {		// enable to send 1 pkt per WDT
+		while (txBufRd != txBufWr) {	// enable to send all pkts
+//		if (txBufRd != txBufWr) {		// enable to send 1 pkt per WDT
 			int i;
 
 			// Set Divide by 8 for 8MHz RC oscillator 
@@ -536,19 +540,17 @@ int main(void)
 		    /* Automatically goes to TX mode */
 			nrf24_send(&config, &txBuf[txBufRd][0], NRF24_PAYLOAD_LEN-1);        
 
+			// Bump the read index
+			txBufRd = (txBufRd + 1) & (TXBUF_SIZE - 1);
+
 			/* Start the transmission */
 			nrf24_pulseCE();
-	//ASSERT_CE();
-//	nrf24_isSending();
-//	_delay_loop_2(250);
 
 			i = 0;
 			while (nrf24_isSending() && i < 100) {
 				i++;
 			}
 			
-	//DEASSERT_CE();
-
 		    nrf24_powerDown();            
 
 			NRF_VCC_DEASSERT(&config);
@@ -563,7 +565,7 @@ int main(void)
 				} else {
 					LED_ASSERT(LED_GRN);
 					// Bump the read index
-					txBufRd = (txBufRd + 1) & (TXBUF_SIZE - 1);
+					//txBufRd = (txBufRd + 1) & (TXBUF_SIZE - 1);
 				}
 
 				_delay_loop_1(33); // ~100us at 1MHz F_CPU
@@ -572,6 +574,21 @@ int main(void)
 
         } //endof: while (txBufRd != TxBufWr) {
 
+#if EN_TPL5111
+		if (PINA & (1<<SWITCH_2)) {
+//			FLAGS |= wdFlag;
+			// assert DONE for TPL5111
+//			GIMSK &= ~(1<<SWITCH_2_GMSK);
+//			PCMSK0 &= ~(1<<SWITCH_2_MSK);
+//			PCMSK0 = 0;
+			PORTA |= (1<<3);
+//			_delay_loop_1(15);
+			PORTA &= ~(1<<3);
+//			_delay_loop_1(15);
+//			GIMSK |= (1<<SWITCH_2_GMSK);
+//			PCMSK0 = (1<<SWITCH_2_MSK);
+		}
+#endif
 		// go to sleep and wait for interrupt (tpl5111 DRVn, watchdog or switch pin change)
 	    sleep_mode();                // System sleeps here
 
@@ -738,54 +755,54 @@ uint16_t readVccTemp(uint8_t mux_select)
 }
 
 // initialze counter message structure
-void ctr_msg_init(config_t *config, sensor_ctr_t *sens_ctr)
+void ctr_msg_init(void)
 {
 	// Initialize counter capability/structure if eeprom configured
-    if (config->en_ctr) {
-        sens_ctr->sensorId = SENID_CTR;
-        sens_ctr->ctr_lo = 0;
-        sens_ctr->ctr_hi = 0;
-		sens_ctr->seq = 0;
+    if (config.en_ctr) {
+        sens_ctr.sensorId = SENID_CTR;
+        sens_ctr.ctr_lo = 0;
+        sens_ctr.ctr_hi = 0;
+		sens_ctr.seq = 0;
 //		ctrCnts = 0;
     }
 }
 
 // initialze Temperature message structure
-void temp_msg_init(config_t *config, sensor_temp_t *sens_temp)
+void temp_msg_init(void)
 {
 	// Initialize Temp capability/structure if eeprom configured
-	if (config->en_temp) {
-        sens_temp->sensorId = SENID_TEMP;
-        sens_temp->temp_lo = 0;
-        sens_temp->temp_hi = 0;
-		sens_temp->seq = 0;
+	if (config.en_temp) {
+        sens_temp.sensorId = SENID_TEMP;
+        sens_temp.temp_lo = 0;
+        sens_temp.temp_hi = 0;
+		sens_temp.seq = 0;
 //		tempCnts = 0;
     }
 }
 
 // initialze Vcc message structure
-void vcc_msg_init(config_t *config, sensor_vcc_t *sens_vcc)
+void vcc_msg_init(void)
 {
 	// Initialize Vcc capability/structure if eeprom configured
-    if (config->en_vcc) {
-        sens_vcc->sensorId = SENID_VCC;
-        sens_vcc->vcc_lo = 0;
-        sens_vcc->vcc_hi = 0;
-		sens_vcc->seq = 0;
+    if (config.en_vcc) {
+        sens_vcc.sensorId = SENID_VCC;
+        sens_vcc.vcc_lo = 0;
+        sens_vcc.vcc_hi = 0;
+		sens_vcc.seq = 0;
 //		vccCnts = 0;
     }
 }
 
 // initialze switch 1 message structure
-void sw1_msg_init(config_t *config, sensor_switch_t *sens_sw1)
+void sw1_msg_init(void)
 {
 	// Initialize switch 1 capability/structure if eeprom configured
-    if (config->en_sw1) {
+    if (config.en_sw1) {
 		DDRB &= ~(1<<SWITCH_1);
-		sens_sw1->sensorId = SENID_SW1;
-		sens_sw1->seq = 2; // init to 2 because it is called 2 times before first xmit
+		sens_sw1.sensorId = SENID_SW1;
+		sens_sw1.seq = 2; // init to 2 because it is called 2 times before first xmit
 		getSw1();
-		if (config->sw1_pc) {
+		if (config.sw1_pc) {
 			GIMSK = (1<<SWITCH_1_GMSK);
 			PCMSK1 = (1<<SWITCH_1_MSK);
 		}
@@ -800,15 +817,15 @@ void sw1_msg_init(config_t *config, sensor_switch_t *sens_sw1)
 }
 
 // initialze switch 2 message structure
-void sw2_msg_init(config_t *config, sensor_switch_t *sens_sw2)
+void sw2_msg_init(void)
 {
 	// Initialize switch 2 capability/structure if eeprom configured
-    if (config->en_sw2) {
+    if (config.en_sw2) {
 		DDRA &= ~(1<<SWITCH_2);
-        sens_sw2->sensorId = SENID_SW2;
-		sens_sw2->seq = 2; // init to 2 because it is called 2 times before first xmit
+        sens_sw2.sensorId = SENID_SW2;
+		sens_sw2.seq = 2; // init to 2 because it is called 2 times before first xmit
 		getSw2();
-		if (config->sw2_pc) {
+		if (config.sw2_pc) {
 			GIMSK |= (1<<SWITCH_2_GMSK);
 			PCMSK0 = (1<<SWITCH_2_MSK);
 		}
