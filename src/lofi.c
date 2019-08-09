@@ -81,6 +81,12 @@
 
 #if EN_TPL5111
 
+#define DONE_PIN	3
+#define PULSE_DONE()  do {			\
+		PORTA |= (1<<DONE_PIN);		\
+		PORTA &= ~(1<<DONE_PIN);	\
+	} while(0)
+
 #define NRF_VCC_INIT(x)
 #define NRF_VCC_ASSERT(x)
 #define NRF_VCC_DEASSERT(x)
@@ -124,7 +130,7 @@ void NRF_VCC_DLY_MS(config_t *config, uint16_t ms)
 int clk_div = 3;
 #define CLK_DIV			3
 #define CORE_FAST		CLK_DIV
-#define CORE_SLOW		(CLK_DIV+1)	
+#define CORE_SLOW		(CLK_DIV)	
 #define CORE_CLK_SET(x)  {	\
 	CLKPR = (1<<CLKPCE);	\
 	CLKPR = (x);			\
@@ -517,19 +523,21 @@ int main(void)
 			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
         }
 
-		while (txBufRd != txBufWr) {	// enable to send all pkts
 //		if (txBufRd != txBufWr) {		// enable to send 1 pkt per WDT
+
+		// Set Divide by 8 for 8MHz RC oscillator 
+		cli();
+		CORE_CLK_SET(CORE_SLOW);
+		sei();
+
+		NRF_VCC_ASSERT(&config);
+		NRF_VCC_DLY_MS(&config, 1250); // running at 500kHz
+		nrf24_powerUpTx();
+		dlyMS(4);
+
+		while (txBufRd != txBufWr) {	// enable to send all pkts
 			int i;
 
-			// Set Divide by 8 for 8MHz RC oscillator 
-			cli();
-			CORE_CLK_SET(CORE_SLOW);
-			sei();
-
-			NRF_VCC_ASSERT(&config);
-			NRF_VCC_DLY_MS(&config, 1250); // running at 500kHz
-			nrf24_powerUpTx();
-			dlyMS(4);
 			nrf24_clearStatus();
 
 			if (config.en_nrfVcc) {
@@ -551,6 +559,7 @@ int main(void)
 				i++;
 			}
 			
+#if 0
 		    nrf24_powerDown();            
 
 			NRF_VCC_DEASSERT(&config);
@@ -558,6 +567,7 @@ int main(void)
 			cli();
 			CORE_CLK_SET(CORE_FAST);
 			sei();
+#endif
 
 //			if (config.en_aa) {
 				if (gstatus & (1 << MAX_RT)) {        
@@ -573,17 +583,27 @@ int main(void)
 //			}
 
         } //endof: while (txBufRd != TxBufWr) {
+#if 1
+		    nrf24_powerDown();            
+
+			NRF_VCC_DEASSERT(&config);
+
+			cli();
+			CORE_CLK_SET(CORE_FAST);
+			sei();
+#endif
 
 #if EN_TPL5111
 		if (PINA & (1<<SWITCH_2)) {
+			PULSE_DONE();
 //			FLAGS |= wdFlag;
 			// assert DONE for TPL5111
 //			GIMSK &= ~(1<<SWITCH_2_GMSK);
 //			PCMSK0 &= ~(1<<SWITCH_2_MSK);
 //			PCMSK0 = 0;
-			PORTA |= (1<<3);
+//			PORTA |= (1<<3);
 //			_delay_loop_1(15);
-			PORTA &= ~(1<<3);
+//			PORTA &= ~(1<<3);
 //			_delay_loop_1(15);
 //			GIMSK |= (1<<SWITCH_2_GMSK);
 //			PCMSK0 = (1<<SWITCH_2_MSK);
