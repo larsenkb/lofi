@@ -52,7 +52,8 @@
 #undef F_CPU
 #define F_CPU 1000000UL
 
-#define HI_AMPS			1		/* pwr on/off nrf due to damaged chip */
+#define EN_TPL5111		1
+//#define HI_AMPS			1		/* pwr on/off nrf due to damaged chip */
 								/* and high current drain */
 
 #define SWITCH_1        2       /* PORTB bit2 */
@@ -80,8 +81,14 @@
 		PORTB &= ~(x);	\
 	}
 
-
-#define NRF_VCC_PIN				((1<<3) | (1<<7))
+#if EN_TPL5111
+#define NRF_VCC_INIT(x)
+#define NRF_VCC_ASSERT(x)
+#define NRF_VCC_DEASSERT(x)
+#define NRF_VCC_DLY_MS(x,y)
+#else
+//#define NRF_VCC_PIN				((1<<3) | (1<<7))
+#define NRF_VCC_PIN				((1<<7))
 void NRF_VCC_INIT(config_t *config)
 {
 	if (config->en_nrfVcc) {
@@ -111,15 +118,8 @@ void NRF_VCC_DLY_MS(config_t *config, uint16_t ms)
 		_delay_loop_2(ms);
 	}
 }
-
-//#define NRF_VCC_INIT()			(DDRA |= NRF_VCC_PIN)
-//#define NRF_VCC_ASSERT()		{DDRA |= NRF_VCC_PIN; PORTA |= NRF_VCC_PIN;}
-#if 0
-//#define NRF_VCC_DEASSERT()		
-#else
-//#define NRF_VCC_DEASSERT()		{PORTA &= ~NRF_VCC_PIN; DDRA &= ~NRF_VCC_PIN;}
 #endif
-//#define NRF_VCC_DLY_MS(x)		_delay_ms((x))
+
 
 int clk_div = 3;
 #define CLK_DIV			3
@@ -165,6 +165,7 @@ uint8_t getSw2(void);
 //
 // 0=16ms, 1=32ms,2=64ms,3=128ms,4=250ms,5=500ms
 // 6=1 sec,7=2 sec, 8=4 sec, 9= 8sec
+#if 1
 void setup_watchdog(int val)
 {
 	uint8_t bb;
@@ -184,6 +185,17 @@ void setup_watchdog(int val)
 	WDTCSR |= _BV(WDIE);
 }
 
+void watchdog_disable(void)
+{
+	uint8_t bb,bb2;
+
+	bb  = (1<<WDCE) | (1<<WDE);
+	bb2 = 0;
+	WDTCSR = bb;
+	WDTCSR = bb2;
+}
+#endif
+
 //****************************************************************
 // watchdog_isr
 //
@@ -191,11 +203,18 @@ void setup_watchdog(int val)
 // The system wakes up when any interrupt occurs. Setting this
 // flag lets background (main loop) know that the watchdog
 // interrupt occured so that we can xmit.
+#if 1
 ISR(WATCHDOG_vect)
 {
 	FLAGS |= wdFlag;
-}
 
+	       
+	LED_ASSERT(LED_RED);
+	LED_ASSERT(LED_GRN);
+	dlyMS(40);
+	LED_DEASSERT(LED_RED | LED_GRN);
+}
+#endif
 
 //****************************************************************
 // pinChange_isr
@@ -217,6 +236,9 @@ ISR(PCINT1_vect)
 //
 ISR(PCINT0_vect)
 {
+#if EN_TPL5111
+//	FLAGS |= wdFlag;
+#else
 	uint8_t pinState;
 
 	pinState = (PINA>>SWITCH_2) & 1;
@@ -224,6 +246,7 @@ ISR(PCINT0_vect)
         FLAGS &= ~sw2Flag;
     else
         FLAGS |= sw2Flag;
+#endif
 }
 
 
@@ -266,6 +289,13 @@ int main(void)
 
 	// read the config params from eeprom
 	eeprom_read_block(&config, 0, sizeof(config));
+
+#if EN_TPL5111
+	config.en_nrfVcc = 0;
+	// set DONE as output/low
+	DDRA |= (1<<3);
+	PORTA &= ~(1<<3);
+#endif
 
     // init LED pins as OUTPUT
 	LED_INIT(LED_GRN | LED_RED);		// set as output even if not used
@@ -337,6 +367,13 @@ int main(void)
 		PORTB &= ~(1<<SWITCH_1);
 	}
 
+#if EN_TPL5111
+	config.en_sw2 = 0;
+	DDRA &= ~(1<<SWITCH_2);
+	GIMSK |= (1<<SWITCH_2_GMSK);
+	PCMSK0 = (1<<SWITCH_2_MSK);
+#else
+
 	// Initialize switch 2 capability/structure if eeprom configured
     if (config.en_sw2) {
 		DDRA &= ~(1<<SWITCH_2);
@@ -355,6 +392,7 @@ int main(void)
 		DDRA |= (1<<SWITCH_2);
 		PORTA &= ~(1<<SWITCH_2);
     }
+#endif
 
 	// initialize pins and apply power to NRF
 	NRF_VCC_INIT(&config);
@@ -378,9 +416,15 @@ int main(void)
 	ctrCnts = config.ctrCntsMax - 1;
 	vccCnts = config.vccCntsMax - 1;
 	tempCnts = config.tempCntsMax - 1;
+
+#if EN_TPL5111
+	config.en_wd = 0;
+	watchdog_disable();
+#else
 	if (config.en_wd) {
 		setup_watchdog(config.wd_timeout + 5);
 	}
+#endif
 
 	// set sleep mode one time here
     set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
@@ -399,17 +443,29 @@ int main(void)
 	//
 	while (1) {
 
-		// go to sleep and wait for interrupt (watchdog or pin change)
-	    sleep_mode();                // System sleeps here
+#if EN_TPL5111
+		if (PINA & (1<<SWITCH_2)) {
+			FLAGS |= wdFlag;
+			// assert DONE for TPL5111
+//			GIMSK &= ~(1<<SWITCH_2_GMSK);
+//			PCMSK0 &= ~(1<<SWITCH_2_MSK);
+//			PCMSK0 = 0;
+			PORTA |= (1<<3);
+//			_delay_loop_1(15);
+			PORTA &= ~(1<<3);
+//			_delay_loop_1(15);
+//			GIMSK |= (1<<SWITCH_2_GMSK);
+//			PCMSK0 = (1<<SWITCH_2_MSK);
+		}
+#endif
+
 
 		if (FLAGS & wdFlag)	{	// can only enter here if en_wd is true
 			FLAGS &= ~wdFlag;
-//			if (config.wdCnts) {
 			if (++swCnts >= config.swCntsMax) {
 				swCnts = 0;
 				FLAGS |= swFlag;
 			}
-//			}
 			if (config.en_ctr) {
 				if (++ctrCnts >= config.ctrCntsMax) {
 					ctrCnts = 0;
@@ -430,56 +486,31 @@ int main(void)
 			}
 		}
 
-#if 0
-		if (FLAGS & swFlag) {
-			uint8_t jj = 0;
+		jj = 0;
 
-			FLAGS &= ~swFlag;
-
-			if (config.sw1_enb) {
+		if (config.en_sw1) {
+			if (FLAGS & (swFlag | sw1Flag)) {
+				FLAGS &= ~sw1Flag;
 				txBuf[txBufWr][jj++] = getSw1();
 			}
+		}
 
-
-			if (config.sw2_enb) {
+		if (config.en_sw2) {
+			if (FLAGS & (swFlag | sw2Flag)) {
+				FLAGS &= ~sw2Flag;
 				txBuf[txBufWr][jj++] = getSw2();
 			}
+		}
 
-			if (jj) {
-				if (jj == 1) {
-					txBuf[txBufWr][jj] = 0;
-				}
-				txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+		FLAGS &= ~swFlag;
+
+		if (jj) {
+			if (jj == 1) {
+				txBuf[txBufWr][jj] = 0;
 			}
+			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+		}
 
-		} else {
-#endif
-			jj = 0;
-
-			if (config.en_sw1) {
-				if (FLAGS & (swFlag | sw1Flag)) {
-					FLAGS &= ~sw1Flag;
-					txBuf[txBufWr][jj++] = getSw1();
-				}
-			}
-
-			if (config.en_sw2) {
-				if (FLAGS & (swFlag | sw2Flag)) {
-					FLAGS &= ~sw2Flag;
-					txBuf[txBufWr][jj++] = getSw2();
-				}
-			}
-
-			FLAGS &= ~swFlag;
-
-			if (jj) {
-				if (jj == 1) {
-					txBuf[txBufWr][jj] = 0;
-				}
-				txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
-			}
-
-//		}
 
 		if (FLAGS & ctrFlag) {
 			FLAGS &= ~ctrFlag;
@@ -571,6 +602,9 @@ int main(void)
 //			}
 
         } //endof: while (txBufRd != TxBufWr) {
+
+		// go to sleep and wait for interrupt (watchdog or pin change)
+	    sleep_mode();                // System sleeps here
 
     } //endof: while (1) {
 
