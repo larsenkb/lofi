@@ -131,10 +131,16 @@ int clk_div = 3;
 #define CLK_DIV			3
 #define CORE_FAST		CLK_DIV
 #define CORE_SLOW		(CLK_DIV)	
-#define CORE_CLK_SET(x)  {	\
-	CLKPR = (1<<CLKPCE);	\
-	CLKPR = (x);			\
-	clk_div = (x); }
+#define CORE_CLK_SET(x)  do {	\
+		CLKPR = (1<<CLKPCE);	\
+		CLKPR = (x);			\
+		clk_div = (x);			\
+	} while(0)
+#define CORE_CLK_SETi(x)  do {	\
+		cli();					\
+		CORE_CLK_SET(x);		\
+		sei();					\
+	} while(0)
 
 void dlyMS(uint16_t ms)
 {
@@ -158,6 +164,11 @@ sensor_vcc_t		sens_vcc;
 sensor_temp_t		sens_temp;
 config_t			config;
 
+uint16_t			swCnts;
+uint16_t			vccCnts;
+uint16_t			tempCnts;
+uint16_t			ctrCnts;
+
 uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
 uint8_t				txBufWr, txBufRd;
 
@@ -172,6 +183,8 @@ void temp_msg_init(void);
 void vcc_msg_init(void);
 void sw1_msg_init(void);
 void sw2_msg_init(void);
+void flags_update(void);
+void msgs_build(void);
 
 
 #if 0
@@ -268,11 +281,7 @@ ISR(PCINT0_vect)
 int main(void)
 {
 	speed_t		speed;
-	uint16_t	swCnts;
-	uint16_t	vccCnts;
-	uint16_t	tempCnts;
-	uint16_t	ctrCnts;
-	uint8_t		jj;
+//	uint8_t		jj;
 
 
 	gstatus = 0;
@@ -404,131 +413,26 @@ int main(void)
 	//
 	while (1) {
 
-#if 0
 #if EN_TPL5111
-		if (PINA & (1<<SWITCH_2)) {
-//			FLAGS |= wdFlag;
-			// assert DONE for TPL5111
-//			GIMSK &= ~(1<<SWITCH_2_GMSK);
-//			PCMSK0 &= ~(1<<SWITCH_2_MSK);
-//			PCMSK0 = 0;
-			PORTA |= (1<<3);
-//			_delay_loop_1(15);
-			PORTA &= ~(1<<3);
-//			_delay_loop_1(15);
-//			GIMSK |= (1<<SWITCH_2_GMSK);
-//			PCMSK0 = (1<<SWITCH_2_MSK);
+		if (wdFlag) {
+			PULSE_DONE();
 		}
-#endif
 #endif
 
 		// can only execute this code if watchdog or TPL5111 DRVn asserted
 		// check to see if it is time to xmit a pkt...
 		if (FLAGS & wdFlag)	{
 			FLAGS &= ~wdFlag;
-			// inc count and set flag if time to xmit a message
-			if (++swCnts >= config.swCntsMax) {
-				swCnts = 0;
-				FLAGS |= swFlag;
-			}
-			// inc count and set flag if time to xmit a message
-			if (config.en_ctr) {
-				if (++ctrCnts >= config.ctrCntsMax) {
-					ctrCnts = 0;
-					FLAGS |= ctrFlag;
-				}
-			}
-			// inc count and set flag if time to xmit a message
-			if (config.en_vcc) {
-				if (++vccCnts >= config.vccCntsMax) {
-					vccCnts = 0;
-					FLAGS |= vccFlag;
-				}
-			}
-			// inc count and set flag if time to xmit a message
-			if (config.en_temp) {
-				if (++tempCnts >= config.tempCntsMax) {
-					tempCnts = 0;
-					FLAGS |= tempFlag;
-				}
-			}
+			flags_update();
 		}
 
 		// build messages to xmit
-
-		// switch 1 or switch 2 might not be enabled, so this code
-		// packs messages in the three byte packet properly
-		jj = 0;
-
-		if (config.en_sw1) {
-			if (FLAGS & (swFlag | sw1Flag)) {
-				FLAGS &= ~sw1Flag;
-				txBuf[txBufWr][jj++] = getSw1();
-			}
-		}
-
-		if (config.en_sw2) {
-			if (FLAGS & (swFlag | sw2Flag)) {
-				FLAGS &= ~sw2Flag;
-				txBuf[txBufWr][jj++] = getSw2();
-			}
-		}
-
-		// we are done building switch messages, clear flag
-		FLAGS &= ~swFlag;
-
-		// if there is only one switch message in 3 byte packet, zero
-		// the third byte of the packet
-		if (jj) {
-			if (jj == 1) {
-				txBuf[txBufWr][jj] = 0;
-			}
-			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
-		}
-
-		// build a Vcc message if flag set
-	   	if (FLAGS & vccFlag) {
-            int16_t vcc = readVccTemp(VCC_MUX);
-			vcc += config.vccFudge;
-			FLAGS &= ~vccFlag;
-//            sens_vcc.sensorId = SENID_VCC;
-            sens_vcc.vcc_lo = vcc & 0xFF;
-            sens_vcc.vcc_hi = (vcc>>8) & 0x3;
-			sens_vcc.seq++;
-            memcpy(&txBuf[txBufWr][0], &sens_vcc, sizeof(sens_vcc));
-			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
-
-		}
-
-		// build a Temperature message if flag set
-		if (FLAGS & tempFlag) {
-            int16_t temp = readVccTemp(TEMP_MUX);
-			temp += config.tempFudge;
-			FLAGS &= ~tempFlag;
-//            sens_temp.sensorId = SENID_TEMP;
-            sens_temp.temp_lo = temp & 0xFF;
-            sens_temp.temp_hi = (temp>>8) & 0x3;
-			sens_temp.seq++;
-            memcpy(&txBuf[txBufWr][0], &sens_temp, sizeof(sens_temp));
-			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
-		}
-
-		// build a counter message if flag set
-		if (FLAGS & ctrFlag) {
-			FLAGS &= ~ctrFlag;
-            memcpy(&txBuf[txBufWr][0], &sens_ctr, sizeof(sens_ctr));
-			sens_ctr.seq++;
-            if (++sens_ctr.ctr_lo == 0)
-                sens_ctr.ctr_hi++;
-			txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
-        }
+		msgs_build();
 
 //		if (txBufRd != txBufWr) {		// enable to send 1 pkt per WDT
 
 		// Set Divide by 8 for 8MHz RC oscillator 
-		cli();
-		CORE_CLK_SET(CORE_SLOW);
-		sei();
+		CORE_CLK_SETi(CORE_SLOW);
 
 		NRF_VCC_ASSERT(&config);
 		NRF_VCC_DLY_MS(&config, 1250); // running at 500kHz
@@ -559,16 +463,6 @@ int main(void)
 				i++;
 			}
 			
-#if 0
-		    nrf24_powerDown();            
-
-			NRF_VCC_DEASSERT(&config);
-
-			cli();
-			CORE_CLK_SET(CORE_FAST);
-			sei();
-#endif
-
 //			if (config.en_aa) {
 				if (gstatus & (1 << MAX_RT)) {        
 					LED_ASSERT(LED_RED);
@@ -583,31 +477,19 @@ int main(void)
 //			}
 
         } //endof: while (txBufRd != TxBufWr) {
-#if 1
-		    nrf24_powerDown();            
 
-			NRF_VCC_DEASSERT(&config);
+	    nrf24_powerDown();            
 
-			cli();
-			CORE_CLK_SET(CORE_FAST);
-			sei();
-#endif
+		NRF_VCC_DEASSERT(&config);
 
+		CORE_CLK_SETi(CORE_FAST);
+
+#if 0
 #if EN_TPL5111
 		if (PINA & (1<<SWITCH_2)) {
 			PULSE_DONE();
-//			FLAGS |= wdFlag;
-			// assert DONE for TPL5111
-//			GIMSK &= ~(1<<SWITCH_2_GMSK);
-//			PCMSK0 &= ~(1<<SWITCH_2_MSK);
-//			PCMSK0 = 0;
-//			PORTA |= (1<<3);
-//			_delay_loop_1(15);
-//			PORTA &= ~(1<<3);
-//			_delay_loop_1(15);
-//			GIMSK |= (1<<SWITCH_2_GMSK);
-//			PCMSK0 = (1<<SWITCH_2_MSK);
 		}
+#endif
 #endif
 		// go to sleep and wait for interrupt (tpl5111 DRVn, watchdog or switch pin change)
 	    sleep_mode();                // System sleeps here
@@ -859,6 +741,104 @@ void sw2_msg_init(void)
     }
 }
 
+
+void flags_update(void)
+{
+	// inc count and set flag if time to xmit a message
+	if (++swCnts >= config.swCntsMax) {
+		swCnts = 0;
+		FLAGS |= swFlag;
+	}
+	// inc count and set flag if time to xmit a message
+	if (config.en_ctr) {
+		if (++ctrCnts >= config.ctrCntsMax) {
+			ctrCnts = 0;
+			FLAGS |= ctrFlag;
+		}
+	}
+	// inc count and set flag if time to xmit a message
+	if (config.en_vcc) {
+		if (++vccCnts >= config.vccCntsMax) {
+			vccCnts = 0;
+			FLAGS |= vccFlag;
+		}
+	}
+	// inc count and set flag if time to xmit a message
+	if (config.en_temp) {
+		if (++tempCnts >= config.tempCntsMax) {
+			tempCnts = 0;
+			FLAGS |= tempFlag;
+		}
+	}
+}
+
+void msgs_build(void)
+{
+	// switch 1 or switch 2 might not be enabled, so this code
+	// packs messages in the three byte packet properly
+	uint8_t jj = 0;
+
+	if (config.en_sw1) {
+		if (FLAGS & (swFlag | sw1Flag)) {
+			FLAGS &= ~sw1Flag;
+			txBuf[txBufWr][jj++] = getSw1();
+		}
+	}
+
+	if (config.en_sw2) {
+		if (FLAGS & (swFlag | sw2Flag)) {
+			FLAGS &= ~sw2Flag;
+			txBuf[txBufWr][jj++] = getSw2();
+		}
+	}
+
+	// we are done building switch messages, clear flag
+	FLAGS &= ~swFlag;
+
+	// if there is only one switch message in 3 byte packet, zero
+	// the third byte of the packet
+	if (jj) {
+		if (jj == 1) {
+			txBuf[txBufWr][jj] = 0;
+		}
+		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+	}
+
+	// build a Vcc message if flag set
+   	if (FLAGS & vccFlag) {
+		int16_t vcc = readVccTemp(VCC_MUX);
+		vcc += config.vccFudge;
+		FLAGS &= ~vccFlag;
+		sens_vcc.vcc_lo = vcc & 0xFF;
+		sens_vcc.vcc_hi = (vcc>>8) & 0x3;
+		sens_vcc.seq++;
+		memcpy(&txBuf[txBufWr][0], &sens_vcc, sizeof(sens_vcc));
+		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+
+	}
+
+	// build a Temperature message if flag set
+	if (FLAGS & tempFlag) {
+		int16_t temp = readVccTemp(TEMP_MUX);
+		temp += config.tempFudge;
+		FLAGS &= ~tempFlag;
+		sens_temp.temp_lo = temp & 0xFF;
+		sens_temp.temp_hi = (temp>>8) & 0x3;
+		sens_temp.seq++;
+		memcpy(&txBuf[txBufWr][0], &sens_temp, sizeof(sens_temp));
+		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+	}
+
+	// build a counter message if flag set
+	if (FLAGS & ctrFlag) {
+		FLAGS &= ~ctrFlag;
+		memcpy(&txBuf[txBufWr][0], &sens_ctr, sizeof(sens_ctr));
+		sens_ctr.seq++;
+		if (++sens_ctr.ctr_lo == 0)
+			sens_ctr.ctr_hi++;
+		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+	}
+}
 
 #if 0
 	// Initialize counter capability/structure if eeprom configured
