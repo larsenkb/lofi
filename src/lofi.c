@@ -66,17 +66,16 @@
 #define NRF24_PAYLOAD_LEN        3
 
 // ---------  LED MACROS  ----------
-#define LED_RED					(1<<0)  // PORTB bit0
-#define LED_GRN					(1<<1)  // PORTB bit1
+#define LED						(1<<1)  // PORTB bit1
 
-#define LED_INIT(x)				{DDRB |= (x); PORTB &= ~(x);}
+#define LED_INIT(x)				{DDRB |= (x); PORTB |= (x);}
 #define LED_ASSERT(x)	\
 	if (config.en_led) {	\
-		PORTB |= (x);	\
+		PORTB &= ~(x);	\
 	}
 #define LED_DEASSERT(x)	\
 	if (config.en_led) {	\
-		PORTB &= ~(x);	\
+		PORTB |= (x);	\
 	}
 
 #if EN_TPL5111
@@ -232,12 +231,6 @@ void watchdog_disable(void)
 ISR(WATCHDOG_vect)
 {
 	FLAGS |= wdFlag;
-
-	       
-	LED_ASSERT(LED_RED);
-	LED_ASSERT(LED_GRN);
-	dlyMS(40);
-	LED_DEASSERT(LED_RED | LED_GRN);
 }
 #endif
 
@@ -313,8 +306,9 @@ int main(void)
 	PORTA &= ~(1<<3);
 #endif
 
-    // init LED pins as OUTPUT
-	LED_INIT(LED_GRN | LED_RED);		// set as output even if not used
+    // init LED pin as OUTPUT
+	// LED pin is a shared resource with txDbg
+	LED_INIT(LED);		// set as output/high even if not used
 
 	// get desired xmit speed
 	///KBL TODO move this to nrf24_config???
@@ -406,6 +400,8 @@ int main(void)
 	if (config.en_txDbg) {
 		printConfig();
 		_delay_loop_2(25000); // ~100ms at 1MHz F_CPU
+		// disable timer0 to reduce power
+		PRR |= (1<<PRTIM0);
 	}
 
 	//
@@ -463,17 +459,17 @@ int main(void)
 				i++;
 			}
 			
-//			if (config.en_aa) {
-				if (gstatus & (1 << MAX_RT)) {        
-					LED_ASSERT(LED_RED);
-				} else {
-					LED_ASSERT(LED_GRN);
-					// Bump the read index
-					//txBufRd = (txBufRd + 1) & (TXBUF_SIZE - 1);
-				}
 
-				_delay_loop_1(33); // ~100us at 1MHz F_CPU
-				LED_DEASSERT(LED_RED | LED_GRN);
+//			if (config.en_aa) {
+				if (0) { //(gstatus & (1 << MAX_RT)) {        
+					LED_ASSERT(LED);
+					_delay_loop_1(15); // ~100us at 1MHz F_CPU
+					LED_DEASSERT(LED);
+					dlyMS(50); // ~100us at 1MHz F_CPU
+				}
+				LED_ASSERT(LED);
+				_delay_loop_1(10); // ~100us at 1MHz F_CPU
+				LED_DEASSERT(LED);
 //			}
 
         } //endof: while (txBufRd != TxBufWr) {
@@ -530,15 +526,15 @@ void printConfig(void)
 
     xprintf("\nnrf config:\n");
 	xprintf("00:%02x", nrf24_rdReg(0));
-    xprintf("  01:%02x", nrf24_rdReg(1));
-    xprintf("  02:%02x", nrf24_rdReg(2));
-    xprintf("  03:%02X", nrf24_rdReg(3));
-	xprintf("  04:%02X", nrf24_rdReg(4));
-    xprintf("  05:%02X", nrf24_rdReg(5));
-    xprintf("  06:%02X", nrf24_rdReg(6));
-    xprintf("  07:%02X", nrf24_rdReg(7));
-    xprintf("  08:%02X", nrf24_rdReg(8));
-    xprintf("  09:%02X\n", nrf24_rdReg(9));
+    xprintf(" %02x", nrf24_rdReg(1));
+    xprintf(" %02x", nrf24_rdReg(2));
+    xprintf(" %02X", nrf24_rdReg(3));
+	xprintf(" %02X", nrf24_rdReg(4));
+    xprintf(" %02X", nrf24_rdReg(5));
+    xprintf(" %02X", nrf24_rdReg(6));
+    xprintf(" %02X", nrf24_rdReg(7));
+    xprintf(" %02X\n", nrf24_rdReg(8));
+    xprintf("09:%02X\n", nrf24_rdReg(9));
 	memset(ta, 0, 8);
 	nrf24_readRegister(0x0a, ta, 5);
 	xprintf("0A:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
