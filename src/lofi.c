@@ -1,8 +1,12 @@
 //-------------------------------------------------------------
 // lofi + nrf24
 //-------------------------------------------------------------
-// This is software that runs on a LoFi board designed by David Cook.
+// This project was influenced by a LoFi board designed by
+// David Cook and entered in a hackaday contest.
 // See https://hackaday.io/project/1552-lofi
+//
+// At the beginning, I used OshPark to make some of his
+// boards and hacked them up to work with a NRF24l01+.
 //
 // I have mated the lofi board with a nrf24l01+ instead of using
 // the 433 MHz transmitter described at the above link.
@@ -23,6 +27,17 @@
 // The polling period is configured in eeprom.
 // A 10-bit incrementing count is sent on polled transmissions.
 //
+// I am making my own board now that uses a TPL5111 to periodically
+// wake the ATtiny84. I do not power down the t84 but instead,
+// use a Pin Change function to monitor the TPL5111 DRVn pin.
+// So, I continuously draw about 2uA.
+// I chose this method, so that my original code did not have
+// to change much. I can still use SRAM between sleeps.
+// If I powered down the t84 between DRVn assertions, I would
+// have to send all messages each time. I don't think there
+// would be a method of only sending Vcc messages every n
+// DRV assertions.
+//
 // I'm using spin loop delays. See util/delay_basic.h.
 // _delay_loop_1 loop is three cycles and takes an 8-bit
 // loop counter. 3us * 256 is max delay.
@@ -33,7 +48,6 @@
 // See config_t structure for details.
 //
 //---------------------------------------------------------
-
 
 #include <avr/io.h>
 #include <avr/sleep.h>
@@ -52,105 +66,8 @@
 #undef F_CPU
 #define F_CPU 1000000UL
 
-#define EN_TPL5111		1
-
-#define SWITCH_1        2       /* PORTB bit2 */
-#define SWITCH_1_MSK    2
-#define SWITCH_1_GMSK   5
-#define SWITCH_2        2       /* PORTA bit2 */
-#define SWITCH_2_MSK    2
-#define SWITCH_2_GMSK   4
-
-#define EEPROM_NODEID_ADR        ((uint8_t *)0)
-
-#define NRF24_PAYLOAD_LEN        3
-
-// ---------  LED MACROS  ----------
-#define LED						(1<<1)  // PORTB bit1
-
-#define LED_INIT(x)				{DDRB |= (x); PORTB |= (x);}
-#define LED_ASSERT(x)	\
-	if (config.en_led) {	\
-		PORTB &= ~(x);	\
-	}
-#define LED_DEASSERT(x)	\
-	if (config.en_led) {	\
-		PORTB |= (x);	\
-	}
-
-#if EN_TPL5111
-
-#define DONE_PIN	3
-#define PULSE_DONE()  do {			\
-		PORTA |= (1<<DONE_PIN);		\
-		PORTA &= ~(1<<DONE_PIN);	\
-	} while(0)
-
-#define NRF_VCC_INIT(x)
-#define NRF_VCC_ASSERT(x)
-#define NRF_VCC_DEASSERT(x)
-#define NRF_VCC_DLY_MS(x,y)
-
-#else
-
-#define NRF_VCC_PIN				((1<<3) | (1<<7))
-void NRF_VCC_INIT(config_t *config)
-{
-	if (config->en_nrfVcc) {
-		DDRA |= NRF_VCC_PIN;
-	}
-}
-
-void NRF_VCC_ASSERT(config_t *config)
-{
-	if (config->en_nrfVcc) {
-		DDRA |= NRF_VCC_PIN;
-		PORTA |= NRF_VCC_PIN;
-	}
-}
-
-void NRF_VCC_DEASSERT(config_t *config)
-{
-	if (config->en_nrfVcc) {
-		PORTA &= ~NRF_VCC_PIN;
-		DDRA &= ~NRF_VCC_PIN;
-	}
-}
-
-void NRF_VCC_DLY_MS(config_t *config, uint16_t ms)
-{
-	if (config->en_nrfVcc) {
-		_delay_loop_2(ms);
-	}
-}
-#endif
-
 
 int clk_div = 3;
-#define CLK_DIV			3
-#define CORE_FAST		CLK_DIV
-#define CORE_SLOW		(CLK_DIV)	
-#define CORE_CLK_SET(x)  do {	\
-		CLKPR = (1<<CLKPCE);	\
-		CLKPR = (x);			\
-		clk_div = (x);			\
-	} while(0)
-#define CORE_CLK_SETi(x)  do {	\
-		cli();					\
-		CORE_CLK_SET(x);		\
-		sei();					\
-	} while(0)
-
-void dlyMS(uint16_t ms)
-{
-	uint16_t val = 2000>>clk_div;
-	val -= ms;
-	while(ms--) {
-		_delay_loop_2(val);
-	}
-}
-
-#define TXBUF_SIZE		8	// must be a power of 2!!!
 
 
 // GLOBAL VARIABLES --------------------------------------------
@@ -171,22 +88,9 @@ uint16_t			ctrCnts;
 uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
 uint8_t				txBufWr, txBufRd;
 
-// FORWARD DECLARATIONS ----------------------------------------
-
-uint16_t readVccTemp(uint8_t mux_select);
-void printConfig(void);
-uint8_t getSw1(void);
-uint8_t getSw2(void);
-void ctr_msg_init(void);
-void temp_msg_init(void);
-void vcc_msg_init(void);
-void sw1_msg_init(void);
-void sw2_msg_init(void);
-void flags_update(void);
-void msgs_build(void);
-
-
 #if 0
+// TODO: maybe use watchdog for switch debounce...
+//
 //****************************************************************
 // setup_watchdog - configure watchdog timeout
 //
@@ -236,22 +140,34 @@ ISR(WATCHDOG_vect)
 
 //****************************************************************
 // pinChange_isr
-//
+//   for PB0, PB1, PB2, PB3
+//   DRVn -> PB0
+//   SW1  -> PB2
 ISR(PCINT1_vect)
 {
 	uint8_t pinState;
+	uint8_t pinbState;
 
-	pinState = (PINB>>SWITCH_1) & 1;
+	pinbState = PINB;
+
+#if EN_TPL5111
+	if (PCMSK1 & 0x01) {
+		if (pinbState & 0x01) {
+			FLAGS |= wdFlag;
+		}
+	}
+#endif
+	pinState = (pinbState >> SWITCH_1) & 1;
     if (sens_sw1.lastState == pinState)
         FLAGS &= ~sw1Flag;
     else
         FLAGS |= sw1Flag;
 }
 
-
+#if 0
 //****************************************************************
 // pinChange_isr
-//
+//   for PA0 thru PA7
 ISR(PCINT0_vect)
 {
 #if EN_TPL5111
@@ -266,7 +182,7 @@ ISR(PCINT0_vect)
         FLAGS |= sw2Flag;
 #endif
 }
-
+#endif
 
 //****************************************************************
 // main
@@ -274,7 +190,6 @@ ISR(PCINT0_vect)
 int main(void)
 {
 	speed_t		speed;
-//	uint8_t		jj;
 
 
 	gstatus = 0;
@@ -296,14 +211,18 @@ int main(void)
 	// reduce power on TIMER1
 	PRR |= (1<<PRTIM1);
 
+	// reduce power of USI peripherla
+	PRR |= (1<<PRUSI);
+
 	// read the config params from eeprom
 	eeprom_read_block(&config, 0, sizeof(config));
 
 #if EN_TPL5111
-	config.en_nrfVcc = 0;	// incase enabled...
+	config.en_nrfVcc = 0;	// in case enabled...
 	// set DONE as output/low
-	DDRA |= (1<<3);
-	PORTA &= ~(1<<3);
+	//DDRA |= (1<<3);
+	//PORTA &= ~(1<<3);
+	DONE_INIT();
 #endif
 
     // init LED pin as OUTPUT
@@ -321,7 +240,6 @@ int main(void)
 
 	// init hardware SPI pins for talking to radio
 	nrf24_init();
-	// KBL TODO, can I disable SPI peripheral to save power???
     
     // initialize uart if eeprom configured
 	if (config.en_txDbg) {
@@ -347,22 +265,22 @@ int main(void)
 
 #if EN_TPL5111
 
-	config.en_sw2 = 0;	// incase enabled...
+	config.en_sw2 = 0;	// in case enabled...
+#if 1
+	DDRB &= ~(1<<0);
+	GIMSK |= (1<<5);
+	PCMSK1 |= (1<<0);
+#else
 	DDRA &= ~(1<<SWITCH_2);
 	GIMSK |= (1<<SWITCH_2_GMSK);
 	PCMSK0 = (1<<SWITCH_2_MSK);
-
+#endif
 #else
 
 	// Initialize switch 2 message structure
 	sw2_msg_init();
 
 #endif
-
-	// initialize pins and apply power to NRF
-	NRF_VCC_INIT(&config);
-	NRF_VCC_ASSERT(&config);
-	NRF_VCC_DLY_MS(&config, 25000);
 
 	// switch to a lower clock rate while reading/writing NRF. For some
 	// reason I can't get anywhere near 10MHz SPI CLK rate.
@@ -374,7 +292,6 @@ int main(void)
 
 	// Power off radio as we go into our first sleep
 	nrf24_powerDown();            
-	NRF_VCC_DEASSERT(&config);
 
     // initialize watchdog and associated variables
     swCnts = config.swCntsMax - 1;
@@ -410,8 +327,8 @@ int main(void)
 	while (1) {
 
 #if EN_TPL5111
-		if (wdFlag) {
-			PULSE_DONE();
+		if (FLAGS & wdFlag) {
+			DONE_PULSE();
 		}
 #endif
 
@@ -425,13 +342,9 @@ int main(void)
 		// build messages to xmit
 		msgs_build();
 
-//		if (txBufRd != txBufWr) {		// enable to send 1 pkt per WDT
-
 		// Set Divide by 8 for 8MHz RC oscillator 
 		CORE_CLK_SETi(CORE_SLOW);
 
-		NRF_VCC_ASSERT(&config);
-		NRF_VCC_DLY_MS(&config, 1250); // running at 500kHz
 		nrf24_powerUpTx();
 		dlyMS(4);
 
@@ -454,6 +367,7 @@ int main(void)
 			/* Start the transmission */
 			nrf24_pulseCE();
 
+			// spin waiting for xmit to complete with good or max retries set
 			i = 0;
 			while (nrf24_isSending() && i < 100) {
 				i++;
@@ -476,14 +390,12 @@ int main(void)
 
 	    nrf24_powerDown();            
 
-		NRF_VCC_DEASSERT(&config);
-
 		CORE_CLK_SETi(CORE_FAST);
 
 #if 0
 #if EN_TPL5111
 		if (PINA & (1<<SWITCH_2)) {
-			PULSE_DONE();
+			DONE_PULSE();
 		}
 #endif
 #endif
@@ -494,6 +406,7 @@ int main(void)
 
     return 0;
 }
+
 
 // read switch one and update state
 uint8_t  getSw1(void)
@@ -701,8 +614,8 @@ void sw1_msg_init(void)
 		sens_sw1.seq = 2; // init to 2 because it is called 2 times before first xmit
 		getSw1();
 		if (config.sw1_pc) {
-			GIMSK = (1<<SWITCH_1_GMSK);
-			PCMSK1 = (1<<SWITCH_1_MSK);
+			GIMSK |= (1<<SWITCH_1_GMSK);
+			PCMSK1 |= (1<<SWITCH_1_MSK);
 		}
     } else {
 		// if we leave pin as input, it will draw more current if it oscillates
@@ -833,6 +746,15 @@ void msgs_build(void)
 		if (++sens_ctr.ctr_lo == 0)
 			sens_ctr.ctr_hi++;
 		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+	}
+}
+
+void dlyMS(uint16_t ms)
+{
+	uint16_t val = 2000>>clk_div;
+	val -= ms;
+	while(ms--) {
+		_delay_loop_2(val);
 	}
 }
 
