@@ -6,7 +6,7 @@
 // See https://hackaday.io/project/1552-lofi
 //
 // At the beginning, I used OshPark to make some of his
-// boards and hacked them up to work with a NRF24l01+.
+// boards and hacked them to work with an NRF24l01+.
 //
 // I have mated the lofi board with a nrf24l01+ instead of using
 // the 433 MHz transmitter described at the above link.
@@ -18,14 +18,17 @@
 // I am using parts of nrf24.[ch] by <ihsan@ehribar.me>
 // (see nrf24.c for license)
 //
-// The lofi+nrf24 combo draws ~6 uA in the idle mode.
-// It can monitor two reed switches, Vcc and internal temperature.
+// The lofi+nrf24 combo draws ~2 uA in the idle mode.
+// It can monitor one reed switch, Vcc and internal temperature.
 // It uses the internal RC oscillator so timing is not very accurate.
-// The switches can be configured to generate an interrupt on Pin Change
-// which will trigger a transmission. Otherwise, they are only polled
+// The switch can be configured to generate an interrupt on Pin Change
+// which will trigger a transmission. Otherwise, it is only polled
 // and switch state will be transmitted at the polling frequency.
-// The polling period is configured in eeprom.
-// A 10-bit incrementing count is sent on polled transmissions.
+// The polling period is configured in eeprom, to be a multiple
+// of the TPL5111 period.
+//
+// A 10-bit incrementing count can also be enabled and will be
+// sent at a frequency determined by eeprom and TPL5111.
 //
 // I am making my own board now that uses a TPL5111 to periodically
 // wake the ATtiny84. I do not power down the t84 but instead,
@@ -74,7 +77,7 @@ int clk_div = 3;
 uint8_t				gstatus;
 
 sensor_switch_t		sens_sw1;
-sensor_switch_t		sens_sw2;
+//sensor_switch_t		sens_sw2;
 sensor_ctr_t		sens_ctr;
 sensor_vcc_t		sens_vcc;
 sensor_temp_t		sens_temp;
@@ -88,55 +91,6 @@ uint16_t			ctrCnts;
 uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
 uint8_t				txBufWr, txBufRd;
 
-#if 0
-// TODO: maybe use watchdog for switch debounce...
-//
-//****************************************************************
-// setup_watchdog - configure watchdog timeout
-//
-// 0=16ms, 1=32ms,2=64ms,3=128ms,4=250ms,5=500ms
-// 6=1 sec,7=2 sec, 8=4 sec, 9= 8sec
-void setup_watchdog(int val)
-{
-	uint8_t bb;
-
-	if (val > 9 )
-		return;		//val = 9;
-	bb = val & 7;
-	if (val > 7)
-		bb |= (1<<5);
-	bb |= (1<<WDCE);
-
-	MCUSR &= ~(1<<WDRF);
-	// start timed sequence
-	WDTCSR |= (1<<WDCE) | (1<<WDE);
-	// set new watchdog timeout value
-	WDTCSR = bb;
-	WDTCSR |= _BV(WDIE);
-}
-
-void watchdog_disable(void)
-{
-	uint8_t bb,bb2;
-
-	bb  = (1<<WDCE) | (1<<WDE);
-	bb2 = 0;
-	WDTCSR = bb;
-	WDTCSR = bb2;
-}
-
-//****************************************************************
-// watchdog_isr
-//
-// This runs each time the watch dog wakes us up from sleep
-// The system wakes up when any interrupt occurs. Setting this
-// flag lets background (main loop) know that the watchdog
-// interrupt occured so that we can xmit.
-ISR(WATCHDOG_vect)
-{
-	FLAGS |= wdFlag;
-}
-#endif
 
 //****************************************************************
 // pinChange_isr
@@ -150,39 +104,21 @@ ISR(PCINT1_vect)
 
 	pinbState = PINB;
 
-#if EN_TPL5111
+	// did TPL5111 generate interrupt?
 	if (PCMSK1 & 0x01) {
 		if (pinbState & 0x01) {
 			FLAGS |= wdFlag;
 		}
 	}
-#endif
+
+	// always check the reed switch state
 	pinState = (pinbState >> SWITCH_1) & 1;
     if (sens_sw1.lastState == pinState)
-        FLAGS &= ~sw1Flag;
+        FLAGS &= ~swFlag;
     else
-        FLAGS |= sw1Flag;
+        FLAGS |= swFlag;
 }
 
-#if 0
-//****************************************************************
-// pinChange_isr
-//   for PA0 thru PA7
-ISR(PCINT0_vect)
-{
-#if EN_TPL5111
-	FLAGS |= wdFlag;
-#else
-	uint8_t pinState;
-
-	pinState = (PINA>>SWITCH_2) & 1;
-    if (sens_sw2.lastState == pinState)
-        FLAGS &= ~sw2Flag;
-    else
-        FLAGS |= sw2Flag;
-#endif
-}
-#endif
 
 //****************************************************************
 // main
@@ -217,13 +153,8 @@ int main(void)
 	// read the config params from eeprom
 	eeprom_read_block(&config, 0, sizeof(config));
 
-#if EN_TPL5111
-	config.en_nrfVcc = 0;	// in case enabled...
-	// set DONE as output/low
-	//DDRA |= (1<<3);
-	//PORTA &= ~(1<<3);
+	// initialze pin to reset TPL5111
 	DONE_INIT();
-#endif
 
     // init LED pin as OUTPUT
 	// LED pin is a shared resource with txDbg
@@ -262,25 +193,10 @@ int main(void)
 	// Initialize switch 1 message structure
 	sw1_msg_init();
 
-
-#if EN_TPL5111
-
-	config.en_sw2 = 0;	// in case enabled...
-#if 1
+// is this needed???
 	DDRB &= ~(1<<0);
 	GIMSK |= (1<<5);
 	PCMSK1 |= (1<<0);
-#else
-	DDRA &= ~(1<<SWITCH_2);
-	GIMSK |= (1<<SWITCH_2_GMSK);
-	PCMSK0 = (1<<SWITCH_2_MSK);
-#endif
-#else
-
-	// Initialize switch 2 message structure
-	sw2_msg_init();
-
-#endif
 
 	// switch to a lower clock rate while reading/writing NRF. For some
 	// reason I can't get anywhere near 10MHz SPI CLK rate.
@@ -298,14 +214,6 @@ int main(void)
 	ctrCnts = config.ctrCntsMax - 1;
 	vccCnts = config.vccCntsMax - 1;
 	tempCnts = config.tempCntsMax - 1;
-
-#if EN_TPL5111
-	config.en_wd = 0;	// incase enabled...
-#else
-	if (config.en_wd) {
-		setup_watchdog(config.wd_timeout + 5);
-	}
-#endif
 
 	// set sleep mode one time here
     set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
@@ -326,15 +234,17 @@ int main(void)
 	//
 	while (1) {
 
-#if EN_TPL5111
+#if 0
+		// if TPL5111 woke us up, reset it
 		if (FLAGS & wdFlag) {
 			DONE_PULSE();
 		}
 #endif
 
-		// can only execute this code if watchdog or TPL5111 DRVn asserted
+		// can only execute this code if TPL5111 DRVn asserted
 		// check to see if it is time to xmit a pkt...
 		if (FLAGS & wdFlag)	{
+			DONE_PULSE();
 			FLAGS &= ~wdFlag;
 			flags_update();
 		}
@@ -353,10 +263,12 @@ int main(void)
 
 			nrf24_clearStatus();
 
+#if 0
 			if (config.en_nrfVcc) {
 				// Initialize radio channel and payload length
 				nrf24_config(&config, NRF24_PAYLOAD_LEN, speed);
 			}
+#endif
 
 		    /* Automatically goes to TX mode */
 			nrf24_send(&config, &txBuf[txBufRd][0], NRF24_PAYLOAD_LEN-1);        
@@ -393,11 +305,9 @@ int main(void)
 		CORE_CLK_SETi(CORE_FAST);
 
 #if 0
-#if EN_TPL5111
 		if (PINA & (1<<SWITCH_2)) {
 			DONE_PULSE();
 		}
-#endif
 #endif
 		// go to sleep and wait for interrupt (tpl5111 DRVn, watchdog or switch pin change)
 	    sleep_mode();                // System sleeps here
@@ -408,7 +318,9 @@ int main(void)
 }
 
 
+//
 // read switch one and update state
+//
 uint8_t  getSw1(void)
 {
 	uint8_t pinState;
@@ -420,19 +332,9 @@ uint8_t  getSw1(void)
 	return (*(uint8_t *)&sens_sw1);
 }
 
-// read switch two and update state
-uint8_t getSw2(void)
-{
-	uint8_t pinState;
-
-	pinState = (PINA>>SWITCH_2) & 1;
-	sens_sw2.closed = config.sw2_rev ^ pinState;
-	sens_sw2.lastState = pinState;
-	sens_sw2.seq++;
-	return (*(uint8_t *)&sens_sw2);
-}
-
+//
 // print nrf24l01+ configuration out serial port
+//
 void printConfig(void)
 {
 	uint8_t  ta[8];
@@ -565,7 +467,9 @@ uint16_t readVccTemp(uint8_t mux_select)
 	
 }
 
+//
 // initialze counter message structure
+//
 void ctr_msg_init(void)
 {
 	// Initialize counter capability/structure if eeprom configured
@@ -574,11 +478,12 @@ void ctr_msg_init(void)
         sens_ctr.ctr_lo = 0;
         sens_ctr.ctr_hi = 0;
 		sens_ctr.seq = 0;
-//		ctrCnts = 0;
     }
 }
 
+//
 // initialze Temperature message structure
+//
 void temp_msg_init(void)
 {
 	// Initialize Temp capability/structure if eeprom configured
@@ -587,11 +492,12 @@ void temp_msg_init(void)
         sens_temp.temp_lo = 0;
         sens_temp.temp_hi = 0;
 		sens_temp.seq = 0;
-//		tempCnts = 0;
     }
 }
 
+//
 // initialze Vcc message structure
+//
 void vcc_msg_init(void)
 {
 	// Initialize Vcc capability/structure if eeprom configured
@@ -600,11 +506,12 @@ void vcc_msg_init(void)
         sens_vcc.vcc_lo = 0;
         sens_vcc.vcc_hi = 0;
 		sens_vcc.seq = 0;
-//		vccCnts = 0;
     }
 }
 
+//
 // initialze switch 1 message structure
+//
 void sw1_msg_init(void)
 {
 	// Initialize switch 1 capability/structure if eeprom configured
@@ -627,30 +534,9 @@ void sw1_msg_init(void)
 	}
 }
 
-// initialze switch 2 message structure
-void sw2_msg_init(void)
-{
-	// Initialize switch 2 capability/structure if eeprom configured
-    if (config.en_sw2) {
-		DDRA &= ~(1<<SWITCH_2);
-        sens_sw2.sensorId = SENID_SW2;
-		sens_sw2.seq = 2; // init to 2 because it is called 2 times before first xmit
-		getSw2();
-		if (config.sw2_pc) {
-			GIMSK |= (1<<SWITCH_2_GMSK);
-			PCMSK0 = (1<<SWITCH_2_MSK);
-		}
-    } else {
-		// if we leave pin as input, it will draw more current if it oscillates
-		// but if we pgm pin as output and there REALLY is a switch connected
-		// we are would  do damage. That is why there is a series resistor on
-		// switch pin.
-		DDRA |= (1<<SWITCH_2);
-		PORTA &= ~(1<<SWITCH_2);
-    }
-}
-
-
+//
+// Update flags to know what packets to build for xmission
+//
 void flags_update(void)
 {
 	// inc count and set flag if time to xmit a message
@@ -681,35 +567,17 @@ void flags_update(void)
 	}
 }
 
+
+//
+// Build and queue packets for xmission
+//
 void msgs_build(void)
 {
-	// switch 1 or switch 2 might not be enabled, so this code
-	// packs messages in the three byte packet properly
-	uint8_t jj = 0;
 
-	if (config.en_sw1) {
-		if (FLAGS & (swFlag | sw1Flag)) {
-			FLAGS &= ~sw1Flag;
-			txBuf[txBufWr][jj++] = getSw1();
-		}
-	}
-
-	if (config.en_sw2) {
-		if (FLAGS & (swFlag | sw2Flag)) {
-			FLAGS &= ~sw2Flag;
-			txBuf[txBufWr][jj++] = getSw2();
-		}
-	}
-
-	// we are done building switch messages, clear flag
-	FLAGS &= ~swFlag;
-
-	// if there is only one switch message in 3 byte packet, zero
-	// the third byte of the packet
-	if (jj) {
-		if (jj == 1) {
-			txBuf[txBufWr][jj] = 0;
-		}
+	if (FLAGS & swFlag) {
+		FLAGS &= ~swFlag;
+		txBuf[txBufWr][0] = getSw1();
+		txBuf[txBufWr][1] = 0;
 		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
 	}
 
@@ -749,6 +617,9 @@ void msgs_build(void)
 	}
 }
 
+//
+// a milli-second delay routine (spin loop)
+//
 void dlyMS(uint16_t ms)
 {
 	uint16_t val = 2000>>clk_div;
@@ -757,70 +628,3 @@ void dlyMS(uint16_t ms)
 		_delay_loop_2(val);
 	}
 }
-
-#if 0
-	// Initialize counter capability/structure if eeprom configured
-    if (config.en_ctr) {
-        sens_ctr.sensorId = SENID_CTR;
-        sens_ctr.ctr_lo = 0;
-        sens_ctr.ctr_hi = 0;
-		sens_ctr.seq = 0;
-		ctrCnts = 0;
-    }
-	// Initialize Temp capability/structure if eeprom configured
-	if (config.en_temp) {
-        sens_temp.sensorId = SENID_TEMP;
-        sens_temp.temp_lo = 0;
-        sens_temp.temp_hi = 0;
-		sens_temp.seq = 0;
-		tempCnts = 0;
-    }
-
-	// Initialize Vcc capability/structure if eeprom configured
-    if (config.en_vcc) {
-        sens_vcc.sensorId = SENID_VCC;
-        sens_vcc.vcc_lo = 0;
-        sens_vcc.vcc_hi = 0;
-		sens_vcc.seq = 0;
-		vccCnts = 0;
-    }
-
-	// Initialize switch 1 capability/structure if eeprom configured
-    if (config.en_sw1) {
-		DDRB &= ~(1<<SWITCH_1);
-		sens_sw1.sensorId = SENID_SW1;
-		sens_sw1.seq = 2; // init to 2 because it is called 2 times before first xmit
-		getSw1();
-		if (config.sw1_pc) {
-			GIMSK = (1<<SWITCH_1_GMSK);
-			PCMSK1 = (1<<SWITCH_1_MSK);
-		}
-    } else {
-		// if we leave pin as input, it will draw more current if it oscillates
-		// but if we pgm pin as output and there REALLY is a switch connected
-		// we are would  do damage. That is why there is a series resistor on
-		// switch pin.
-		DDRB |= (1<<SWITCH_1);
-		PORTB &= ~(1<<SWITCH_1);
-	}
-
-	// Initialize switch 2 capability/structure if eeprom configured
-    if (config.en_sw2) {
-		DDRA &= ~(1<<SWITCH_2);
-        sens_sw2.sensorId = SENID_SW2;
-		sens_sw2.seq = 2; // init to 2 because it is called 2 times before first xmit
-		getSw2();
-		if (config.sw2_pc) {
-			GIMSK |= (1<<SWITCH_2_GMSK);
-			PCMSK0 = (1<<SWITCH_2_MSK);
-		}
-    } else {
-		// if we leave pin as input, it will draw more current if it oscillates
-		// but if we pgm pin as output and there REALLY is a switch connected
-		// we are would  do damage. That is why there is a series resistor on
-		// switch pin.
-		DDRA |= (1<<SWITCH_2);
-		PORTA &= ~(1<<SWITCH_2);
-    }
-#endif
-

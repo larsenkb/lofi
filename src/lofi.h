@@ -141,18 +141,14 @@ typedef struct {
 	uint8_t		sw1_rev			:1;
 	uint8_t		sw1_pc			:1;
 	uint8_t		en_sw1			:1;
-	uint8_t		sw2_rev			:1;
-	uint8_t		sw2_pc			:1;
-	uint8_t		en_sw2			:1;
-	uint8_t		en_wd			:1;
-	uint8_t		rsvd_1			:1;
+	uint8_t		rsvd_1			:5;
 
 	// byte 2
     uint8_t     en_ctr			:1;
     uint8_t     en_vcc			:1;
 	uint8_t		en_temp			:1;
 	uint8_t		en_led			:1;
-	uint8_t		en_nrfVcc		:1;
+	uint8_t		en_led_nack		:1;
 	uint8_t		en_txDbg		:1;
 	uint8_t		spd_1M			:1;
 	uint8_t		spd_250K		:1;
