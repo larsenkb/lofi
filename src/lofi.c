@@ -77,7 +77,6 @@ int clk_div = 3;
 uint8_t				gstatus;
 
 sensor_switch_t		sens_sw1;
-//sensor_switch_t		sens_sw2;
 sensor_ctr_t		sens_ctr;
 sensor_vcc_t		sens_vcc;
 sensor_temp_t		sens_temp;
@@ -229,6 +228,8 @@ int main(void)
 		PRR |= (1<<PRTIM0);
 	}
 
+	FLAGS |= swFlag;
+
 	//
 	// Start of main loop
 	//
@@ -285,7 +286,31 @@ int main(void)
 				i++;
 			}
 			
+#if 1
+			if (config.en_aa) {
+				if (config.en_led) {
+					if (gstatus & (1<<TX_DS)) {
+						LED_ASSERT(LED);
+						_delay_loop_1(15); // ~100us at 1MHz F_CPU
+						LED_DEASSERT(LED);
+					}
+				}
+				if (config.en_led_nack) {
+					if (gstatus &  (1<<MAX_RT)) {
+						LED_ASSERT(LED);
+						_delay_loop_1(15); // ~100us at 1MHz F_CPU
+						LED_DEASSERT(LED);
+					}
+				}
+			} else {
+				if (config.en_led_nack || config.en_led) {
+					LED_ASSERT(LED);
+					_delay_loop_1(15); // ~100us at 1MHz F_CPU
+					LED_DEASSERT(LED);
+				}
+			}
 
+#else
 //			if (config.en_aa) {
 				if (0) { //(gstatus & (1 << MAX_RT)) {        
 					LED_ASSERT(LED);
@@ -297,6 +322,7 @@ int main(void)
 				_delay_loop_1(10); // ~100us at 1MHz F_CPU
 				LED_DEASSERT(LED);
 //			}
+#endif
 
         } //endof: while (txBufRd != TxBufWr) {
 
@@ -540,9 +566,11 @@ void sw1_msg_init(void)
 void flags_update(void)
 {
 	// inc count and set flag if time to xmit a message
-	if (++swCnts >= config.swCntsMax) {
-		swCnts = 0;
-		FLAGS |= swFlag;
+	if (config.en_sw1) {
+		if (++swCnts >= config.swCntsMax) {
+			swCnts = 0;
+			FLAGS |= swFlag;
+		}
 	}
 	// inc count and set flag if time to xmit a message
 	if (config.en_ctr) {

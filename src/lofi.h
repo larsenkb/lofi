@@ -36,15 +36,20 @@ typedef enum {
 //was PORTB bit 1
 #define LED						(1<<3)  // PORTA bit3
 
-#define LED_INIT(x)				{DDRA |= (x); PORTA |= (x);}
+#define LED_INIT(x)				do {DDRA |= (x); PORTA |= (x);} while(0)
+#if 1
+#define LED_ASSERT(x)			do {PORTA &= ~(x);} while(0)
+#define LED_DEASSERT(x)			do {PORTA |= (x);} while(0)
+#else
 #define LED_ASSERT(x)	\
-	if (config.en_led) {	\
+	if (config.en_led || config.en_led_nack) {	\
 		PORTA &= ~(x);	\
 	}
 #define LED_DEASSERT(x)	\
-	if (config.en_led) {	\
+	if (config.en_led || config.en_led_nack) {	\
 		PORTA |= (x);	\
 	}
+#endif
 
 // define DONE pin and macro
 // was PORTB bit 3
@@ -141,34 +146,35 @@ typedef struct {
 	uint8_t		sw1_rev			:1;
 	uint8_t		sw1_pc			:1;
 	uint8_t		en_sw1			:1;
-	uint8_t		rsvd_1			:5;
+	uint8_t		rsvd_1			:3;
+	uint8_t		spd_1M			:1;
+	uint8_t		spd_250K		:1;
 
 	// byte 2
     uint8_t     en_ctr			:1;
     uint8_t     en_vcc			:1;
 	uint8_t		en_temp			:1;
+	uint8_t		en_txDbg		:1;
 	uint8_t		en_led			:1;
 	uint8_t		en_led_nack		:1;
-	uint8_t		en_txDbg		:1;
-	uint8_t		spd_1M			:1;
-	uint8_t		spd_250K		:1;
+	uint8_t		rsvd_2			:2;
 
 	// byte 3
 	uint8_t		rf_chan			:7;		// use only even chan #s at 2Mbps
-	uint8_t		rsvd_2			:1;
+	uint8_t		rsvd_3			:1;
 
 	// byte 4
 	uint8_t		rf_gain			:2;
-	uint8_t		wd_timeout		:3;		// 0-0.5,1-1,2-2,3-4,4-8,567-off
+	uint8_t		rsvd_4			:2;
 	uint8_t		en_dyn_ack		:1;		// 0: tell receiver to NOT send an ACK
 	uint8_t		en_aa			:1;
-	uint8_t		rsvd_3			:1;
+	uint8_t		rsvd_5			:2;
 
 	// byte 5
 	uint8_t		setup_retr;				// nrf SETUP_RETR register contents
 
 	// bytes 6 & 7
-	uint16_t	rsvd_4;
+	uint16_t	rsvd_6;
 
 	// bytes 8 & 9
 	uint16_t	swCntsMax;				// LE 0x01c2 for ~1 hr 
