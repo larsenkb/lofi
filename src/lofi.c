@@ -82,6 +82,7 @@ sensor_vcc_t		sens_vcc;
 sensor_temp_t		sens_temp;
 config_t			config;
 
+// these hold how many TPL5111 periods to bypass before xmitting
 uint16_t			swCnts;
 uint16_t			vccCnts;
 uint16_t			tempCnts;
@@ -93,29 +94,22 @@ uint8_t				txBufWr, txBufRd;
 
 //****************************************************************
 // pinChange_isr
-//   for PB0, PB1, PB2, PB3
-//   DRVn -> PB0
+//   for PA0..PA7
+//   DRVn -> PA2
+ISR(PCINT0_vect)
+{
+	FLAGS |= wdFlag;
+}
+
+//****************************************************************
+// pinChange_isr
+//   for PB0..PB3
 //   SW1  -> PB2
 ISR(PCINT1_vect)
 {
-	uint8_t pinState;
-	uint8_t pinbState;
-
-	pinbState = PINB;
-
-	// did TPL5111 generate interrupt?
-	if (PCMSK1 & 0x01) {
-		if (pinbState & 0x01) {
-			FLAGS |= wdFlag;
-		}
-	}
-
-	// always check the reed switch state
-	pinState = (pinbState >> SWITCH_1) & 1;
-    if (sens_sw1.lastState == pinState)
-        FLAGS &= ~swFlag;
-    else
-        FLAGS |= swFlag;
+//		BITDBG_ASSERT();
+	FLAGS |= swFlag;
+//		BITDBG_DEASSERT();
 }
 
 
@@ -124,8 +118,6 @@ ISR(PCINT1_vect)
 //
 int main(void)
 {
-	speed_t		speed;
-
 
 	gstatus = 0;
     FLAGS = 0;
@@ -140,13 +132,19 @@ int main(void)
 	// disable Pullups
 	MCUCR &= ~(1<<PUD);
 
+	// set unused pins to output low
+	DDRB |= (1<<0);		// PB0
+	PORTB &= ~(1<<0);
+	DDRA |= (1<<7);		// PA7
+	PORTA &= ~(1<<7);
+
 	// turn off analog comparator
 	ACSR = 0x80;
 
 	// reduce power on TIMER1
 	PRR |= (1<<PRTIM1);
 
-	// reduce power of USI peripherla
+	// reduce power of USI peripheral
 	PRR |= (1<<PRUSI);
 
 	// read the config params from eeprom
@@ -159,14 +157,8 @@ int main(void)
 	// LED pin is a shared resource with txDbg
 	LED_INIT(LED);		// set as output/high even if not used
 
-	// get desired xmit speed
-	///KBL TODO move this to nrf24_config???
-	if (config.spd_1M)
-		speed = speed_1M;
-	else if (config.spd_250K)
-		speed = speed_250K;
-	else
-		speed = speed_2M;
+	// init BIT DEBUG
+//	BITDBG_INIT();
 
 	// init hardware SPI pins for talking to radio
 	nrf24_init();
@@ -192,23 +184,23 @@ int main(void)
 	// Initialize switch 1 message structure
 	sw1_msg_init();
 
-// is this needed???
-	DDRB &= ~(1<<0);
-	GIMSK |= (1<<5);
-	PCMSK1 |= (1<<0);
+	// Enable TPL5111 DVRn pin change on PA2
+	DDRA &= ~(1<<2);
+	GIMSK |= (1<<4);
+	PCMSK0 |= (1<<2);
 
 	// switch to a lower clock rate while reading/writing NRF. For some
 	// reason I can't get anywhere near 10MHz SPI CLK rate.
 	CORE_CLK_SET(CORE_SLOW);
 
 	// Initialize radio channel and payload length
-	nrf24_config(&config, NRF24_PAYLOAD_LEN, speed);
+	nrf24_config(&config, NRF24_PAYLOAD_LEN);
 	nrf24_flush_tx();
 
 	// Power off radio as we go into our first sleep
 	nrf24_powerDown();            
 
-    // initialize watchdog and associated variables
+    // initialize delay counts
     swCnts = config.swCntsMax - 1;
 	ctrCnts = config.ctrCntsMax - 1;
 	vccCnts = config.vccCntsMax - 1;
@@ -228,19 +220,21 @@ int main(void)
 		PRR |= (1<<PRTIM0);
 	}
 
-	FLAGS |= swFlag;
+	// fake a pin change interrupt
+	FLAGS |= wdFlag;
 
 	//
 	// Start of main loop
 	//
 	while (1) {
 
-#if 0
-		// if TPL5111 woke us up, reset it
-		if (FLAGS & wdFlag) {
-			DONE_PULSE();
+		// check swFlag before calling flags_update
+		// this will tell us if the reed switch had a pin change
+		// if so, then reset swCnts to push out next TPL5111 msg
+		if (FLAGS & swFlag) {
+			swCnts = 0;
+			//dlyMS(50);
 		}
-#endif
 
 		// can only execute this code if TPL5111 DRVn asserted
 		// check to see if it is time to xmit a pkt...
@@ -264,13 +258,6 @@ int main(void)
 
 			nrf24_clearStatus();
 
-#if 0
-			if (config.en_nrfVcc) {
-				// Initialize radio channel and payload length
-				nrf24_config(&config, NRF24_PAYLOAD_LEN, speed);
-			}
-#endif
-
 		    /* Automatically goes to TX mode */
 			nrf24_send(&config, &txBuf[txBufRd][0], NRF24_PAYLOAD_LEN-1);        
 
@@ -286,43 +273,25 @@ int main(void)
 				i++;
 			}
 			
-#if 1
-			if (config.en_aa) {
-				if (config.en_led) {
-					if (gstatus & (1<<TX_DS)) {
+			if (config.en_led) {
+				if (config.en_aa) {
+					if (config.en_led_nack) {
+						if (gstatus &  (1<<MAX_RT)) {
+							LED_ASSERT(LED);
+							_delay_loop_1(10); // ~100us at 1MHz F_CPU
+							LED_DEASSERT(LED);
+						}
+					} else if (gstatus & (1<<TX_DS)) {
 						LED_ASSERT(LED);
-						_delay_loop_1(15); // ~100us at 1MHz F_CPU
+						_delay_loop_1(10); // ~100us at 1MHz F_CPU
 						LED_DEASSERT(LED);
 					}
 				}
-				if (config.en_led_nack) {
-					if (gstatus &  (1<<MAX_RT)) {
-						LED_ASSERT(LED);
-						_delay_loop_1(15); // ~100us at 1MHz F_CPU
-						LED_DEASSERT(LED);
-					}
-				}
-			} else {
-				if (config.en_led_nack || config.en_led) {
-					LED_ASSERT(LED);
-					_delay_loop_1(15); // ~100us at 1MHz F_CPU
-					LED_DEASSERT(LED);
-				}
-			}
-
-#else
-//			if (config.en_aa) {
-				if (0) { //(gstatus & (1 << MAX_RT)) {        
-					LED_ASSERT(LED);
-					_delay_loop_1(15); // ~100us at 1MHz F_CPU
-					LED_DEASSERT(LED);
-					dlyMS(50); // ~100us at 1MHz F_CPU
-				}
+			} else if (config.en_led_nack) {
 				LED_ASSERT(LED);
 				_delay_loop_1(10); // ~100us at 1MHz F_CPU
 				LED_DEASSERT(LED);
-//			}
-#endif
+			}
 
         } //endof: while (txBufRd != TxBufWr) {
 
@@ -330,12 +299,7 @@ int main(void)
 
 		CORE_CLK_SETi(CORE_FAST);
 
-#if 0
-		if (PINA & (1<<SWITCH_2)) {
-			DONE_PULSE();
-		}
-#endif
-		// go to sleep and wait for interrupt (tpl5111 DRVn, watchdog or switch pin change)
+		// go to sleep and wait for interrupt (tpl5111 DRVn or switch pin change)
 	    sleep_mode();                // System sleeps here
 
     } //endof: while (1) {
@@ -349,11 +313,11 @@ int main(void)
 //
 uint8_t  getSw1(void)
 {
-	uint8_t pinState;
+	register uint8_t pinState;
 
 	pinState = (PINB>>SWITCH_1) & 1;
+	sens_sw1.lastState = sens_sw1.closed;
 	sens_sw1.closed = config.sw1_rev ^ pinState;
-	sens_sw1.lastState = pinState;
 	sens_sw1.seq++;
 	return (*(uint8_t *)&sens_sw1);
 }
@@ -429,7 +393,6 @@ uint16_t readVccTemp(uint8_t mux_select)
 	// REFS = 10       = 1.1V used as Vref (for Temp measurement)
 	// MUX  =   100010 = Single ended, chan 8 (internal Temp sensor) as Vin
 	
-//	ADMUX = 0b00100001;
 	ADMUX = mux_select;
 	
 	// By default, the successive approximation circuitry requires an
@@ -478,7 +441,8 @@ uint16_t readVccTemp(uint8_t mux_select)
 	// Vcc10 = ((1.1v * 1024) / ADC ) * 10			->convert to 1 decimal fixed point
 	// Vcc10 = ((11   * 1024) / ADC )				->simplify to all 16-bit integer math
 				
-//	uint8_t vccx10 = (uint8_t) ( (11 * 1024) / adc); 
+	// let the receiving software compute floating point value
+	// uint8_t vccx10 = (uint8_t) ( (11 * 1024) / adc); 
 	
 	// Note that the ADC will not automatically be turned off when
 	// entering other sleep modes than Idle

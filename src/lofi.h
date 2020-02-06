@@ -21,15 +21,6 @@
 #define SWITCH_1        2       /* PORTB bit2 */
 #define SWITCH_1_MSK    2
 #define SWITCH_1_GMSK   5
-#define SWITCH_2        2       /* PORTA bit2 */
-#define SWITCH_2_MSK    2
-#define SWITCH_2_GMSK   4
-
-typedef enum {
-	speed_1M = 0,
-	speed_2M = 1,
-	speed_250K = 2
-} speed_t;
 
 
 // ---------  LED MACROS  ----------
@@ -37,33 +28,28 @@ typedef enum {
 #define LED						(1<<3)  // PORTA bit3
 
 #define LED_INIT(x)				do {DDRA |= (x); PORTA |= (x);} while(0)
-#if 1
 #define LED_ASSERT(x)			do {PORTA &= ~(x);} while(0)
 #define LED_DEASSERT(x)			do {PORTA |= (x);} while(0)
-#else
-#define LED_ASSERT(x)	\
-	if (config.en_led || config.en_led_nack) {	\
-		PORTA &= ~(x);	\
-	}
-#define LED_DEASSERT(x)	\
-	if (config.en_led || config.en_led_nack) {	\
-		PORTA |= (x);	\
-	}
-#endif
+
+// --------- BITDBG ---------
+#define BITDBG					(1<<7)	// PORTA bit7
+#define BITDBG_INIT()			do {DDRA |= (BITDBG); PORTA &= ~(BITDBG);} while(0)
+#define BITDBG_ASSERT()			do {PORTA |= BITDBG;} while(0)
+#define BITDBG_DEASSERT()		do {PORTA &= ~BITDBG;} while(0)
 
 // define DONE pin and macro
 // was PORTB bit 3
 #define DONE_PIN	1
 #define DONE_INIT()	  do {			\
-		DDRB |= (1<<DONE_PIN);			\
-		PORTB &= ~(1<<DONE_PIN);		\
+		DDRB |= (1<<DONE_PIN);		\
+		PORTB &= ~(1<<DONE_PIN);	\
 	} while(0)
 #define DONE_PULSE()  do {			\
 		PORTB |= (1<<DONE_PIN);		\
 		PORTB &= ~(1<<DONE_PIN);	\
 	} while(0)
 
-
+	
 // define macros to slow clock even more that fuse setting
 #define CLK_DIV			3
 #define CORE_FAST		CLK_DIV
@@ -83,12 +69,10 @@ typedef enum {
 // use one of the unused internal I/O registers as a 1-clock access register
 #define FLAGS       GPIOR0
 #define wdFlag      (1<<0)
-#define sw1Flag     (1<<1)
-#define sw2Flag     (1<<2)
-#define swFlag      (1<<3)
-#define ctrFlag     (1<<4)
-#define vccFlag     (1<<5)
-#define tempFlag    (1<<6)
+#define swFlag      (1<<1)
+#define ctrFlag     (1<<2)
+#define vccFlag     (1<<3)
+#define tempFlag    (1<<4)
 
 #define VCC_MUX		0b00100001
 #define TEMP_MUX	0b10100010
