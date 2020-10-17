@@ -18,14 +18,14 @@
 /* always need to be a power of two */
 #define UARTBB_TX_PWR		4
 
-enum { UARTBB_STATE_IDLE = 0,
+typedef enum { UARTBB_STATE_IDLE = 0,
 	   UARTBB_STATE_START,
 	   UARTBB_STATE_CHAR,
 	   UARTBB_STATE_STOP,
 	   UARTBB_STATE_POST
 } uartbb_state_t;
 
-extern volatile uint8_t      uartbb_next_state;
+//extern volatile uint8_t      uartbb_next_state;
 
 void uartbb_init(void);
 //void uartbb_puthex( uint8_t data );

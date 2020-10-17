@@ -95,21 +95,21 @@ uint8_t				txBufWr, txBufRd;
 //****************************************************************
 // pinChange_isr
 //   for PA0..PA7
-//   DRVn -> PA2
+//   DRVn -> PA2	// for version 2
+//   SW1  -> PA7	// for version 3
 ISR(PCINT0_vect)
 {
-	FLAGS |= wdFlag;
+	FLAGS |= PCINT0_FLAG;
 }
 
 //****************************************************************
 // pinChange_isr
 //   for PB0..PB3
-//   SW1  -> PB2
+//   SW1  -> PB2	// for version 2
+//   DRVn -> PB0	// for version 2
 ISR(PCINT1_vect)
 {
-//		BITDBG_ASSERT();
-	FLAGS |= swFlag;
-//		BITDBG_DEASSERT();
+	FLAGS |= PCINT1_FLAG;
 }
 
 
@@ -133,10 +133,7 @@ int main(void)
 	MCUCR &= ~(1<<PUD);
 
 	// set unused pins to output low
-	DDRB |= (1<<0);		// PB0
-	PORTB &= ~(1<<0);
-	DDRA |= (1<<7);		// PA7
-	PORTA &= ~(1<<7);
+	INIT_UNUSED_PINS();
 
 	// turn off analog comparator
 	ACSR = 0x80;
@@ -185,9 +182,7 @@ int main(void)
 	sw1_msg_init();
 
 	// Enable TPL5111 DVRn pin change on PA2
-	DDRA &= ~(1<<2);
-	GIMSK |= (1<<4);
-	PCMSK0 |= (1<<2);
+	INIT_DRV();
 
 	// switch to a lower clock rate while reading/writing NRF. For some
 	// reason I can't get anywhere near 10MHz SPI CLK rate.
@@ -220,7 +215,7 @@ int main(void)
 		PRR |= (1<<PRTIM0);
 	}
 
-	// fake a pin change interrupt
+	// fake a watchdog interrupt
 	FLAGS |= wdFlag;
 
 	//
@@ -232,8 +227,17 @@ int main(void)
 		// this will tell us if the reed switch had a pin change
 		// if so, then reset swCnts to push out next TPL5111 msg
 		if (FLAGS & swFlag) {
+			uint8_t pin_debounce = 0xaa;
 			swCnts = 0;
-			//dlyMS(50);
+#if 1
+			// debounce read switch
+			//pin_debounce = 0xaa;
+			do {
+				pin_debounce <<= 1;
+				pin_debounce |= READ_SWITCH();
+				_delay_loop_1(50); // ~500us at 1MHz F_CPU
+			} while ((pin_debounce != 0) && (pin_debounce != 0xff));
+#endif
 		}
 
 		// can only execute this code if TPL5111 DRVn asserted
@@ -315,7 +319,7 @@ uint8_t  getSw1(void)
 {
 	register uint8_t pinState;
 
-	pinState = (PINB>>SWITCH_1) & 1;
+	pinState = READ_SWITCH();
 	sens_sw1.lastState = sens_sw1.closed;
 	sens_sw1.closed = config.sw1_rev ^ pinState;
 	sens_sw1.seq++;
@@ -506,21 +510,19 @@ void sw1_msg_init(void)
 {
 	// Initialize switch 1 capability/structure if eeprom configured
     if (config.en_sw1) {
-		DDRB &= ~(1<<SWITCH_1);
+		INIT_SWITCH();
 		sens_sw1.sensorId = SENID_SW1;
 		sens_sw1.seq = 2; // init to 2 because it is called 2 times before first xmit
 		getSw1();
 		if (config.sw1_pc) {
-			GIMSK |= (1<<SWITCH_1_GMSK);
-			PCMSK1 |= (1<<SWITCH_1_MSK);
+			INIT_SWITCH_PC();
 		}
     } else {
 		// if we leave pin as input, it will draw more current if it oscillates
 		// but if we pgm pin as output and there REALLY is a switch connected
 		// we are would  do damage. That is why there is a series resistor on
 		// switch pin.
-		DDRB |= (1<<SWITCH_1);
-		PORTB &= ~(1<<SWITCH_1);
+		SAFE_SWITCH();
 	}
 }
 
