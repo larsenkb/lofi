@@ -18,7 +18,7 @@
 /* always need to be a power of two */
 #define UARTBB_TX_PWR		4
 
-enum { UARTBB_STATE_IDLE = 0,
+typedef enum { UARTBB_STATE_IDLE = 0,
 	   UARTBB_STATE_START,
 	   UARTBB_STATE_CHAR,
 	   UARTBB_STATE_STOP,
