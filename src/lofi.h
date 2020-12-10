@@ -96,14 +96,14 @@
 							} while(0)
 
 // define DONE pin and macro
-#define DONE_PIN			1
-#define DONE_PORT_DDR		DDRB
-#define DONE_PORT_OUT		PORTB
-#define DONE_INIT()			do {DONE_PORT_DDR |= (1<<DONE_PIN); \
-								DONE_PORT_OUT &= ~(1<<DONE_PIN); \
+#define TPL_DONE_PIN			1
+#define TPL_DONE_PORT_DDR		DDRB
+#define TPL_DONE_PORT_OUT		PORTB
+#define TPL_DONE_INIT()			do {TPL_DONE_PORT_DDR |= (1<<TPL_DONE_PIN); \
+								TPL_DONE_PORT_OUT &= ~(1<<TPL_DONE_PIN); \
 							} while(0)
-#define DONE_PULSE()		do {DONE_PORT_OUT |= (1<<DONE_PIN); \
-								DONE_PORT_OUT &= ~(1<<DONE_PIN); \
+#define TPL_DONE_PULSE()		do {TPL_DONE_PORT_OUT |= (1<<TPL_DONE_PIN); \
+								TPL_DONE_PORT_OUT &= ~(1<<TPL_DONE_PIN); \
 							} while(0)
 
 

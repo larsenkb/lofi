@@ -106,7 +106,7 @@ ISR(PCINT0_vect)
 // pinChange_isr
 //   for PB0..PB3
 //   SW1  -> PB2	// for version 2
-//   DRVn -> PB0	// for version 2
+//   DRVn -> PB0	// for version 3
 ISR(PCINT1_vect)
 {
 	FLAGS |= PCINT1_FLAG;
@@ -122,6 +122,7 @@ int main(void)
 	gstatus = 0;
     FLAGS = 0;
 
+	// initialize uart buf indices
 	txBufRd = 0;
 	txBufWr = 0;
 
@@ -148,7 +149,7 @@ int main(void)
 	eeprom_read_block(&config, 0, sizeof(config));
 
 	// initialze pin to reset TPL5111
-	DONE_INIT();
+	TPL_DONE_INIT();
 
     // init LED pin as OUTPUT
 	// LED pin is a shared resource with txDbg
@@ -227,7 +228,7 @@ int main(void)
 		// this will tell us if the reed switch had a pin change
 		// if so, then reset swCnts to push out next TPL5111 msg
 		if (FLAGS & swFlag) {
-			uint8_t pin_debounce = 0xaa;
+			uint16_t pin_debounce = 0xaaaa;
 			swCnts = 0;
 #if 1
 			// debounce read switch
@@ -236,14 +237,14 @@ int main(void)
 				pin_debounce <<= 1;
 				pin_debounce |= READ_SWITCH();
 				_delay_loop_1(50); // ~500us at 1MHz F_CPU
-			} while ((pin_debounce != 0) && (pin_debounce != 0xff));
+			} while ((pin_debounce != 0) && (pin_debounce != 0xffff));
 #endif
 		}
 
 		// can only execute this code if TPL5111 DRVn asserted
 		// check to see if it is time to xmit a pkt...
 		if (FLAGS & wdFlag)	{
-			DONE_PULSE();
+			TPL_DONE_PULSE();
 			FLAGS &= ~wdFlag;
 			flags_update();
 		}
