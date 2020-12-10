@@ -216,18 +216,18 @@ int main(void)
 		PRR |= (1<<PRTIM0);
 	}
 
-	// fake a watchdog interrupt
-	FLAGS |= wdFlag;
+	// fake a watchdog/TPL interrupt
+	FLAGS |= WD_FLAG;
 
 	//
 	// Start of main loop
 	//
 	while (1) {
 
-		// check swFlag before calling flags_update
+		// check SW_FLAG before calling flags_update
 		// this will tell us if the reed switch had a pin change
 		// if so, then reset swCnts to push out next TPL5111 msg
-		if (FLAGS & swFlag) {
+		if (FLAGS & SW_FLAG) {
 			uint16_t pin_debounce = 0xaaaa;
 			swCnts = 0;
 #if 1
@@ -243,9 +243,9 @@ int main(void)
 
 		// can only execute this code if TPL5111 DRVn asserted
 		// check to see if it is time to xmit a pkt...
-		if (FLAGS & wdFlag)	{
+		if (FLAGS & WD_FLAG)	{
 			TPL_DONE_PULSE();
-			FLAGS &= ~wdFlag;
+			FLAGS &= ~WD_FLAG;
 			flags_update();
 		}
 
@@ -536,28 +536,28 @@ void flags_update(void)
 	if (config.en_sw1) {
 		if (++swCnts >= config.swCntsMax) {
 			swCnts = 0;
-			FLAGS |= swFlag;
+			FLAGS |= SW_FLAG;
 		}
 	}
 	// inc count and set flag if time to xmit a message
 	if (config.en_ctr) {
 		if (++ctrCnts >= config.ctrCntsMax) {
 			ctrCnts = 0;
-			FLAGS |= ctrFlag;
+			FLAGS |= CTR_FLAG;
 		}
 	}
 	// inc count and set flag if time to xmit a message
 	if (config.en_vcc) {
 		if (++vccCnts >= config.vccCntsMax) {
 			vccCnts = 0;
-			FLAGS |= vccFlag;
+			FLAGS |= VCC_FLAG;
 		}
 	}
 	// inc count and set flag if time to xmit a message
 	if (config.en_temp) {
 		if (++tempCnts >= config.tempCntsMax) {
 			tempCnts = 0;
-			FLAGS |= tempFlag;
+			FLAGS |= TEMP_FLAG;
 		}
 	}
 }
@@ -569,18 +569,18 @@ void flags_update(void)
 void msgs_build(void)
 {
 
-	if (FLAGS & swFlag) {
-		FLAGS &= ~swFlag;
+	if (FLAGS & SW_FLAG) {
+		FLAGS &= ~SW_FLAG;
 		txBuf[txBufWr][0] = getSw1();
 		txBuf[txBufWr][1] = 0;
 		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
 	}
 
 	// build a Vcc message if flag set
-   	if (FLAGS & vccFlag) {
+   	if (FLAGS & VCC_FLAG) {
 		int16_t vcc = readVccTemp(VCC_MUX);
 		vcc += config.vccFudge;
-		FLAGS &= ~vccFlag;
+		FLAGS &= ~VCC_FLAG;
 		sens_vcc.vcc_lo = vcc & 0xFF;
 		sens_vcc.vcc_hi = (vcc>>8) & 0x3;
 		sens_vcc.seq++;
@@ -590,10 +590,10 @@ void msgs_build(void)
 	}
 
 	// build a Temperature message if flag set
-	if (FLAGS & tempFlag) {
+	if (FLAGS & TEMP_FLAG) {
 		int16_t temp = readVccTemp(TEMP_MUX);
 		temp += config.tempFudge;
-		FLAGS &= ~tempFlag;
+		FLAGS &= ~TEMP_FLAG;
 		sens_temp.temp_lo = temp & 0xFF;
 		sens_temp.temp_hi = (temp>>8) & 0x3;
 		sens_temp.seq++;
@@ -602,8 +602,8 @@ void msgs_build(void)
 	}
 
 	// build a counter message if flag set
-	if (FLAGS & ctrFlag) {
-		FLAGS &= ~ctrFlag;
+	if (FLAGS & CTR_FLAG) {
+		FLAGS &= ~CTR_FLAG;
 		memcpy(&txBuf[txBufWr][0], &sens_ctr, sizeof(sens_ctr));
 		sens_ctr.seq++;
 		if (++sens_ctr.ctr_lo == 0)

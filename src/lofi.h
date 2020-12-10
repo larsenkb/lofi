@@ -19,8 +19,8 @@
 
 #if LOFI_VER==2
 	// define which flag is set for which PC ISR
-	#define PCINT0_FLAG			wdFlag
-	#define PCINT1_FLAG			swFlag
+	#define PCINT0_FLAG			WD_FLAG
+	#define PCINT1_FLAG			SW_FLAG
 
 	// define SWITCH pin
 	#define SWITCH_PIN			2	// PB2
@@ -47,8 +47,8 @@
 
 #elif LOFI_VER==3
 	// define which flag is set for which PC ISR
-	#define PCINT0_FLAG			swFlag
-	#define PCINT1_FLAG			wdFlag
+	#define PCINT0_FLAG			SW_FLAG
+	#define PCINT1_FLAG			WD_FLAG
 
 	// define SWITCH pin
 	#define SWITCH_PIN			7	// PA7
@@ -148,11 +148,11 @@
 
 // use one of the unused internal I/O registers as a 1-clock access register
 #define FLAGS       GPIOR0
-#define wdFlag      (1<<0)
-#define swFlag      (1<<1)
-#define ctrFlag     (1<<2)
-#define vccFlag     (1<<3)
-#define tempFlag    (1<<4)
+#define WD_FLAG      (1<<0)
+#define SW_FLAG      (1<<1)
+#define CTR_FLAG     (1<<2)
+#define VCC_FLAG     (1<<3)
+#define TEMP_FLAG    (1<<4)
 
 #define VCC_MUX		0b00100001
 #define TEMP_MUX	0b10100010
