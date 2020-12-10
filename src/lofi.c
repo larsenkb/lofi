@@ -183,7 +183,7 @@ int main(void)
 	sw1_msg_init();
 
 	// Enable TPL5111 DVRn pin change on PA2
-	INIT_DRV();
+	TPL_DRV_INIT();
 
 	// switch to a lower clock rate while reading/writing NRF. For some
 	// reason I can't get anywhere near 10MHz SPI CLK rate.

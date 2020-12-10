@@ -30,12 +30,12 @@
 	#define SWITCH_PORT_MSK		PCMSK1
 	#define SWITCH_GMSK			5
 
-	// define DRV pin
-	#define DRV_PIN				2	// PA2
-	#define DRV_PORT_DDR		DDRA
-	#define DRV_PORT_OUT		PORTA
-	#define DRV_PORT_MSK		PCMSK0
-	#define DRV_GMSK			4
+	// define TPL_DRV pin
+	#define TPL_DRV_PIN				2	// PA2
+	#define TPL_DRV_PORT_DDR		DDRA
+	#define TPL_DRV_PORT_OUT		PORTA
+	#define TPL_DRV_PORT_MSK		PCMSK0
+	#define TPL_DRV_GMSK			4
 
 	// define UNUSED pins
 	#define NC1_PIN				0		// PB0
@@ -58,12 +58,12 @@
 	#define SWITCH_PORT_MSK		PCMSK0
 	#define SWITCH_GMSK			4
 
-	// define DRV pin
-	#define DRV_PIN				0	// PB0
-	#define DRV_PORT_DDR		DDRB
-	#define DRV_PORT_OUT		PORTB
-	#define DRV_PORT_MSK		PCMSK1
-	#define DRV_GMSK			5
+	// define TPL_DRV pin
+	#define TPL_DRV_PIN				0	// PB0
+	#define TPL_DRV_PORT_DDR		DDRB
+	#define TPL_DRV_PORT_OUT		PORTB
+	#define TPL_DRV_PORT_MSK		PCMSK1
+	#define TPL_DRV_GMSK			5
 
 	// define UNUSED pins
 	#define NC1_PIN				2		// PB2
@@ -88,23 +88,23 @@
 								SWITCH_PORT_MSK |= (1<<SWITCH_MSK); \
 							} while(0)
 
-// define DRV pin functions
-#define DRV_MSK_PIN			DRV_PIN
-#define INIT_DRV()			do {DRV_PORT_DDR &= ~(1<<DRV_PIN); \
-								GIMSK |= (1<<DRV_GMSK); \
-								DRV_PORT_MSK |= (1<<DRV_MSK_PIN); \
-							} while(0)
+// define TPL_DRV pin functions
+#define TPL_DRV_MSK_PIN			TPL_DRV_PIN
+#define TPL_DRV_INIT()			do {TPL_DRV_PORT_DDR &= ~(1<<TPL_DRV_PIN); \
+									GIMSK |= (1<<TPL_DRV_GMSK); \
+									TPL_DRV_PORT_MSK |= (1<<TPL_DRV_MSK_PIN); \
+								} while(0)
 
-// define DONE pin and macro
+// define TPL_DONE pin and macro
 #define TPL_DONE_PIN			1
 #define TPL_DONE_PORT_DDR		DDRB
 #define TPL_DONE_PORT_OUT		PORTB
 #define TPL_DONE_INIT()			do {TPL_DONE_PORT_DDR |= (1<<TPL_DONE_PIN); \
-								TPL_DONE_PORT_OUT &= ~(1<<TPL_DONE_PIN); \
-							} while(0)
+									TPL_DONE_PORT_OUT &= ~(1<<TPL_DONE_PIN); \
+								} while(0)
 #define TPL_DONE_PULSE()		do {TPL_DONE_PORT_OUT |= (1<<TPL_DONE_PIN); \
-								TPL_DONE_PORT_OUT &= ~(1<<TPL_DONE_PIN); \
-							} while(0)
+									TPL_DONE_PORT_OUT &= ~(1<<TPL_DONE_PIN); \
+								} while(0)
 
 
 // define UNUSED pins INIT function
