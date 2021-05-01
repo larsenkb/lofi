@@ -82,6 +82,7 @@ sensor_vcc_t		sens_vcc;
 sensor_temp_t		sens_temp;
 config_t			config;
 
+// these hold how many TPL5111 periods to bypass before xmitting
 uint16_t			swCnts;
 uint16_t			vccCnts;
 uint16_t			tempCnts;
@@ -93,29 +94,22 @@ uint8_t				txBufWr, txBufRd;
 
 //****************************************************************
 // pinChange_isr
-//   for PB0, PB1, PB2, PB3
-//   DRVn -> PB0
-//   SW1  -> PB2
+//   for PA0..PA7
+//   DRVn -> PA2	// for version 2
+//   SW1  -> PA7	// for version 3
+ISR(PCINT0_vect)
+{
+	FLAGS |= PCINT0_FLAG;
+}
+
+//****************************************************************
+// pinChange_isr
+//   for PB0..PB3
+//   SW1  -> PB2	// for version 2
+//   DRVn -> PB0	// for version 3
 ISR(PCINT1_vect)
 {
-	uint8_t pinState;
-	uint8_t pinbState;
-
-	pinbState = PINB;
-
-	// did TPL5111 generate interrupt?
-	if (PCMSK1 & 0x01) {
-		if (pinbState & 0x01) {
-			FLAGS |= wdFlag;
-		}
-	}
-
-	// always check the reed switch state
-	pinState = (pinbState >> SWITCH_1) & 1;
-    if (sens_sw1.lastState == pinState)
-        FLAGS &= ~swFlag;
-    else
-        FLAGS |= swFlag;
+	FLAGS |= PCINT1_FLAG;
 }
 
 
@@ -124,12 +118,11 @@ ISR(PCINT1_vect)
 //
 int main(void)
 {
-	speed_t		speed;
-
 
 	gstatus = 0;
     FLAGS = 0;
 
+	// initialize uart buf indices
 	txBufRd = 0;
 	txBufWr = 0;
 
@@ -140,33 +133,30 @@ int main(void)
 	// disable Pullups
 	MCUCR &= ~(1<<PUD);
 
+	// set unused pins to output low
+	INIT_UNUSED_PINS();
+
 	// turn off analog comparator
 	ACSR = 0x80;
 
 	// reduce power on TIMER1
 	PRR |= (1<<PRTIM1);
 
-	// reduce power of USI peripherla
+	// reduce power of USI peripheral
 	PRR |= (1<<PRUSI);
 
 	// read the config params from eeprom
 	eeprom_read_block(&config, 0, sizeof(config));
 
 	// initialze pin to reset TPL5111
-	DONE_INIT();
+	TPL_DONE_INIT();
 
     // init LED pin as OUTPUT
 	// LED pin is a shared resource with txDbg
 	LED_INIT(LED);		// set as output/high even if not used
 
-	// get desired xmit speed
-	///KBL TODO move this to nrf24_config???
-	if (config.spd_1M)
-		speed = speed_1M;
-	else if (config.spd_250K)
-		speed = speed_250K;
-	else
-		speed = speed_2M;
+	// init BIT DEBUG
+//	BITDBG_INIT();
 
 	// init hardware SPI pins for talking to radio
 	nrf24_init();
@@ -192,23 +182,24 @@ int main(void)
 	// Initialize switch 1 message structure
 	sw1_msg_init();
 
-// is this needed???
-	DDRB &= ~(1<<0);
-	GIMSK |= (1<<5);
-	PCMSK1 |= (1<<0);
+	// Enable TPL5111 DVRn pin change
+	TPL_DRV_INIT();
 
 	// switch to a lower clock rate while reading/writing NRF. For some
 	// reason I can't get anywhere near 10MHz SPI CLK rate.
 	CORE_CLK_SET(CORE_SLOW);
 
 	// Initialize radio channel and payload length
-	nrf24_config(&config, NRF24_PAYLOAD_LEN, speed);
+	nrf24_config(&config, NRF24_PAYLOAD_LEN);
 	nrf24_flush_tx();
 
 	// Power off radio as we go into our first sleep
 	nrf24_powerDown();            
 
-    // initialize watchdog and associated variables
+	CORE_CLK_SET(CORE_FAST);
+
+    // initialize delay counts so that first time through loop
+	// all enabled messages will be transmitted
     swCnts = config.swCntsMax - 1;
 	ctrCnts = config.ctrCntsMax - 1;
 	vccCnts = config.vccCntsMax - 1;
@@ -228,25 +219,19 @@ int main(void)
 		PRR |= (1<<PRTIM0);
 	}
 
-	FLAGS |= swFlag;
+	// fake a watchdog/TPL interrupt
+	FLAGS |= WD_FLAG;
 
 	//
 	// Start of main loop
 	//
 	while (1) {
 
-#if 0
-		// if TPL5111 woke us up, reset it
-		if (FLAGS & wdFlag) {
-			DONE_PULSE();
-		}
-#endif
-
 		// can only execute this code if TPL5111 DRVn asserted
 		// check to see if it is time to xmit a pkt...
-		if (FLAGS & wdFlag)	{
-			DONE_PULSE();
-			FLAGS &= ~wdFlag;
+		if (FLAGS & WD_FLAG)	{
+			TPL_DONE_PULSE();
+			FLAGS &= ~WD_FLAG;
 			flags_update();
 		}
 
@@ -264,14 +249,7 @@ int main(void)
 
 			nrf24_clearStatus();
 
-#if 0
-			if (config.en_nrfVcc) {
-				// Initialize radio channel and payload length
-				nrf24_config(&config, NRF24_PAYLOAD_LEN, speed);
-			}
-#endif
-
-		    /* Automatically goes to TX mode */
+			/* Automatically goes to TX mode */
 			nrf24_send(&config, &txBuf[txBufRd][0], NRF24_PAYLOAD_LEN-1);        
 
 			// Bump the read index
@@ -285,58 +263,35 @@ int main(void)
 			while (nrf24_isSending() && i < 100) {
 				i++;
 			}
-			
-#if 1
-			if (config.en_aa) {
-				if (config.en_led) {
-					if (gstatus & (1<<TX_DS)) {
-						LED_ASSERT(LED);
-						_delay_loop_1(15); // ~100us at 1MHz F_CPU
-						LED_DEASSERT(LED);
-					}
-				}
-				if (config.en_led_nack) {
-					if (gstatus &  (1<<MAX_RT)) {
-						LED_ASSERT(LED);
-						_delay_loop_1(15); // ~100us at 1MHz F_CPU
-						LED_DEASSERT(LED);
-					}
-				}
-			} else {
-				if (config.en_led_nack || config.en_led) {
-					LED_ASSERT(LED);
-					_delay_loop_1(15); // ~100us at 1MHz F_CPU
-					LED_DEASSERT(LED);
-				}
-			}
 
-#else
-//			if (config.en_aa) {
-				if (0) { //(gstatus & (1 << MAX_RT)) {        
-					LED_ASSERT(LED);
-					_delay_loop_1(15); // ~100us at 1MHz F_CPU
-					LED_DEASSERT(LED);
-					dlyMS(50); // ~100us at 1MHz F_CPU
+			if (config.en_led) {
+				if (config.en_aa) {
+					if (config.en_led_nack) {
+						if (gstatus &  (1<<MAX_RT)) {
+							LED_ASSERT(LED);
+							_delay_loop_1(10); // ~100us at 1MHz F_CPU
+							LED_DEASSERT(LED);
+						}
+					} else if (gstatus & (1<<TX_DS)) {
+						LED_ASSERT(LED);
+						_delay_loop_1(10); // ~100us at 1MHz F_CPU
+						LED_DEASSERT(LED);
+					}
 				}
+			} else if (config.en_led_nack) {
 				LED_ASSERT(LED);
 				_delay_loop_1(10); // ~100us at 1MHz F_CPU
 				LED_DEASSERT(LED);
-//			}
-#endif
+			}
 
         } //endof: while (txBufRd != TxBufWr) {
 
-	    nrf24_powerDown();            
+		nrf24_powerDown();            
 
 		CORE_CLK_SETi(CORE_FAST);
 
-#if 0
-		if (PINA & (1<<SWITCH_2)) {
-			DONE_PULSE();
-		}
-#endif
-		// go to sleep and wait for interrupt (tpl5111 DRVn, watchdog or switch pin change)
-	    sleep_mode();                // System sleeps here
+		// go to sleep and wait for interrupt (tpl5111 DRVn or switch pin change)
+		sleep_mode();                // System sleeps here
 
     } //endof: while (1) {
 
@@ -350,10 +305,18 @@ int main(void)
 uint8_t  getSw1(void)
 {
 	uint8_t pinState;
+	uint16_t pin_debounce = 0xaaaa;
 
-	pinState = (PINB>>SWITCH_1) & 1;
+	// debounce read switch
+	do {
+		pin_debounce <<= 1;
+		pin_debounce |= READ_SWITCH();
+		_delay_loop_1(50); // ~500us at 1MHz F_CPU
+	} while ((pin_debounce != 0) && (pin_debounce != 0xffff));
+
+	pinState = pin_debounce & 1;
+	sens_sw1.lastState = sens_sw1.closed;
 	sens_sw1.closed = config.sw1_rev ^ pinState;
-	sens_sw1.lastState = pinState;
 	sens_sw1.seq++;
 	return (*(uint8_t *)&sens_sw1);
 }
@@ -429,7 +392,6 @@ uint16_t readVccTemp(uint8_t mux_select)
 	// REFS = 10       = 1.1V used as Vref (for Temp measurement)
 	// MUX  =   100010 = Single ended, chan 8 (internal Temp sensor) as Vin
 	
-//	ADMUX = 0b00100001;
 	ADMUX = mux_select;
 	
 	// By default, the successive approximation circuitry requires an
@@ -478,7 +440,8 @@ uint16_t readVccTemp(uint8_t mux_select)
 	// Vcc10 = ((1.1v * 1024) / ADC ) * 10			->convert to 1 decimal fixed point
 	// Vcc10 = ((11   * 1024) / ADC )				->simplify to all 16-bit integer math
 				
-//	uint8_t vccx10 = (uint8_t) ( (11 * 1024) / adc); 
+	// let the receiving software compute floating point value
+	// uint8_t vccx10 = (uint8_t) ( (11 * 1024) / adc); 
 	
 	// Note that the ADC will not automatically be turned off when
 	// entering other sleep modes than Idle
@@ -542,21 +505,19 @@ void sw1_msg_init(void)
 {
 	// Initialize switch 1 capability/structure if eeprom configured
     if (config.en_sw1) {
-		DDRB &= ~(1<<SWITCH_1);
+		INIT_SWITCH();
 		sens_sw1.sensorId = SENID_SW1;
 		sens_sw1.seq = 2; // init to 2 because it is called 2 times before first xmit
 		getSw1();
 		if (config.sw1_pc) {
-			GIMSK |= (1<<SWITCH_1_GMSK);
-			PCMSK1 |= (1<<SWITCH_1_MSK);
+			INIT_SWITCH_PC();
 		}
     } else {
 		// if we leave pin as input, it will draw more current if it oscillates
 		// but if we pgm pin as output and there REALLY is a switch connected
 		// we are would  do damage. That is why there is a series resistor on
 		// switch pin.
-		DDRB |= (1<<SWITCH_1);
-		PORTB &= ~(1<<SWITCH_1);
+		SAFE_SWITCH();
 	}
 }
 
@@ -569,28 +530,28 @@ void flags_update(void)
 	if (config.en_sw1) {
 		if (++swCnts >= config.swCntsMax) {
 			swCnts = 0;
-			FLAGS |= swFlag;
+			FLAGS |= SW_FLAG;
 		}
 	}
 	// inc count and set flag if time to xmit a message
 	if (config.en_ctr) {
 		if (++ctrCnts >= config.ctrCntsMax) {
 			ctrCnts = 0;
-			FLAGS |= ctrFlag;
+			FLAGS |= CTR_FLAG;
 		}
 	}
 	// inc count and set flag if time to xmit a message
 	if (config.en_vcc) {
 		if (++vccCnts >= config.vccCntsMax) {
 			vccCnts = 0;
-			FLAGS |= vccFlag;
+			FLAGS |= VCC_FLAG;
 		}
 	}
 	// inc count and set flag if time to xmit a message
 	if (config.en_temp) {
 		if (++tempCnts >= config.tempCntsMax) {
 			tempCnts = 0;
-			FLAGS |= tempFlag;
+			FLAGS |= TEMP_FLAG;
 		}
 	}
 }
@@ -602,18 +563,19 @@ void flags_update(void)
 void msgs_build(void)
 {
 
-	if (FLAGS & swFlag) {
-		FLAGS &= ~swFlag;
+	// build a Switch message if flag set
+	if (FLAGS & SW_FLAG) {
+		FLAGS &= ~SW_FLAG;
 		txBuf[txBufWr][0] = getSw1();
 		txBuf[txBufWr][1] = 0;
 		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
 	}
 
 	// build a Vcc message if flag set
-   	if (FLAGS & vccFlag) {
+	if (FLAGS & VCC_FLAG) {
 		int16_t vcc = readVccTemp(VCC_MUX);
 		vcc += config.vccFudge;
-		FLAGS &= ~vccFlag;
+		FLAGS &= ~VCC_FLAG;
 		sens_vcc.vcc_lo = vcc & 0xFF;
 		sens_vcc.vcc_hi = (vcc>>8) & 0x3;
 		sens_vcc.seq++;
@@ -623,10 +585,10 @@ void msgs_build(void)
 	}
 
 	// build a Temperature message if flag set
-	if (FLAGS & tempFlag) {
+	if (FLAGS & TEMP_FLAG) {
 		int16_t temp = readVccTemp(TEMP_MUX);
 		temp += config.tempFudge;
-		FLAGS &= ~tempFlag;
+		FLAGS &= ~TEMP_FLAG;
 		sens_temp.temp_lo = temp & 0xFF;
 		sens_temp.temp_hi = (temp>>8) & 0x3;
 		sens_temp.seq++;
@@ -635,8 +597,8 @@ void msgs_build(void)
 	}
 
 	// build a counter message if flag set
-	if (FLAGS & ctrFlag) {
-		FLAGS &= ~ctrFlag;
+	if (FLAGS & CTR_FLAG) {
+		FLAGS &= ~CTR_FLAG;
 		memcpy(&txBuf[txBufWr][0], &sens_ctr, sizeof(sens_ctr));
 		sens_ctr.seq++;
 		if (++sens_ctr.ctr_lo == 0)

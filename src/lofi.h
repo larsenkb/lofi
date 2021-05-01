@@ -10,26 +10,109 @@
 #ifndef __LOFI_H__
 #define __LOFI_H__
 
+#define LOFI_VER		3
 
 #define EN_TPL5111				1
 #define EEPROM_NODEID_ADR		((uint8_t *)0)
 #define NRF24_PAYLOAD_LEN		3
 #define TXBUF_SIZE				8	// must be a power of 2!!!
 
+#if LOFI_VER==2
+	// define which flag is set for which PC ISR
+	#define PCINT0_FLAG			WD_FLAG
+	#define PCINT1_FLAG			SW_FLAG
 
-// define masks to enable switch Pin Change
-#define SWITCH_1        2       /* PORTB bit2 */
-#define SWITCH_1_MSK    2
-#define SWITCH_1_GMSK   5
-#define SWITCH_2        2       /* PORTA bit2 */
-#define SWITCH_2_MSK    2
-#define SWITCH_2_GMSK   4
+	// define SWITCH pin
+	#define SWITCH_PIN			2	// PB2
+	#define SWITCH_PORT_DDR		DDRB
+	#define SWITCH_PORT_OUT		PORTB
+	#define SWITCH_PORT_IN		PINB
+	#define SWITCH_PORT_MSK		PCMSK1
+	#define SWITCH_GMSK			5
 
-typedef enum {
-	speed_1M = 0,
-	speed_2M = 1,
-	speed_250K = 2
-} speed_t;
+	// define TPL_DRV pin
+	#define TPL_DRV_PIN				2	// PA2
+	#define TPL_DRV_PORT_DDR		DDRA
+	#define TPL_DRV_PORT_OUT		PORTA
+	#define TPL_DRV_PORT_MSK		PCMSK0
+	#define TPL_DRV_GMSK			4
+
+	// define UNUSED pins
+	#define NC1_PIN				0		// PB0
+	#define NC1_PORT_DDR		DDRB
+	#define NC1_PORT_OUT		PORTB
+	#define NC2_PIN				7		// PA7
+	#define NC2_PORT_DDR		DDRA
+	#define NC2_PORT_OUT		PORTA
+
+#elif LOFI_VER==3
+	// define which flag is set for which PC ISR
+	#define PCINT0_FLAG			SW_FLAG
+	#define PCINT1_FLAG			WD_FLAG
+
+	// define SWITCH pin
+	#define SWITCH_PIN			7	// PA7
+	#define SWITCH_PORT_DDR		DDRA
+	#define SWITCH_PORT_OUT		PORTA
+	#define SWITCH_PORT_IN		PINA
+	#define SWITCH_PORT_MSK		PCMSK0
+	#define SWITCH_GMSK			4
+
+	// define TPL_DRV pin
+	#define TPL_DRV_PIN				0	// PB0
+	#define TPL_DRV_PORT_DDR		DDRB
+	#define TPL_DRV_PORT_OUT		PORTB
+	#define TPL_DRV_PORT_MSK		PCMSK1
+	#define TPL_DRV_GMSK			5
+
+	// define UNUSED pins
+	#define NC1_PIN				2		// PB2
+	#define NC1_PORT_DDR		DDRB
+	#define NC1_PORT_OUT		PORTB
+	#define NC2_PIN				2		// PA2
+	#define NC2_PORT_DDR		DDRA
+	#define NC2_PORT_OUT		PORTA
+
+#else
+	#error "LOFI_VER not defined"
+#endif
+
+// define SWITCH pin functions
+#define SWITCH_MSK			SWITCH_PIN
+#define INIT_SWITCH()		(SWITCH_PORT_DDR &= ~(1<<SWITCH_PIN))
+#define READ_SWITCH()		((SWITCH_PORT_IN>>SWITCH_PIN) & 1)
+#define SAFE_SWITCH()		do {SWITCH_PORT_DDR |= (1<<SWITCH_PIN); \
+								SWITCH_PORT_OUT &= ~(1<<SWITCH_PIN); \
+						    } while(0)
+#define INIT_SWITCH_PC()	do {GIMSK |= (1<<SWITCH_GMSK); \
+								SWITCH_PORT_MSK |= (1<<SWITCH_MSK); \
+							} while(0)
+
+// define TPL_DRV pin functions
+#define TPL_DRV_MSK_PIN			TPL_DRV_PIN
+#define TPL_DRV_INIT()			do {TPL_DRV_PORT_DDR &= ~(1<<TPL_DRV_PIN); \
+									GIMSK |= (1<<TPL_DRV_GMSK); \
+									TPL_DRV_PORT_MSK |= (1<<TPL_DRV_MSK_PIN); \
+								} while(0)
+
+// define TPL_DONE pin and macro
+#define TPL_DONE_PIN			1
+#define TPL_DONE_PORT_DDR		DDRB
+#define TPL_DONE_PORT_OUT		PORTB
+#define TPL_DONE_INIT()			do {TPL_DONE_PORT_DDR |= (1<<TPL_DONE_PIN); \
+									TPL_DONE_PORT_OUT &= ~(1<<TPL_DONE_PIN); \
+								} while(0)
+#define TPL_DONE_PULSE()		do {TPL_DONE_PORT_OUT |= (1<<TPL_DONE_PIN); \
+									TPL_DONE_PORT_OUT &= ~(1<<TPL_DONE_PIN); \
+								} while(0)
+
+
+// define UNUSED pins INIT function
+#define INIT_UNUSED_PINS()	do { NC1_PORT_DDR |= (1<<NC1_PIN); \
+								NC1_PORT_OUT &= ~(1<<NC1_PIN); \
+								NC2_PORT_DDR |= (1<<NC2_PIN); \
+								NC2_PORT_OUT &= ~(1<<NC2_PIN); \
+							} while(0)
 
 
 // ---------  LED MACROS  ----------
@@ -37,37 +120,20 @@ typedef enum {
 #define LED						(1<<3)  // PORTA bit3
 
 #define LED_INIT(x)				do {DDRA |= (x); PORTA |= (x);} while(0)
-#if 1
 #define LED_ASSERT(x)			do {PORTA &= ~(x);} while(0)
 #define LED_DEASSERT(x)			do {PORTA |= (x);} while(0)
-#else
-#define LED_ASSERT(x)	\
-	if (config.en_led || config.en_led_nack) {	\
-		PORTA &= ~(x);	\
-	}
-#define LED_DEASSERT(x)	\
-	if (config.en_led || config.en_led_nack) {	\
-		PORTA |= (x);	\
-	}
-#endif
 
-// define DONE pin and macro
-// was PORTB bit 3
-#define DONE_PIN	1
-#define DONE_INIT()	  do {			\
-		DDRB |= (1<<DONE_PIN);			\
-		PORTB &= ~(1<<DONE_PIN);		\
-	} while(0)
-#define DONE_PULSE()  do {			\
-		PORTB |= (1<<DONE_PIN);		\
-		PORTB &= ~(1<<DONE_PIN);	\
-	} while(0)
+// --------- BITDBG ---------
+#define BITDBG					(1<<7)	// PORTA bit7
+#define BITDBG_INIT()			do {DDRA |= (BITDBG); PORTA &= ~(BITDBG);} while(0)
+#define BITDBG_ASSERT()			do {PORTA |= BITDBG;} while(0)
+#define BITDBG_DEASSERT()		do {PORTA &= ~BITDBG;} while(0)
 
-
-// define macros to slow clock even more that fuse setting
+	
+// define macros to slow clock even more than fuse setting
 #define CLK_DIV			3
 #define CORE_FAST		CLK_DIV
-#define CORE_SLOW		(CLK_DIV)	
+#define CORE_SLOW		(CLK_DIV+2)	
 #define CORE_CLK_SET(x)  do {	\
 		CLKPR = (1<<CLKPCE);	\
 		CLKPR = (x);			\
@@ -82,13 +148,11 @@ typedef enum {
 
 // use one of the unused internal I/O registers as a 1-clock access register
 #define FLAGS       GPIOR0
-#define wdFlag      (1<<0)
-#define sw1Flag     (1<<1)
-#define sw2Flag     (1<<2)
-#define swFlag      (1<<3)
-#define ctrFlag     (1<<4)
-#define vccFlag     (1<<5)
-#define tempFlag    (1<<6)
+#define WD_FLAG      (1<<0)
+#define SW_FLAG      (1<<1)
+#define CTR_FLAG     (1<<2)
+#define VCC_FLAG     (1<<3)
+#define TEMP_FLAG    (1<<4)
 
 #define VCC_MUX		0b00100001
 #define TEMP_MUX	0b10100010

@@ -66,7 +66,7 @@ void nrf24_init(void)
 
 
 /* configure the module */
-void nrf24_config(config_t *config, uint8_t pay_length, uint8_t speed)
+void nrf24_config(config_t *config, uint8_t pay_length)
 {
     // Set RF channel
     nrf24_configRegister(RF_CH, config->rf_chan);
@@ -78,9 +78,9 @@ void nrf24_config(config_t *config, uint8_t pay_length, uint8_t speed)
     nrf24_configRegister(RX_PW_P1, pay_length); // Data payload pipe
 
     // configure RF speed and power gain
-	if (speed == speed_1M)
+	if (config->spd_1M)
 		nrf24_configRegister(RF_SETUP, 0x00 | ((config->rf_gain & 0x3) << 1));
-	else if (speed == speed_250K)
+	else if (config->spd_250K)
 		nrf24_configRegister(RF_SETUP, 0x20 | ((config->rf_gain & 0x3) << 1));
 	else 
 		nrf24_configRegister(RF_SETUP, 0x08 | ((config->rf_gain & 0x3) << 1));

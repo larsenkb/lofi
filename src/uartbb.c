@@ -19,7 +19,7 @@
 static char                 uartbb_tx[1<<UARTBB_TX_PWR];
 // keep track of current/next state of bit bang state machine
 static uint8_t              uartbb_state;
-volatile uint8_t            uartbb_next_state;
+static uint8_t              uartbb_next_state;
 // keep track of which bit of the byte is being transmitted
 static uint8_t		        uartbb_cnt;
 // current byte that is being serialzed
