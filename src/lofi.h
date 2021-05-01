@@ -130,10 +130,10 @@
 #define BITDBG_DEASSERT()		do {PORTA &= ~BITDBG;} while(0)
 
 	
-// define macros to slow clock even more that fuse setting
+// define macros to slow clock even more than fuse setting
 #define CLK_DIV			3
 #define CORE_FAST		CLK_DIV
-#define CORE_SLOW		(CLK_DIV)	
+#define CORE_SLOW		(CLK_DIV+2)	
 #define CORE_CLK_SET(x)  do {	\
 		CLKPR = (1<<CLKPCE);	\
 		CLKPR = (x);			\

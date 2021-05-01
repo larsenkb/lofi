@@ -182,7 +182,7 @@ int main(void)
 	// Initialize switch 1 message structure
 	sw1_msg_init();
 
-	// Enable TPL5111 DVRn pin change on PA2
+	// Enable TPL5111 DVRn pin change
 	TPL_DRV_INIT();
 
 	// switch to a lower clock rate while reading/writing NRF. For some
@@ -196,7 +196,10 @@ int main(void)
 	// Power off radio as we go into our first sleep
 	nrf24_powerDown();            
 
-    // initialize delay counts
+	CORE_CLK_SET(CORE_FAST);
+
+    // initialize delay counts so that first time through loop
+	// all enabled messages will be transmitted
     swCnts = config.swCntsMax - 1;
 	ctrCnts = config.ctrCntsMax - 1;
 	vccCnts = config.vccCntsMax - 1;
@@ -224,23 +227,6 @@ int main(void)
 	//
 	while (1) {
 
-		// check SW_FLAG before calling flags_update
-		// this will tell us if the reed switch had a pin change
-		// if so, then reset swCnts to push out next TPL5111 msg
-		if (FLAGS & SW_FLAG) {
-			uint16_t pin_debounce = 0xaaaa;
-			swCnts = 0;
-#if 1
-			// debounce read switch
-			//pin_debounce = 0xaa;
-			do {
-				pin_debounce <<= 1;
-				pin_debounce |= READ_SWITCH();
-				_delay_loop_1(50); // ~500us at 1MHz F_CPU
-			} while ((pin_debounce != 0) && (pin_debounce != 0xffff));
-#endif
-		}
-
 		// can only execute this code if TPL5111 DRVn asserted
 		// check to see if it is time to xmit a pkt...
 		if (FLAGS & WD_FLAG)	{
@@ -263,7 +249,7 @@ int main(void)
 
 			nrf24_clearStatus();
 
-		    /* Automatically goes to TX mode */
+			/* Automatically goes to TX mode */
 			nrf24_send(&config, &txBuf[txBufRd][0], NRF24_PAYLOAD_LEN-1);        
 
 			// Bump the read index
@@ -277,7 +263,7 @@ int main(void)
 			while (nrf24_isSending() && i < 100) {
 				i++;
 			}
-			
+
 			if (config.en_led) {
 				if (config.en_aa) {
 					if (config.en_led_nack) {
@@ -300,12 +286,12 @@ int main(void)
 
         } //endof: while (txBufRd != TxBufWr) {
 
-	    nrf24_powerDown();            
+		nrf24_powerDown();            
 
 		CORE_CLK_SETi(CORE_FAST);
 
 		// go to sleep and wait for interrupt (tpl5111 DRVn or switch pin change)
-	    sleep_mode();                // System sleeps here
+		sleep_mode();                // System sleeps here
 
     } //endof: while (1) {
 
@@ -318,9 +304,17 @@ int main(void)
 //
 uint8_t  getSw1(void)
 {
-	register uint8_t pinState;
+	uint8_t pinState;
+	uint16_t pin_debounce = 0xaaaa;
 
-	pinState = READ_SWITCH();
+	// debounce read switch
+	do {
+		pin_debounce <<= 1;
+		pin_debounce |= READ_SWITCH();
+		_delay_loop_1(50); // ~500us at 1MHz F_CPU
+	} while ((pin_debounce != 0) && (pin_debounce != 0xffff));
+
+	pinState = pin_debounce & 1;
 	sens_sw1.lastState = sens_sw1.closed;
 	sens_sw1.closed = config.sw1_rev ^ pinState;
 	sens_sw1.seq++;
@@ -569,6 +563,7 @@ void flags_update(void)
 void msgs_build(void)
 {
 
+	// build a Switch message if flag set
 	if (FLAGS & SW_FLAG) {
 		FLAGS &= ~SW_FLAG;
 		txBuf[txBufWr][0] = getSw1();
@@ -577,7 +572,7 @@ void msgs_build(void)
 	}
 
 	// build a Vcc message if flag set
-   	if (FLAGS & VCC_FLAG) {
+	if (FLAGS & VCC_FLAG) {
 		int16_t vcc = readVccTemp(VCC_MUX);
 		vcc += config.vccFudge;
 		FLAGS &= ~VCC_FLAG;
