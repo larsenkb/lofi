@@ -69,6 +69,7 @@
 #undef F_CPU
 #define F_CPU 1000000UL
 
+const uint16_t revision = 5;	// increment this for each release
 
 int clk_div = 3;
 
@@ -78,6 +79,7 @@ uint8_t				gstatus;
 
 sensor_switch_t		sens_sw1;
 sensor_ctr_t		sens_ctr;
+sensor_ctr_t		sens_rev;
 sensor_vcc_t		sens_vcc;
 sensor_temp_t		sens_temp;
 config_t			config;
@@ -169,6 +171,9 @@ int main(void)
 		// disable timer0 to reduce power
 		PRR |= (1<<PRTIM0);
 	}
+
+	// Initialize revision message structure
+	rev_msg_init();
 
 	// Initialize counter message structure
 	ctr_msg_init();
@@ -459,6 +464,18 @@ uint16_t readVccTemp(uint8_t mux_select)
 //
 // initialze counter message structure
 //
+void rev_msg_init(void)
+{
+	// Initialize counter capability/structure if eeprom configured
+    sens_rev.sensorId = SENID_REV;
+    sens_rev.ctr_lo = (revision & 0xff);
+    sens_rev.ctr_hi = ((revision >> 8) & 0x3);
+	sens_rev.seq = 0;
+}
+
+//
+// initialze counter message structure
+//
 void ctr_msg_init(void)
 {
 	// Initialize counter capability/structure if eeprom configured
@@ -604,6 +621,11 @@ void msgs_build(void)
 		if (++sens_ctr.ctr_lo == 0)
 			sens_ctr.ctr_hi++;
 		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+	}
+	if (sens_rev.seq == 0) {
+		memcpy(&txBuf[txBufWr][0], &sens_rev, sizeof(sens_rev));
+		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+		sens_rev.seq = 1;
 	}
 }
 

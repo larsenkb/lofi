@@ -164,7 +164,8 @@ typedef enum {
 	SENID_SW2,
 	SENID_VCC,
 	SENID_TEMP,
-	SENID_CTR
+	SENID_CTR,
+	SENID_REV
 } senId_t;
 
 
@@ -266,6 +267,7 @@ void printConfig(void);
 uint8_t getSw1(void);
 uint8_t getSw2(void);
 void ctr_msg_init(void);
+void rev_msg_init(void);
 void temp_msg_init(void);
 void vcc_msg_init(void);
 void sw1_msg_init(void);
