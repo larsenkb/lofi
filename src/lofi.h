@@ -10,6 +10,7 @@
 #ifndef __LOFI_H__
 #define __LOFI_H__
 
+// specify 2 for rev 0.2 boards and 3 for rev 0.3 and 0.4 boards
 #define LOFI_VER		3
 
 #define EN_TPL5111				1
@@ -20,7 +21,7 @@
 #if LOFI_VER==2
 	// define which flag is set for which PC ISR
 	#define PCINT0_FLAG			WD_FLAG
-	#define PCINT1_FLAG			SW_FLAG
+	#define PCINT1_FLAG			PC_FLAG
 
 	// define SWITCH pin
 	#define SWITCH_PIN			2	// PB2
@@ -47,7 +48,7 @@
 
 #elif LOFI_VER==3
 	// define which flag is set for which PC ISR
-	#define PCINT0_FLAG			SW_FLAG
+	#define PCINT0_FLAG			PC_FLAG
 	#define PCINT1_FLAG			WD_FLAG
 
 	// define SWITCH pin
@@ -133,7 +134,7 @@
 // define macros to slow clock even more than fuse setting
 #define CLK_DIV			3
 #define CORE_FAST		CLK_DIV
-#define CORE_SLOW		(CLK_DIV+2)	
+#define CORE_SLOW		(CLK_DIV + 2)	
 #define CORE_CLK_SET(x)  do {	\
 		CLKPR = (1<<CLKPCE);	\
 		CLKPR = (x);			\
@@ -153,6 +154,7 @@
 #define CTR_FLAG     (1<<2)
 #define VCC_FLAG     (1<<3)
 #define TEMP_FLAG    (1<<4)
+#define PC_FLAG		 (1<<5)
 
 #define VCC_MUX		0b00100001
 #define TEMP_MUX	0b10100010
@@ -203,17 +205,17 @@ typedef struct {
 
 
 // define eeprom configuration format
-typedef struct {
+typedef struct {	// fills up bit fields LSB to MSB
 	// byte 0
 	uint8_t		nodeId;
 
 	// byte 1
-	uint8_t		sw1_rev			:1;
+	uint8_t		sw1_rev			:1;	// LSB
 	uint8_t		sw1_pc			:1;
 	uint8_t		en_sw1			:1;
 	uint8_t		rsvd_1			:3;
 	uint8_t		spd_1M			:1;
-	uint8_t		spd_250K		:1;
+	uint8_t		spd_250K		:1;	// MSB
 
 	// byte 2
     uint8_t     en_ctr			:1;
@@ -264,8 +266,8 @@ typedef struct {
 // FORWARD DECLARATIONS ----------------------------------------
 uint16_t readVccTemp(uint8_t mux_select);
 void printConfig(void);
-uint8_t getSw1(void);
-uint8_t getSw2(void);
+uint8_t getSw1(uint8_t pc_triggered);
+//uint8_t getSw2(void);
 void ctr_msg_init(void);
 void rev_msg_init(void);
 void temp_msg_init(void);

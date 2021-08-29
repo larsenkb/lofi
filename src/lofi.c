@@ -307,7 +307,7 @@ int main(void)
 //
 // read switch one and update state
 //
-uint8_t  getSw1(void)
+uint8_t  getSw1(uint8_t pc_triggered)
 {
 	uint8_t pinState;
 	uint16_t pin_debounce = 0xaaaa;
@@ -320,7 +320,7 @@ uint8_t  getSw1(void)
 	} while ((pin_debounce != 0) && (pin_debounce != 0xffff));
 
 	pinState = pin_debounce & 1;
-	sens_sw1.lastState = sens_sw1.closed;
+	sens_sw1.lastState = pc_triggered; //sens_sw1.closed;
 	sens_sw1.closed = config.sw1_rev ^ pinState;
 	sens_sw1.seq++;
 	return (*(uint8_t *)&sens_sw1);
@@ -525,7 +525,7 @@ void sw1_msg_init(void)
 		INIT_SWITCH();
 		sens_sw1.sensorId = SENID_SW1;
 		sens_sw1.seq = 2; // init to 2 because it is called 2 times before first xmit
-		getSw1();
+		getSw1(0);
 		if (config.sw1_pc) {
 			INIT_SWITCH_PC();
 		}
@@ -581,11 +581,12 @@ void msgs_build(void)
 {
 
 	// build a Switch message if flag set
-	if (FLAGS & SW_FLAG) {
-		FLAGS &= ~SW_FLAG;
-		txBuf[txBufWr][0] = getSw1();
+	if (FLAGS & (SW_FLAG | PC_FLAG)) {
+		txBuf[txBufWr][0] = getSw1((FLAGS & PC_FLAG) == PC_FLAG);
 		txBuf[txBufWr][1] = 0;
 		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+		if (FLAGS & SW_FLAG) FLAGS &= ~SW_FLAG;
+		if (FLAGS & PC_FLAG) FLAGS &= ~PC_FLAG;
 	}
 
 	// build a Vcc message if flag set
