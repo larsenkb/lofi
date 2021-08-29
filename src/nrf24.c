@@ -68,6 +68,8 @@ void nrf24_init(void)
 /* configure the module */
 void nrf24_config(config_t *config, uint8_t pay_length)
 {
+	uint8_t tval;
+
     // Set RF channel
     nrf24_configRegister(RF_CH, config->rf_chan);
 
@@ -78,12 +80,15 @@ void nrf24_config(config_t *config, uint8_t pay_length)
     nrf24_configRegister(RX_PW_P1, pay_length); // Data payload pipe
 
     // configure RF speed and power gain
-	if (config->spd_1M)
-		nrf24_configRegister(RF_SETUP, 0x00 | ((config->rf_gain & 0x3) << 1));
-	else if (config->spd_250K)
-		nrf24_configRegister(RF_SETUP, 0x20 | ((config->rf_gain & 0x3) << 1));
-	else 
-		nrf24_configRegister(RF_SETUP, 0x08 | ((config->rf_gain & 0x3) << 1));
+	tval = (config->rf_gain & 0x3) << 1;
+	if (config->spd_1M) {
+		// do nothing
+	} else if (config->spd_250K) {
+		tval |= 0x20;
+	} else {
+		tval |= 0x08;
+	}
+	nrf24_configRegister(RF_SETUP, tval | 0);
 
     // CRC enable, 1 byte CRC length
 //    nrf24_configRegister(CONFIG, nrf24_CONFIG);
