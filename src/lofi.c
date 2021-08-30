@@ -225,7 +225,7 @@ int main(void)
 	}
 
 	// fake a watchdog/TPL interrupt
-	FLAGS |= WD_FLAG;
+	FLAGS = WD_FLAG;
 
 	//
 	// Start of main loop
