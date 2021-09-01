@@ -157,9 +157,6 @@ int main(void)
 	// LED pin is a shared resource with txDbg
 	LED_INIT(LED);		// set as output/high even if not used
 
-	// init BIT DEBUG
-//	BITDBG_INIT();
-
 	// init hardware SPI pins for talking to radio
 	nrf24_init();
     
@@ -237,12 +234,15 @@ int main(void)
 		// check to see if it is time to xmit a pkt...
 		if (FLAGS & WD_FLAG)	{
 			TPL_DONE_PULSE();
-			FLAGS &= ~WD_FLAG;
 			flags_update();
+			// build messages to xmit
+			msgs_build(0);
+			FLAGS &= ~WD_FLAG;
+		} else {
+			// build messages to xmit
+			msgs_build(1);
 		}
 
-		// build messages to xmit
-		msgs_build();
 
 		// Set Divide by 8 for 8MHz RC oscillator 
 		CORE_CLK_SETi(CORE_SLOW);
@@ -297,8 +297,9 @@ int main(void)
 		CORE_CLK_SETi(CORE_FAST);
 
 		// go to sleep and wait for interrupt (tpl5111 DRVn or switch pin change)
+	if (FLAGS == 0) {
 		sleep_mode();                // System sleeps here
-
+	}
     } //endof: while (1) {
 
     return 0;
@@ -310,19 +311,17 @@ int main(void)
 //
 uint8_t  getSw1(uint8_t pc_triggered)
 {
-	uint8_t pinState;
-	uint16_t pin_debounce = 0xaaaa;
+	register uint8_t pin_debounce = 0xaa;
 
 	// debounce read switch
 	do {
 		pin_debounce <<= 1;
 		pin_debounce |= READ_SWITCH();
-		_delay_loop_1(50); // ~500us at 1MHz F_CPU
-	} while ((pin_debounce != 0) && (pin_debounce != 0xffff));
+	} while ((pin_debounce != 0) && (pin_debounce != 0xff));
 
-	pinState = pin_debounce & 1;
-	sens_sw1.lastState = pc_triggered; //sens_sw1.closed;
-	sens_sw1.closed = config.sw1_rev ^ pinState;
+	pin_debounce &= 1;
+	sens_sw1.lastState = pc_triggered;
+	sens_sw1.closed = config.sw1_rev ^ pin_debounce;
 	sens_sw1.seq++;
 	return (*(uint8_t *)&sens_sw1);
 }
@@ -578,16 +577,15 @@ void flags_update(void)
 //
 // Build and queue packets for xmission
 //
-void msgs_build(void)
+void msgs_build(int pc_triggered)
 {
 
 	// build a Switch message if flag set
-	if (FLAGS & (SW_FLAG | PC_FLAG)) {
-		txBuf[txBufWr][0] = getSw1((FLAGS & PC_FLAG) == PC_FLAG);
+	if (FLAGS & SW_FLAG) {
+		FLAGS &= ~SW_FLAG;
+		txBuf[txBufWr][0] = getSw1(pc_triggered);
 		txBuf[txBufWr][1] = 0;
 		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
-		if (FLAGS & SW_FLAG) FLAGS &= ~SW_FLAG;
-		if (FLAGS & PC_FLAG) FLAGS &= ~PC_FLAG;
 	}
 
 	// build a Vcc message if flag set

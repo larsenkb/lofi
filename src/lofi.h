@@ -21,7 +21,7 @@
 #if LOFI_VER==2
 	// define which flag is set for which PC ISR
 	#define PCINT0_FLAG			WD_FLAG
-	#define PCINT1_FLAG			PC_FLAG
+	#define PCINT1_FLAG			SW_FLAG
 
 	// define SWITCH pin
 	#define SWITCH_PIN			2	// PB2
@@ -32,11 +32,11 @@
 	#define SWITCH_GMSK			5
 
 	// define TPL_DRV pin
-	#define TPL_DRV_PIN				2	// PA2
-	#define TPL_DRV_PORT_DDR		DDRA
-	#define TPL_DRV_PORT_OUT		PORTA
-	#define TPL_DRV_PORT_MSK		PCMSK0
-	#define TPL_DRV_GMSK			4
+	#define TPL_DRV_PIN			2	// PA2
+	#define TPL_DRV_PORT_DDR	DDRA
+	#define TPL_DRV_PORT_OUT	PORTA
+	#define TPL_DRV_PORT_MSK	PCMSK0
+	#define TPL_DRV_GMSK		4
 
 	// define UNUSED pins
 	#define NC1_PIN				0		// PB0
@@ -48,7 +48,7 @@
 
 #elif LOFI_VER==3
 	// define which flag is set for which PC ISR
-	#define PCINT0_FLAG			PC_FLAG
+	#define PCINT0_FLAG			SW_FLAG
 	#define PCINT1_FLAG			WD_FLAG
 
 	// define SWITCH pin
@@ -60,11 +60,11 @@
 	#define SWITCH_GMSK			4
 
 	// define TPL_DRV pin
-	#define TPL_DRV_PIN				0	// PB0
-	#define TPL_DRV_PORT_DDR		DDRB
-	#define TPL_DRV_PORT_OUT		PORTB
-	#define TPL_DRV_PORT_MSK		PCMSK1
-	#define TPL_DRV_GMSK			5
+	#define TPL_DRV_PIN			0	// PB0
+	#define TPL_DRV_PORT_DDR	DDRB
+	#define TPL_DRV_PORT_OUT	PORTB
+	#define TPL_DRV_PORT_MSK	PCMSK1
+	#define TPL_DRV_GMSK		5
 
 	// define UNUSED pins
 	#define NC1_PIN				2		// PB2
@@ -82,16 +82,19 @@
 #define SWITCH_MSK			SWITCH_PIN
 #define INIT_SWITCH()		(SWITCH_PORT_DDR &= ~(1<<SWITCH_PIN))
 #define READ_SWITCH()		((SWITCH_PORT_IN>>SWITCH_PIN) & 1)
-#define SAFE_SWITCH()		do {SWITCH_PORT_DDR |= (1<<SWITCH_PIN); \
+#define SAFE_SWITCH()		do { \
+								SWITCH_PORT_DDR |= (1<<SWITCH_PIN); \
 								SWITCH_PORT_OUT &= ~(1<<SWITCH_PIN); \
 						    } while(0)
-#define INIT_SWITCH_PC()	do {GIMSK |= (1<<SWITCH_GMSK); \
+#define INIT_SWITCH_PC()	do { \
+								GIMSK |= (1<<SWITCH_GMSK); \
 								SWITCH_PORT_MSK |= (1<<SWITCH_MSK); \
 							} while(0)
 
 // define TPL_DRV pin functions
 #define TPL_DRV_MSK_PIN			TPL_DRV_PIN
-#define TPL_DRV_INIT()			do {TPL_DRV_PORT_DDR &= ~(1<<TPL_DRV_PIN); \
+#define TPL_DRV_INIT()			do { \
+									TPL_DRV_PORT_DDR &= ~(1<<TPL_DRV_PIN); \
 									GIMSK |= (1<<TPL_DRV_GMSK); \
 									TPL_DRV_PORT_MSK |= (1<<TPL_DRV_MSK_PIN); \
 								} while(0)
@@ -100,16 +103,19 @@
 #define TPL_DONE_PIN			1
 #define TPL_DONE_PORT_DDR		DDRB
 #define TPL_DONE_PORT_OUT		PORTB
-#define TPL_DONE_INIT()			do {TPL_DONE_PORT_DDR |= (1<<TPL_DONE_PIN); \
+#define TPL_DONE_INIT()			do { \
+									TPL_DONE_PORT_DDR |= (1<<TPL_DONE_PIN); \
 									TPL_DONE_PORT_OUT &= ~(1<<TPL_DONE_PIN); \
 								} while(0)
-#define TPL_DONE_PULSE()		do {TPL_DONE_PORT_OUT |= (1<<TPL_DONE_PIN); \
+#define TPL_DONE_PULSE()		do { \
+									TPL_DONE_PORT_OUT |= (1<<TPL_DONE_PIN); \
 									TPL_DONE_PORT_OUT &= ~(1<<TPL_DONE_PIN); \
 								} while(0)
 
 
 // define UNUSED pins INIT function
-#define INIT_UNUSED_PINS()	do { NC1_PORT_DDR |= (1<<NC1_PIN); \
+#define INIT_UNUSED_PINS()	do { \
+								NC1_PORT_DDR |= (1<<NC1_PIN); \
 								NC1_PORT_OUT &= ~(1<<NC1_PIN); \
 								NC2_PORT_DDR |= (1<<NC2_PIN); \
 								NC2_PORT_OUT &= ~(1<<NC2_PIN); \
@@ -154,7 +160,7 @@
 #define CTR_FLAG     (1<<2)
 #define VCC_FLAG     (1<<3)
 #define TEMP_FLAG    (1<<4)
-#define PC_FLAG		 (1<<5)
+//#define PC_FLAG		 (1<<5)
 
 #define VCC_MUX		0b00100001
 #define TEMP_MUX	0b10100010
@@ -275,7 +281,7 @@ void vcc_msg_init(void);
 void sw1_msg_init(void);
 void sw2_msg_init(void);
 void flags_update(void);
-void msgs_build(void);
+void msgs_build(int pc_triggered);
 void dlyMS(uint16_t ms);
 
 
