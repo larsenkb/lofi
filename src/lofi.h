@@ -11,14 +11,56 @@
 #define __LOFI_H__
 
 // specify 2 for rev 0.2 boards and 3 for rev 0.3 and 0.4 boards
-#define LOFI_VER		3
+// specify 0 for original lofi boards
+#define LOFI_VER		0
 
 #define EN_TPL5111				1
 #define EEPROM_NODEID_ADR		((uint8_t *)0)
 #define NRF24_PAYLOAD_LEN		3
 #define TXBUF_SIZE				8	// must be a power of 2!!!
 
-#if LOFI_VER==2
+#if LOFI_VER==0
+
+	// define SWITCH pin
+	#define SWITCH_PIN			2	// PB2
+	#define SWITCH_PORT_DDR		DDRB
+	#define SWITCH_PORT_OUT		PORTB
+	#define SWITCH_PORT_IN		PINB
+	#define SWITCH_PORT_MSK		PCMSK1
+	#define SWITCH_GMSK			5
+
+	// define TPL_DRV pin
+	#define TPL_DRV_PIN			2	// PA2
+	#define TPL_DRV_PORT_DDR	DDRA
+	#define TPL_DRV_PORT_OUT	PORTA
+	#define TPL_DRV_PORT_MSK	PCMSK0
+	#define TPL_DRV_GMSK		4
+
+	// define TPL_DRV pin functions
+	#define TPL_DRV_INIT()
+
+	// define TPL_DONE pin and macro
+	#define TPL_DONE_INIT()
+	#define TPL_DONE_PULSE()
+
+	// define UNUSED pins INIT function
+	#define INIT_UNUSED_PINS() do { \
+									DDRB  |= (1<<1); \
+									PORTB &= ~(1<<1); \
+									DDRA  |= (1<<2); \
+									PORTA &= ~(1<<2); \
+								} while (0)
+
+	// ---------  LED MACROS  ----------
+	//was PORTB bit 1
+	#define LED						(1<<0)  // PORTB bit0
+
+	#define LED_INIT(x)				do {DDRB |= (x); PORTB |= (x);} while(0)
+	#define LED_DEASSERT(x)			do {PORTB &= ~(x);} while(0)
+	#define LED_ASSERT(x)			do {PORTB |= (x);} while(0)
+
+
+#elif LOFI_VER==2
 	// define which flag is set for which PC ISR
 	#define PCINT0_FLAG			WD_FLAG
 	#define PCINT1_FLAG			SW_FLAG
@@ -91,6 +133,7 @@
 								SWITCH_PORT_MSK |= (1<<SWITCH_MSK); \
 							} while(0)
 
+#if LOFI_VER != 0
 // define TPL_DRV pin functions
 #define TPL_DRV_MSK_PIN			TPL_DRV_PIN
 #define TPL_DRV_INIT()			do { \
@@ -112,7 +155,6 @@
 									TPL_DONE_PORT_OUT &= ~(1<<TPL_DONE_PIN); \
 								} while(0)
 
-
 // define UNUSED pins INIT function
 #define INIT_UNUSED_PINS()	do { \
 								NC1_PORT_DDR |= (1<<NC1_PIN); \
@@ -121,7 +163,6 @@
 								NC2_PORT_OUT &= ~(1<<NC2_PIN); \
 							} while(0)
 
-
 // ---------  LED MACROS  ----------
 //was PORTB bit 1
 #define LED						(1<<3)  // PORTA bit3
@@ -129,6 +170,8 @@
 #define LED_INIT(x)				do {DDRA |= (x); PORTA |= (x);} while(0)
 #define LED_ASSERT(x)			do {PORTA &= ~(x);} while(0)
 #define LED_DEASSERT(x)			do {PORTA |= (x);} while(0)
+
+#endif
 
 // --------- BITDBG ---------
 #define BITDBG					(1<<7)	// PORTA bit7
@@ -218,7 +261,7 @@ typedef struct {	// fills up bit fields LSB to MSB
 	uint8_t		sw1_rev			:1;	// LSB
 	uint8_t		sw1_pc			:1;
 	uint8_t		en_sw1			:1;
-	uint8_t		rsvd_1			:3;
+	uint8_t		wd_timeout		:3; //rsvd_1			:3;
 	uint8_t		spd_1M			:1;
 	uint8_t		spd_250K		:1;	// MSB
 
@@ -246,7 +289,7 @@ typedef struct {	// fills up bit fields LSB to MSB
 	uint8_t		setup_retr;				// nrf SETUP_RETR register contents
 
 	// bytes 6 & 7
-	uint16_t	rsvd_6;
+	uint16_t	wdCnts;					// rsvd_6;
 
 	// bytes 8 & 9
 	uint16_t	swCntsMax;				// LE 0x01c2 for ~1 hr 

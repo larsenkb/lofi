@@ -90,9 +90,65 @@ uint16_t			vccCnts;
 uint16_t			tempCnts;
 uint16_t			ctrCnts;
 
+#if LOFI_VER == 0
+volatile uint8_t	wdTick;
+#endif
+
 uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
 uint8_t				txBufWr, txBufRd;
 
+#if LOFI_VER==0
+//****************************************************************
+// setup_watchdog - configure watchdog timeout
+//
+// 0=16ms, 1=32ms,2=64ms,3=128ms,4=250ms,5=500ms
+// 6=1 sec,7=2 sec, 8=4 sec, 9= 8sec
+void setup_watchdog(int val)
+{
+    uint8_t bb;
+
+    if (val > 9 )
+        return;     //val = 9;
+    bb = val & 7;
+    if (val > 7)
+        bb |= (1<<5);
+    bb |= (1<<WDCE);
+
+    MCUSR &= ~(1<<WDRF);
+    // start timed sequence
+    WDTCSR |= (1<<WDCE) | (1<<WDE);
+    // set new watchdog timeout value
+    WDTCSR = bb;
+    WDTCSR |= _BV(WDIE);
+}
+
+//****************************************************************
+// watchdog_isr
+//
+// This runs each time the watch dog wakes us up from sleep
+// The system wakes up when any interrupt occurs. Setting this
+// flag lets background (main loop) know that the watchdog
+// interrupt occured so that we can xmit.
+ISR(WATCHDOG_vect)
+{
+	if (config.wdCnts) {
+		if (++wdTick >= config.wdCnts) {
+			wdTick = 0;
+			FLAGS |= WD_FLAG;
+		}
+	}
+}
+
+//****************************************************************
+// pinChange_isr
+//
+ISR(PCINT1_vect)
+{
+    FLAGS |= SW_FLAG;
+}
+
+
+#else
 
 //****************************************************************
 // pinChange_isr
@@ -114,6 +170,7 @@ ISR(PCINT1_vect)
 	FLAGS |= PCINT1_FLAG;
 }
 
+#endif
 
 //****************************************************************
 // main
@@ -206,6 +263,10 @@ int main(void)
 	ctrCnts = config.ctrCntsMax - 1;
 	vccCnts = config.vccCntsMax - 1;
 	tempCnts = config.tempCntsMax - 1;
+#if LOFI_VER == 0
+	wdTick = config.wdCnts - 1;
+	setup_watchdog(config.wd_timeout + 5);
+#endif
 
 	// set sleep mode one time here
     set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
