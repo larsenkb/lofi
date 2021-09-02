@@ -12,7 +12,7 @@
 
 // specify 2 for rev 0.2 boards and 3 for rev 0.3 and 0.4 boards
 // specify 0 for original lofi boards
-#define LOFI_VER		0
+#define LOFI_VER		3
 
 #define EN_TPL5111				1
 #define EEPROM_NODEID_ADR		((uint8_t *)0)
@@ -28,13 +28,6 @@
 	#define SWITCH_PORT_IN		PINB
 	#define SWITCH_PORT_MSK		PCMSK1
 	#define SWITCH_GMSK			5
-
-	// define TPL_DRV pin
-	#define TPL_DRV_PIN			2	// PA2
-	#define TPL_DRV_PORT_DDR	DDRA
-	#define TPL_DRV_PORT_OUT	PORTA
-	#define TPL_DRV_PORT_MSK	PCMSK0
-	#define TPL_DRV_GMSK		4
 
 	// define TPL_DRV pin functions
 	#define TPL_DRV_INIT()
@@ -142,7 +135,8 @@
 									TPL_DRV_PORT_MSK |= (1<<TPL_DRV_MSK_PIN); \
 								} while(0)
 
-// define TPL_DONE pin and macro
+// define TPL_DONE pin and macro; must be at least 0.1us wide
+// and rising edge must be at least 0.1us later that rising edge of DRV
 #define TPL_DONE_PIN			1
 #define TPL_DONE_PORT_DDR		DDRB
 #define TPL_DONE_PORT_OUT		PORTB
@@ -289,7 +283,8 @@ typedef struct {	// fills up bit fields LSB to MSB
 	uint8_t		setup_retr;				// nrf SETUP_RETR register contents
 
 	// bytes 6 & 7
-	uint16_t	wdCntsMax;				// LE 0x0007 for ~5 min					// rsvd_6;
+	uint8_t		wdCntsMax;				// 0x07 for ~5 min					// rsvd_6;
+	uint8_t		rsvd_6;
 
 	// bytes 8 & 9
 	uint16_t	swCntsMax;				// LE 0x01c2 for ~1 hr 

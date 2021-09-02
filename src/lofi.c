@@ -90,10 +90,6 @@ uint16_t			vccCnts;
 uint16_t			tempCnts;
 uint16_t			ctrCnts;
 
-#if LOFI_VER == 0
-volatile uint8_t	wdTick;
-#endif
-
 uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
 uint8_t				txBufWr, txBufRd;
 
@@ -131,11 +127,11 @@ void setup_watchdog(int val)
 // interrupt occured so that we can xmit.
 ISR(WATCHDOG_vect)
 {
-	if (config.wdCntsMax) {
-		if (++wdTick >= config.wdCntsMax) {
-			wdTick = 0;
-			FLAGS |= WD_FLAG;
-		}
+	static uint8_t wdTick = 0xF0;
+
+	if (++wdTick >= config.wdCntsMax) {
+		wdTick = 0;
+		FLAGS |= WD_FLAG;
 	}
 }
 
@@ -146,7 +142,6 @@ ISR(PCINT1_vect)
 {
     FLAGS |= SW_FLAG;
 }
-
 
 #else
 
@@ -264,7 +259,6 @@ int main(void)
 	vccCnts = config.vccCntsMax - 1;
 	tempCnts = config.tempCntsMax - 1;
 #if LOFI_VER == 0
-	wdTick = config.wdCntsMax - 1;
 	setup_watchdog(config.wd_timeout + 5);
 #endif
 
@@ -293,11 +287,11 @@ int main(void)
 		// can only execute this code if TPL5111 DRVn asserted
 		// check to see if it is time to xmit a pkt...
 		if (FLAGS & WD_FLAG)	{
+			TPL_DONE_PULSE();
 			flags_update();
 			// build messages to xmit
 			msgs_build(0);
 			FLAGS &= ~WD_FLAG;
-			TPL_DONE_PULSE();
 		} else {
 			// build messages to xmit
 			msgs_build(1);
@@ -357,9 +351,9 @@ int main(void)
 		CORE_CLK_SETi(CORE_FAST);
 
 		// go to sleep and wait for interrupt (tpl5111 DRVn or switch pin change)
-	if (FLAGS == 0) {
-		sleep_mode();                // System sleeps here
-	}
+		if (FLAGS == 0) {
+			sleep_mode();                // System sleeps here
+		}
     } //endof: while (1) {
 
     return 0;
@@ -654,8 +648,8 @@ void msgs_build(int pc_triggered)
 		memcpy(&txBuf[txBufWr][0], &sens_rev, sizeof(sens_rev));
 		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
 		sens_rev.seq++;
-	}
-	if (FLAGS & VCC_FLAG) {
+//	}
+//	if (FLAGS & VCC_FLAG) {
 		int16_t vcc = readVccTemp(VCC_MUX);
 		vcc += config.vccFudge;
 		FLAGS &= ~VCC_FLAG;
