@@ -131,8 +131,8 @@ void setup_watchdog(int val)
 // interrupt occured so that we can xmit.
 ISR(WATCHDOG_vect)
 {
-	if (config.wdCnts) {
-		if (++wdTick >= config.wdCnts) {
+	if (config.wdCntsMax) {
+		if (++wdTick >= config.wdCntsMax) {
 			wdTick = 0;
 			FLAGS |= WD_FLAG;
 		}
@@ -264,7 +264,7 @@ int main(void)
 	vccCnts = config.vccCntsMax - 1;
 	tempCnts = config.tempCntsMax - 1;
 #if LOFI_VER == 0
-	wdTick = config.wdCnts - 1;
+	wdTick = config.wdCntsMax - 1;
 	setup_watchdog(config.wd_timeout + 5);
 #endif
 
@@ -648,7 +648,13 @@ void msgs_build(int pc_triggered)
 		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
 	}
 
-	// build a Vcc message if flag set
+	// build a Vcc message if flag set and a rev msg
+	//if (sens_rev.seq == 0) {
+	if (FLAGS & VCC_FLAG) {
+		memcpy(&txBuf[txBufWr][0], &sens_rev, sizeof(sens_rev));
+		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+		sens_rev.seq++;
+	}
 	if (FLAGS & VCC_FLAG) {
 		int16_t vcc = readVccTemp(VCC_MUX);
 		vcc += config.vccFudge;
@@ -681,11 +687,6 @@ void msgs_build(int pc_triggered)
 		if (++sens_ctr.ctr_lo == 0)
 			sens_ctr.ctr_hi++;
 		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
-	}
-	if (sens_rev.seq == 0) {
-		memcpy(&txBuf[txBufWr][0], &sens_rev, sizeof(sens_rev));
-		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
-		sens_rev.seq = 1;
 	}
 }
 
