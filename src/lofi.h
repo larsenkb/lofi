@@ -10,162 +10,12 @@
 #ifndef __LOFI_H__
 #define __LOFI_H__
 
-// specify 2 for rev 0.2 boards and 3 for rev 0.3 and 0.4 boards
-// specify 0 for original lofi boards
-#define LOFI_VER		3
 
 #define EN_TPL5111				1
 #define EEPROM_NODEID_ADR		((uint8_t *)0)
 #define NRF24_PAYLOAD_LEN		3
 #define TXBUF_SIZE				8	// must be a power of 2!!!
 
-#if LOFI_VER==0
-
-	// define SWITCH pin
-	#define SWITCH_PIN			2	// PB2
-	#define SWITCH_PORT_DDR		DDRB
-	#define SWITCH_PORT_OUT		PORTB
-	#define SWITCH_PORT_IN		PINB
-	#define SWITCH_PORT_MSK		PCMSK1
-	#define SWITCH_GMSK			5
-
-	// define TPL_DRV pin functions
-	#define TPL_DRV_INIT()
-
-	// define TPL_DONE pin and macro
-	#define TPL_DONE_INIT()
-	#define TPL_DONE_PULSE()
-
-	// define UNUSED pins INIT function
-	#define INIT_UNUSED_PINS() do { \
-									DDRB  |= (1<<1); \
-									PORTB &= ~(1<<1); \
-									DDRA  |= (1<<2); \
-									PORTA &= ~(1<<2); \
-								} while (0)
-
-	// ---------  LED MACROS  ----------
-	//was PORTB bit 1
-	#define LED						(1<<0)  // PORTB bit0
-
-	#define LED_INIT(x)				do {DDRB |= (x); PORTB |= (x);} while(0)
-	#define LED_DEASSERT(x)			do {PORTB &= ~(x);} while(0)
-	#define LED_ASSERT(x)			do {PORTB |= (x);} while(0)
-
-
-#elif LOFI_VER==2
-	// define which flag is set for which PC ISR
-	#define PCINT0_FLAG			WD_FLAG
-	#define PCINT1_FLAG			SW_FLAG
-
-	// define SWITCH pin
-	#define SWITCH_PIN			2	// PB2
-	#define SWITCH_PORT_DDR		DDRB
-	#define SWITCH_PORT_OUT		PORTB
-	#define SWITCH_PORT_IN		PINB
-	#define SWITCH_PORT_MSK		PCMSK1
-	#define SWITCH_GMSK			5
-
-	// define TPL_DRV pin
-	#define TPL_DRV_PIN			2	// PA2
-	#define TPL_DRV_PORT_DDR	DDRA
-	#define TPL_DRV_PORT_OUT	PORTA
-	#define TPL_DRV_PORT_MSK	PCMSK0
-	#define TPL_DRV_GMSK		4
-
-	// define UNUSED pins
-	#define NC1_PIN				0		// PB0
-	#define NC1_PORT_DDR		DDRB
-	#define NC1_PORT_OUT		PORTB
-	#define NC2_PIN				7		// PA7
-	#define NC2_PORT_DDR		DDRA
-	#define NC2_PORT_OUT		PORTA
-
-#elif LOFI_VER==3
-	// define which flag is set for which PC ISR
-	#define PCINT0_FLAG			SW_FLAG
-	#define PCINT1_FLAG			WD_FLAG
-
-	// define SWITCH pin
-	#define SWITCH_PIN			7	// PA7
-	#define SWITCH_PORT_DDR		DDRA
-	#define SWITCH_PORT_OUT		PORTA
-	#define SWITCH_PORT_IN		PINA
-	#define SWITCH_PORT_MSK		PCMSK0
-	#define SWITCH_GMSK			4
-
-	// define TPL_DRV pin
-	#define TPL_DRV_PIN			0	// PB0
-	#define TPL_DRV_PORT_DDR	DDRB
-	#define TPL_DRV_PORT_OUT	PORTB
-	#define TPL_DRV_PORT_MSK	PCMSK1
-	#define TPL_DRV_GMSK		5
-
-	// define UNUSED pins
-	#define NC1_PIN				2		// PB2
-	#define NC1_PORT_DDR		DDRB
-	#define NC1_PORT_OUT		PORTB
-	#define NC2_PIN				2		// PA2
-	#define NC2_PORT_DDR		DDRA
-	#define NC2_PORT_OUT		PORTA
-
-#else
-	#error "LOFI_VER not defined"
-#endif
-
-// define SWITCH pin functions
-#define SWITCH_MSK			SWITCH_PIN
-#define INIT_SWITCH()		(SWITCH_PORT_DDR &= ~(1<<SWITCH_PIN))
-#define READ_SWITCH()		((SWITCH_PORT_IN>>SWITCH_PIN) & 1)
-#define SAFE_SWITCH()		do { \
-								SWITCH_PORT_DDR |= (1<<SWITCH_PIN); \
-								SWITCH_PORT_OUT &= ~(1<<SWITCH_PIN); \
-						    } while(0)
-#define INIT_SWITCH_PC()	do { \
-								GIMSK |= (1<<SWITCH_GMSK); \
-								SWITCH_PORT_MSK |= (1<<SWITCH_MSK); \
-							} while(0)
-
-#if LOFI_VER != 0
-// define TPL_DRV pin functions
-#define TPL_DRV_MSK_PIN			TPL_DRV_PIN
-#define TPL_DRV_INIT()			do { \
-									TPL_DRV_PORT_DDR &= ~(1<<TPL_DRV_PIN); \
-									GIMSK |= (1<<TPL_DRV_GMSK); \
-									TPL_DRV_PORT_MSK |= (1<<TPL_DRV_MSK_PIN); \
-								} while(0)
-
-// define TPL_DONE pin and macro; must be at least 0.1us wide
-// and rising edge must be at least 0.1us later that rising edge of DRV
-#define TPL_DONE_PIN			1
-#define TPL_DONE_PORT_DDR		DDRB
-#define TPL_DONE_PORT_OUT		PORTB
-#define TPL_DONE_INIT()			do { \
-									TPL_DONE_PORT_DDR |= (1<<TPL_DONE_PIN); \
-									TPL_DONE_PORT_OUT &= ~(1<<TPL_DONE_PIN); \
-								} while(0)
-#define TPL_DONE_PULSE()		do { \
-									TPL_DONE_PORT_OUT |= (1<<TPL_DONE_PIN); \
-									TPL_DONE_PORT_OUT &= ~(1<<TPL_DONE_PIN); \
-								} while(0)
-
-// define UNUSED pins INIT function
-#define INIT_UNUSED_PINS()	do { \
-								NC1_PORT_DDR |= (1<<NC1_PIN); \
-								NC1_PORT_OUT &= ~(1<<NC1_PIN); \
-								NC2_PORT_DDR |= (1<<NC2_PIN); \
-								NC2_PORT_OUT &= ~(1<<NC2_PIN); \
-							} while(0)
-
-// ---------  LED MACROS  ----------
-//was PORTB bit 1
-#define LED						(1<<3)  // PORTA bit3
-
-#define LED_INIT(x)				do {DDRA |= (x); PORTA |= (x);} while(0)
-#define LED_ASSERT(x)			do {PORTA &= ~(x);} while(0)
-#define LED_DEASSERT(x)			do {PORTA |= (x);} while(0)
-
-#endif
 
 // --------- BITDBG ---------
 #define BITDBG					(1<<7)	// PORTA bit7
@@ -189,6 +39,7 @@
 		sei();					\
 	} while(0)
 
+#define PWB_REV       GPIOR1
 
 // use one of the unused internal I/O registers as a 1-clock access register
 #define FLAGS       GPIOR0
@@ -255,7 +106,8 @@ typedef struct {	// fills up bit fields LSB to MSB
 	uint8_t		sw1_rev			:1;	// LSB
 	uint8_t		sw1_pc			:1;
 	uint8_t		en_sw1			:1;
-	uint8_t		wd_timeout		:3; // 0-0.5s, 1-1s, 2-2s, 3-4s, 4-8s, 567-off; //rsvd_1			:3;
+//	uint8_t		wd_timeout		:3; // 0-0.5s, 1-1s, 2-2s, 3-4s, 4-8s, 567-off; //rsvd_1			:3;
+	uint8_t		rsvd_1			:3;
 	uint8_t		spd_1M			:1;
 	uint8_t		spd_250K		:1;	// MSB
 
@@ -283,7 +135,7 @@ typedef struct {	// fills up bit fields LSB to MSB
 	uint8_t		setup_retr;				// nrf SETUP_RETR register contents
 
 	// bytes 6 & 7
-	uint8_t		wdCntsMax;				// 0x07 for ~5 min					// rsvd_6;
+	uint8_t		pwbRev;					// 0 = original PWB; 2 = 0.1/2 PWB rev; 3 = 0.3/4 PWB rev
 	uint8_t		rsvd_6;
 
 	// bytes 8 & 9
@@ -310,6 +162,8 @@ typedef struct {	// fills up bit fields LSB to MSB
 uint16_t readVccTemp(uint8_t mux_select);
 void printConfig(void);
 uint8_t getSw1(uint8_t pc_triggered);
+uint8_t read_switch(void);
+void safe_switch(void);
 //uint8_t getSw2(void);
 void ctr_msg_init(void);
 void rev_msg_init(void);
@@ -320,7 +174,15 @@ void sw2_msg_init(void);
 void flags_update(void);
 void msgs_build(int pc_triggered);
 void dlyMS(uint16_t ms);
-
+void tpl_done_init(void);
+void tpl_drv_init(void);
+void tpl_done_pulse(void);
+void led_init(void);
+void led_assert(void);
+void led_deassert(void);
+void init_switch_PC(void);
+void init_switch(void);
+void init_unused_pins(void);
 
 #endif  /* __LOFI_H__ */
 
