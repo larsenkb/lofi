@@ -95,7 +95,7 @@ void nrf24_config(config_t *config, uint8_t pay_length)
 
     // Auto Acknowledgment
 	if (config->en_aa) {
-		nrf24_configRegister(EN_AA,(1<<ENAA_P0)|(1<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
+		nrf24_configRegister(EN_AA,(1<<ENAA_P0)|(0<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
 		nrf24_configRegister(SETUP_RETR,config->setup_retr);
 	} else {
 		nrf24_configRegister(EN_AA, 0);
