@@ -101,16 +101,8 @@ uint8_t				txBufWr, txBufRd;
 void setup_watchdog(void)
 {
     uint8_t bb;
-//	uint8_t val = 9;
-#if 0
-    if (val > 9 )
-        return;     //val = 9;
-    bb = val & 7;
-    if (val > 7)
-        bb |= (1<<5);
-    bb |= (1<<WDCE);
-#endif
-	bb = 0x21 | (1<<WDCE);
+
+	bb = 0x21 | (1<<WDCE); // 9 ~= 8sec; hardcoded
 
     MCUSR &= ~(1<<WDRF);
     // start timed sequence
@@ -145,7 +137,7 @@ ISR(WATCHDOG_vect)
 //   not enabled for PWB_REV == 0
 ISR(PCINT0_vect)
 {
-	if (PWB_REV == 2) {
+	if (PWB_REV == 1 || PWB_REV == 2) {
 		FLAGS |= WD_FLAG;
 	} else if (PWB_REV == 3) {
 		FLAGS |= SW_FLAG;
@@ -161,7 +153,7 @@ ISR(PCINT1_vect)
 {
 	if (PWB_REV == 0) {
 		FLAGS |= SW_FLAG;
-	} else if (PWB_REV == 2) {
+	} else if (PWB_REV == 1 || PWB_REV == 2) {
 		FLAGS |= SW_FLAG;
 	} else if (PWB_REV == 3) {
 		FLAGS |= WD_FLAG;
@@ -262,7 +254,6 @@ int main(void)
 	tempCnts = config.tempCntsMax - 1;
 	if (PWB_REV == 0) {
 		setup_watchdog();
-//		setup_watchdog(config.wd_timeout + 5);
 	}
 
 	// set sleep mode one time here
@@ -624,7 +615,7 @@ uint8_t  getSw1(uint8_t pc_triggered)
 	// debounce read switch
 	do {
 		pin_debounce <<= 1;
-//		_delay_loop_1(10); // ~100us at 1MHz F_CPU
+		_delay_loop_1(2); // ~20us at 1MHz F_CPU
 		pin_debounce |= read_switch();
 	} while ((pin_debounce != 0) && (pin_debounce != 0xff));
 
@@ -650,14 +641,12 @@ void msgs_build(int pc_triggered)
 	}
 
 	// build a Vcc message if flag set and a rev msg
-	//if (sens_rev.seq == 0) {
 	if (FLAGS & VCC_FLAG) {
+		int16_t vcc = readVccTemp(VCC_MUX);
 		memcpy(&txBuf[txBufWr][0], &sens_rev, sizeof(sens_rev));
 		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
 		sens_rev.seq++;
-//	}
-//	if (FLAGS & VCC_FLAG) {
-		int16_t vcc = readVccTemp(VCC_MUX);
+
 		vcc += config.vccFudge;
 		FLAGS &= ~VCC_FLAG;
 		sens_vcc.vcc_lo = vcc & 0xFF;
@@ -665,7 +654,6 @@ void msgs_build(int pc_triggered)
 		sens_vcc.seq++;
 		memcpy(&txBuf[txBufWr][0], &sens_vcc, sizeof(sens_vcc));
 		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
-
 	}
 
 	// build a Temperature message if flag set
@@ -709,109 +697,37 @@ void dlyMS(uint16_t ms)
 //
 void tpl_done_init(void)
 {
-	if (PWB_REV == 2 || PWB_REV == 3) {
-		DDRB |= (1<<1);
-		PORTB &= ~(1<<1);
-	}
-	// do nothing for PWB_REV == 0
-	// it is GREEN LED
+	// don't do anything for PWB_REV == 0
+	if (PWB_REV == 0)
+		return;
+
+	// PB1 for PWB_REVs 1-3
+	DDRB |= (1<<1);
+	PORTB &= ~(1<<1);
 }
 
+//
 // define TPL_DONE pin and macro; must be at least 0.1us wide
 // and rising edge must be at least 0.1us later that rising edge of DRV
+//
 void tpl_done_pulse(void)
 {
-	if (PWB_REV == 2 || PWB_REV == 3) {
-		PORTB |= (1<<1);
-		PORTB &= ~(1<<1);
-	}
 	// don't do anything for PWB_REV == 0
+	if (PWB_REV == 0)
+		return;
+
+	// PB1 for PWB_REVs 1-3
+	PORTB |= (1<<1);
+	PORTB &= ~(1<<1);
 }
 
-void led_init(void)
-{
-	if (PWB_REV == 0) {
-		DDRB |= (1<<0);
-		PORTB |= (1<<0);
-	} else if (PWB_REV == 2 || PWB_REV == 3) {
-		DDRA |= (1<<3);
-		PORTA |= (1<<3);
-	}
-}
-
-void led_deassert(void)
-{
-	if (PWB_REV== 0) {
-		PORTB &= ~(1<<0);
-	} else if (PWB_REV == 2 || PWB_REV == 3) {
-		PORTA |= (1<<3);
-	}
-}
-
-void led_assert(void)
-{
-	if (PWB_REV == 0) {
-		PORTB |= (1<<0);
-	} else if (PWB_REV == 2  || PWB_REV == 3) {
-		PORTA &= ~(1<<3);
-	}
-}
-
-uint8_t read_switch(void)
-{
-	if (PWB_REV == 0) {
-		return ((PINB >> 2) & 1);
-	} else if (PWB_REV == 2) {
-		return ((PINB >> 2) & 1);
-	} else if (PWB_REV == 3) {
-		return ((PINA >> 7) & 1);
-	}
-	return 0;
-}
-
-void safe_switch(void)
-{
-	if (PWB_REV == 0) {
-		DDRB |= (1<<2);
-		PORTB &= ~(1<<2);
-	} else if (PWB_REV == 2) {
-		DDRB |= (1<<2);
-		PORTB &= ~(1<<2);
-	} else if (PWB_REV == 3) {
-		DDRA |= (1<<7);
-		PORTA &= ~(1<<7);
-	}
-}
-
-void init_switch(void)
-{
-	if (PWB_REV == 0) {
-		DDRB &= ~(1<<2);
-	} else if (PWB_REV == 2) {
-		DDRB &= ~(1<<2);
-	} else if (PWB_REV == 3) {
-		DDRA &= ~(1<<7);
-	}
-}
-
-void init_switch_PC(void)
-{
-	if (PWB_REV == 0) {
-		GIMSK |= (1<<5);
-		PCMSK1 |= (1<<2);
-	} else if (PWB_REV == 2) {
-		GIMSK |= (1<<5);
-		PCMSK1 |= (1<<2);
-	} else if (PWB_REV == 3) {
-		GIMSK |= (1<<4);
-		PCMSK0 |= (1<<7);
-	}
-}
-
+//
+// Initialize pin to recieve TPL5111 DRV interrupt
+//
 void tpl_drv_init(void)
 {
 	if (PWB_REV == 0) {
-	} else if (PWB_REV == 2) {
+	} else if (PWB_REV == 1 || PWB_REV == 2) {
 		DDRA &= ~(1<<2);
 		GIMSK |= (1<<4);
 		PCMSK0 |= (1<<2);
@@ -822,6 +738,111 @@ void tpl_drv_init(void)
 	}
 }
 
+//
+// Initialize LED control pin
+//
+void led_init(void)
+{
+	if (PWB_REV == 0) {
+		DDRB |= (1<<0);
+		PORTB |= (1<<0);
+	} else if (PWB_REV == 1 || PWB_REV == 2 || PWB_REV == 3) {
+		DDRA |= (1<<3);
+		PORTA |= (1<<3);
+	}
+}
+
+//
+// Turn OFF LED
+//
+void led_deassert(void)
+{
+	if (PWB_REV== 0) {
+		PORTB &= ~(1<<0);
+	} else if (PWB_REV == 1 || PWB_REV == 2 || PWB_REV == 3) {
+		PORTA |= (1<<3);
+	}
+}
+
+//
+// Turn ON LED
+//
+void led_assert(void)
+{
+	if (PWB_REV == 0) {
+		PORTB |= (1<<0);
+	} else if (PWB_REV == 1 || PWB_REV == 2  || PWB_REV == 3) {
+		PORTA &= ~(1<<3);
+	}
+}
+
+//
+// Read reed switch input
+//
+uint8_t read_switch(void)
+{
+	if (PWB_REV == 0) {
+		return ((PINB >> 2) & 1);
+	} else if (PWB_REV == 1 || PWB_REV == 2) {
+		return ((PINB >> 2) & 1);
+	} else if (PWB_REV == 3) {
+		return ((PINA >> 7) & 1);
+	}
+	return 0;
+}
+
+//
+// Put the reed switch input pin in safe state; it won't be used
+// We will be in polling mode
+//
+void safe_switch(void)
+{
+	if (PWB_REV == 0) {
+		DDRB |= (1<<2);
+		PORTB &= ~(1<<2);
+	} else if (PWB_REV == 1 || PWB_REV == 2) {
+		DDRB |= (1<<2);
+		PORTB &= ~(1<<2);
+	} else if (PWB_REV == 3) {
+		DDRA |= (1<<7);
+		PORTA &= ~(1<<7);
+	}
+}
+
+//
+// Initialize input pin to be controlled by reed switch
+//
+void init_switch(void)
+{
+	if (PWB_REV == 0) {
+		DDRB &= ~(1<<2);
+	} else if (PWB_REV == 1 || PWB_REV == 2) {
+		DDRB &= ~(1<<2);
+	} else if (PWB_REV == 3) {
+		DDRA &= ~(1<<7);
+	}
+}
+
+//
+// Initialize input pin so that reed switch can generate an interrupt
+//
+void init_switch_PC(void)
+{
+	if (PWB_REV == 0) {
+		GIMSK |= (1<<5);
+		PCMSK1 |= (1<<2);
+	} else if (PWB_REV == 1 || PWB_REV == 2) {
+		GIMSK |= (1<<5);
+		PCMSK1 |= (1<<2);
+	} else if (PWB_REV == 3) {
+		GIMSK |= (1<<4);
+		PCMSK0 |= (1<<7);
+	}
+}
+
+//
+// Put the unused pins in safe mode
+//
 void init_unused_pins(void)
 {
 	if (PWB_REV == 0) {
@@ -829,7 +850,7 @@ void init_unused_pins(void)
 		PORTB &= ~(1<<1);
 		DDRA |= (1<<2);
 		PORTA &= ~(1<<2);
-	} else if (PWB_REV == 2) {
+	} else if (PWB_REV == 1 || PWB_REV == 2) {
 		DDRB |= (1<<0);
 		PORTB &= ~(1<<0);
 		DDRA |= (1<<7);
