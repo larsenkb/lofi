@@ -106,8 +106,7 @@ typedef struct {	// fills up bit fields LSB to MSB
 	uint8_t		sw1_rev			:1;	// LSB
 	uint8_t		sw1_pc			:1;
 	uint8_t		en_sw1			:1;
-//	uint8_t		wd_timeout		:3; // 0-0.5s, 1-1s, 2-2s, 3-4s, 4-8s, 567-off; //rsvd_1			:3;
-	uint8_t		rsvd_1			:3;
+	uint8_t		rsvd_1			:3;	// was wd_timeout - now hardcoded to max 8 sec.
 	uint8_t		spd_1M			:1;
 	uint8_t		spd_250K		:1;	// MSB
 
@@ -135,7 +134,7 @@ typedef struct {	// fills up bit fields LSB to MSB
 	uint8_t		setup_retr;				// nrf SETUP_RETR register contents
 
 	// bytes 6 & 7
-	uint8_t		pwbRev;					// 0 = original PWB; 2 = 0.1/2 PWB rev; 3 = 0.3/4 PWB rev
+	uint8_t		pwbRev;					// 0=original PWB; 1=0.1 PWB; 2=0.2 PWB; 3 = 0.3/0.4 PWB
 	uint8_t		rsvd_6;
 
 	// bytes 8 & 9
