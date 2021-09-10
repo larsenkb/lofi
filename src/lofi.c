@@ -90,8 +90,11 @@ uint16_t			vccCnts;
 uint16_t			tempCnts;
 uint16_t			ctrCnts;
 
-uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
-uint8_t				txBufWr, txBufRd;
+#define	RF_MSGBUF_SIZE	8
+//uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
+//uint8_t				txBufWr, txBufRd;
+uint8_t				rfMsgBuf[RF_MSGBUF_SIZE][NRF24_PAYLOAD_LEN-1];
+uint8_t				rfMsgBufWr, rfMsgBufRd;
 
 //****************************************************************
 // setup_watchdog - configure watchdog timeout
@@ -170,9 +173,9 @@ int main(void)
     FLAGS = 0;
 	PWB_REV = 0xff;		// until it can get properly initialized from eeprom
 
-	// initialize uart buf indices
-	txBufRd = 0;
-	txBufWr = 0;
+	// initialize RF msg buf indices
+	rfMsgBufRd = 0;
+	rfMsgBufWr = 0;
 
 	// Set Divide by 8 for 8MHz RC oscillator 
 	// to get a 1MHz F_CPU
@@ -278,6 +281,10 @@ int main(void)
 	//
 	while (1) {
 
+		// initialize RF msg buf indices
+		rfMsgBufRd = 0;
+		rfMsgBufWr = 0;
+
 		// can only execute this code if TPL5111 DRVn asserted
 		// check to see if it is time to xmit a pkt...
 		if (FLAGS & WD_FLAG)	{
@@ -295,19 +302,21 @@ int main(void)
 		// Set Divide by 8 for 8MHz RC oscillator 
 		CORE_CLK_SETi(CORE_SLOW);
 
+		nrf24_flush_tx();
+
 		nrf24_powerUpTx();
 		dlyMS(4);
 
-		while (txBufRd != txBufWr) {	// enable to send all pkts
+		while (rfMsgBufRd != rfMsgBufWr) {	// enable to send all pkts
 			int i;
 
 			nrf24_clearStatus();
 
 			/* Automatically goes to TX mode */
-			nrf24_send(&config, &txBuf[txBufRd][0], NRF24_PAYLOAD_LEN-1);        
+			nrf24_send(&config, &rfMsgBuf[rfMsgBufRd][0], NRF24_PAYLOAD_LEN-1);        
 
 			// Bump the read index
-			txBufRd = (txBufRd + 1) & (TXBUF_SIZE - 1);
+			rfMsgBufRd = (rfMsgBufRd + 1) & (RF_MSGBUF_SIZE - 1);
 
 			/* Start the transmission */
 			nrf24_pulseCE();
@@ -342,6 +351,8 @@ int main(void)
 				_delay_loop_1(10); // ~100us at 1MHz F_CPU
 				led_deassert();
 			}
+
+			dlyMS(4);
 
         } //endof: while (txBufRd != TxBufWr) {
 
@@ -635,25 +646,26 @@ void msgs_build(int pc_triggered)
 	// build a Switch message if flag set
 	if (FLAGS & SW_FLAG) {
 		FLAGS &= ~SW_FLAG;
-		txBuf[txBufWr][0] = getSw1(pc_triggered);
-		txBuf[txBufWr][1] = 0;
-		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+		rfMsgBuf[rfMsgBufWr][0] = getSw1(pc_triggered);
+		rfMsgBuf[rfMsgBufWr][1] = 0;
+		rfMsgBufWr = (rfMsgBufWr + 1) & (RF_MSGBUF_SIZE - 1);
 	}
 
 	// build a Vcc message if flag set and a rev msg
 	if (FLAGS & VCC_FLAG) {
 		int16_t vcc = readVccTemp(VCC_MUX);
-		memcpy(&txBuf[txBufWr][0], &sens_rev, sizeof(sens_rev));
-		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
-		sens_rev.seq++;
 
 		vcc += config.vccFudge;
 		FLAGS &= ~VCC_FLAG;
 		sens_vcc.vcc_lo = vcc & 0xFF;
 		sens_vcc.vcc_hi = (vcc>>8) & 0x3;
+		memcpy(&rfMsgBuf[rfMsgBufWr][0], &sens_vcc, sizeof(sens_vcc));
+		rfMsgBufWr = (rfMsgBufWr + 1) & (RF_MSGBUF_SIZE - 1);
 		sens_vcc.seq++;
-		memcpy(&txBuf[txBufWr][0], &sens_vcc, sizeof(sens_vcc));
-		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+
+		memcpy(&rfMsgBuf[rfMsgBufWr][0], &sens_rev, sizeof(sens_rev));
+		rfMsgBufWr = (rfMsgBufWr + 1) & (RF_MSGBUF_SIZE - 1);
+		sens_rev.seq++;
 	}
 
 	// build a Temperature message if flag set
@@ -663,19 +675,19 @@ void msgs_build(int pc_triggered)
 		FLAGS &= ~TEMP_FLAG;
 		sens_temp.temp_lo = temp & 0xFF;
 		sens_temp.temp_hi = (temp>>8) & 0x3;
+		memcpy(&rfMsgBuf[rfMsgBufWr][0], &sens_temp, sizeof(sens_temp));
+		rfMsgBufWr = (rfMsgBufWr + 1) & (RF_MSGBUF_SIZE - 1);
 		sens_temp.seq++;
-		memcpy(&txBuf[txBufWr][0], &sens_temp, sizeof(sens_temp));
-		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
 	}
 
 	// build a counter message if flag set
 	if (FLAGS & CTR_FLAG) {
 		FLAGS &= ~CTR_FLAG;
-		memcpy(&txBuf[txBufWr][0], &sens_ctr, sizeof(sens_ctr));
-		sens_ctr.seq++;
+		memcpy(&rfMsgBuf[rfMsgBufWr][0], &sens_ctr, sizeof(sens_ctr));
+		rfMsgBufWr = (rfMsgBufWr + 1) & (RF_MSGBUF_SIZE - 1);
 		if (++sens_ctr.ctr_lo == 0)
 			sens_ctr.ctr_hi++;
-		txBufWr = (txBufWr + 1) & (TXBUF_SIZE - 1);
+		sens_ctr.seq++;
 	}
 }
 
