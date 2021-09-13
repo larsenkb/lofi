@@ -168,10 +168,15 @@ ISR(PCINT1_vect)
 //
 int main(void)
 {
+	uint8_t mcusr;
 
 	gstatus = 0;
     FLAGS = 0;
 	PWB_REV = 0xff;		// until it can get properly initialized from eeprom
+
+	// read reason for reset
+	mcusr = MCUSR;
+	MCUSR = 0;		// clear all reasons for reset
 
 	// initialize RF msg buf indices
 	rfMsgBufRd = 0;
@@ -206,6 +211,7 @@ int main(void)
     // init LED pin as OUTPUT
 	// LED pin is a shared resource with txDbg
 	led_init();		// set as output/high even if not used
+
 	// init hardware SPI pins for talking to radio
 	nrf24_init();
     
@@ -235,6 +241,11 @@ int main(void)
 
 	// Enable TPL5111 DVRn pin change
 	tpl_drv_init();
+
+	// Delay 100ms if this is a POR; as per sec 5.6 in nrf doc
+	if (mcusr & 1) {
+		dlyMS(100);
+	}
 
 	// switch to a lower clock rate while reading/writing NRF. For some
 	// reason I can't get anywhere near 10MHz SPI CLK rate.
@@ -302,8 +313,6 @@ int main(void)
 		// Set Divide by 8 for 8MHz RC oscillator 
 		CORE_CLK_SETi(CORE_SLOW);
 
-		nrf24_flush_tx();
-
 		nrf24_powerUpTx();
 		dlyMS(4);
 
@@ -311,6 +320,8 @@ int main(void)
 			int i;
 
 			nrf24_clearStatus();
+
+			nrf24_flush_tx();
 
 			/* Automatically goes to TX mode */
 			nrf24_send(&config, &rfMsgBuf[rfMsgBufRd][0], NRF24_PAYLOAD_LEN-1);        
@@ -325,11 +336,6 @@ int main(void)
 			i = 0;
 			while (nrf24_isSending() && i < 100) {
 				i++;
-			}
-			if (i >= 100) {
-				led_assert();
-				dlyMS(1000);
-				led_deassert();
 			}
 
 			if (config.en_led) {
@@ -361,9 +367,9 @@ int main(void)
 		CORE_CLK_SETi(CORE_FAST);
 
 		// go to sleep and wait for interrupt (tpl5111 DRVn or switch pin change)
-		if (FLAGS == 0) {
+//		if (FLAGS == 0) {
 			sleep_mode();                // System sleeps here
-		}
+//		}
     } //endof: while (1) {
 
     return 0;
