@@ -10,6 +10,7 @@
 * Which is based on this library: 
 *   http://www.tinkerer.eu/AVRLib/nRF24L01
 * -----------------------------------------------------------------------------
+*  Modified by: Kent B. Larsen
 */
 #ifndef __NRF24_H__
 #define __NRF24_H__
@@ -34,99 +35,21 @@
 #define nrf24_ADDR_LEN 5
 #define nrf24_CONFIG ((1<<MASK_RX_DR) | (1<<MASK_TX_DS) | (1<<MASK_MAX_RT) | (1<<EN_CRC) | (1<<CRCO))
 
-#define NRF24_TRANSMISSON_OK 0
-#define NRF24_MESSAGE_LOST   1
 
-/* adjustment functions */
-void    nrf24_init(void);
-void    nrf24_rx_address(uint8_t* adr);
-void    nrf24_tx_address(uint8_t* adr);
-void    nrf24_config(config_t *config, uint8_t pay_length);
-
-/* state check functions */
-uint8_t nrf24_dataReady(void);
-uint8_t nrf24_isSending(void);
-uint8_t nrf24_getStatus(void);
-uint8_t nrf24_rxFifoEmpty(void);
-void nrf24_flush_tx(void);
-void nrf24_clearStatus(void);
-
-/* core TX / RX functions */
-void    nrf24_send(config_t *config, uint8_t *buf, uint8_t buf_length);
-void    nrf24_getData(uint8_t *data);
-void    nrf24_pulseCE(void);
-
-/* use in dynamic length mode */
-uint8_t nrf24_payloadLength(void);
-
-/* post transmission analysis */
-uint8_t nrf24_lastMessageStatus(void);
-uint8_t nrf24_retransmissionCount(void);
-
-/* Returns the payload length */
-uint8_t nrf24_payload_length(void);
-
-/* power management */
-void    nrf24_powerUpRx(void);
-void    nrf24_powerUpTx(void);
-void    nrf24_powerDown(void);
-
-/* low level interface ... */
+void    nrfInit(void);
+void    nrfConfig(config_t *config, uint8_t pay_length);
+uint8_t nrfIsSending(void);
+uint8_t nrfGetStatus(void);
+void	nrfFlushTx(void);
+void	nrfClearStatus(void);
+void    nrfFillTxFifo(config_t *config, uint8_t *buf, uint8_t buf_length);
+void    nrfPulseCE(void);
+void    nrfPowerUpTx(void);
+void    nrfPowerDown(void);
 void    spi_init(void);
 uint8_t spi_transfer(uint8_t tx);
-void    nrf24_transmitSync(uint8_t* dataout,uint8_t len);
-void    nrf24_transferSync(uint8_t* dataout,uint8_t* datain,uint8_t len);
-void    nrf24_configRegister(uint8_t reg, uint8_t value);
-void    nrf24_readRegister(uint8_t reg, uint8_t* value, uint8_t len);
-void    nrf24_writeRegister(uint8_t reg, uint8_t* value, uint8_t len);
-uint8_t nrf24_rdReg(uint8_t reg);
-
-/* -------------------------------------------------------------------------- */
-/* You should implement the platform spesific functions in your code */
-/* -------------------------------------------------------------------------- */
-
-/* -------------------------------------------------------------------------- */
-/* In this function you should do the following things:
- *    - Set MISO pin input
- *    - Set MOSI pin output
- *    - Set SCK pin output
- *    - Set CSN pin output
- *    - Set CE pin output     */
-/* -------------------------------------------------------------------------- */
-//extern void nrf24_setupPins(void);
-
-/* -------------------------------------------------------------------------- */
-/* nrf24 CE pin control function
- *    - state:1 => Pin HIGH
- *    - state:0 => Pin LOW     */
-/* -------------------------------------------------------------------------- */
-//extern void nrf24_ce_digitalWrite(uint8_t state);
-
-/* -------------------------------------------------------------------------- */
-/* nrf24 CE pin control function
- *    - state:1 => Pin HIGH
- *    - state:0 => Pin LOW     */
-/* -------------------------------------------------------------------------- */
-//extern void nrf24_csn_digitalWrite(uint8_t state);
-
-/* -------------------------------------------------------------------------- */
-/* nrf24 SCK pin control function
- *    - state:1 => Pin HIGH
- *    - state:0 => Pin LOW     */
-/* -------------------------------------------------------------------------- */
-//extern void nrf24_sck_digitalWrite(uint8_t state);
-
-/* -------------------------------------------------------------------------- */
-/* nrf24 MOSI pin control function
- *    - state:1 => Pin HIGH
- *    - state:0 => Pin LOW     */
-/* -------------------------------------------------------------------------- */
-//extern void nrf24_mosi_digitalWrite(uint8_t state);
-
-/* -------------------------------------------------------------------------- */
-/* nrf24 MISO pin read function */
-/* - returns: Non-zero if the pin is high */
-/* -------------------------------------------------------------------------- */
-//extern uint8_t nrf24_miso_digitalRead(void);
+void    nrfReadRegs(uint8_t reg, uint8_t* value, uint8_t len);
+void    nrfWriteReg(uint8_t reg, uint8_t value);
+uint8_t nrfReadReg(uint8_t reg);
 
 #endif /* __NRF24_H__ */

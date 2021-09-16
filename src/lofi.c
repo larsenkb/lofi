@@ -213,7 +213,7 @@ int main(void)
 	led_init();		// set as output/high even if not used
 
 	// init hardware SPI pins for talking to radio
-	nrf24_init();
+	nrfInit();
     
     // initialize uart if eeprom configured
 	if (config.en_txDbg) {
@@ -252,11 +252,11 @@ int main(void)
 	CORE_CLK_SET(CORE_SLOW);
 
 	// Initialize radio channel and payload length
-	nrf24_config(&config, NRF24_PAYLOAD_LEN);
-	nrf24_flush_tx();
+	nrfConfig(&config, NRF24_PAYLOAD_LEN);
+	nrfFlushTx();
 
 	// Power off radio as we go into our first sleep
-	nrf24_powerDown();            
+	nrfPowerDown();            
 
 	CORE_CLK_SET(CORE_FAST);
 
@@ -313,28 +313,28 @@ int main(void)
 		// Set Divide by 8 for 8MHz RC oscillator 
 		CORE_CLK_SETi(CORE_SLOW);
 
-		nrf24_powerUpTx();
+		nrfPowerUpTx();
 		dlyMS(4);
 
 		while (rfMsgBufRd != rfMsgBufWr) {	// enable to send all pkts
 			int i;
 
-			nrf24_clearStatus();
+			nrfClearStatus();
 
-			nrf24_flush_tx();
+			nrfFlushTx();
 
 			/* Automatically goes to TX mode */
-			nrf24_send(&config, &rfMsgBuf[rfMsgBufRd][0], NRF24_PAYLOAD_LEN-1);        
+			nrfFillTxFifo(&config, &rfMsgBuf[rfMsgBufRd][0], NRF24_PAYLOAD_LEN-1);        
 
 			// Bump the read index
 			rfMsgBufRd = (rfMsgBufRd + 1) & (RF_MSGBUF_SIZE - 1);
 
 			/* Start the transmission */
-			nrf24_pulseCE();
+			nrfPulseCE();
 
 			// spin waiting for xmit to complete with good or max retries set
 			i = 0;
-			while (nrf24_isSending() && i < 100) {
+			while (nrfIsSending() && i < 100) {
 				i++;
 			}
 
@@ -362,7 +362,7 @@ int main(void)
 
         } //endof: while (txBufRd != TxBufWr) {
 
-		nrf24_powerDown();            
+		nrfPowerDown();            
 
 		CORE_CLK_SETi(CORE_FAST);
 
@@ -383,39 +383,39 @@ void printConfig(void)
 	uint8_t  ta[8];
 
     xprintf("\nnrf config:\n");
-	xprintf("00:%02x", nrf24_rdReg(0));
-    xprintf(" %02x", nrf24_rdReg(1));
-    xprintf(" %02x", nrf24_rdReg(2));
-    xprintf(" %02X", nrf24_rdReg(3));
-	xprintf(" %02X", nrf24_rdReg(4));
-    xprintf(" %02X", nrf24_rdReg(5));
-    xprintf(" %02X", nrf24_rdReg(6));
-    xprintf(" %02X", nrf24_rdReg(7));
-    xprintf(" %02X\n", nrf24_rdReg(8));
-    xprintf("09:%02X\n", nrf24_rdReg(9));
+	xprintf("00:%02x", nrfReadReg(0));
+    xprintf(" %02x", nrfReadReg(1));
+    xprintf(" %02x", nrfReadReg(2));
+    xprintf(" %02X", nrfReadReg(3));
+	xprintf(" %02X", nrfReadReg(4));
+    xprintf(" %02X", nrfReadReg(5));
+    xprintf(" %02X", nrfReadReg(6));
+    xprintf(" %02X", nrfReadReg(7));
+    xprintf(" %02X\n", nrfReadReg(8));
+    xprintf("09:%02X\n", nrfReadReg(9));
 	memset(ta, 0, 8);
-	nrf24_readRegister(0x0a, ta, 5);
+	nrfReadRegs(0x0a, ta, 5);
 	xprintf("0A:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
 	memset(ta, 0, 8);
-	nrf24_readRegister(0x0b, ta, 5);
+	nrfReadRegs(0x0b, ta, 5);
 	xprintf("0B:%02X %02X %02X %02X %02X", ta[4], ta[3], ta[2], ta[1], ta[0]);
-    xprintf("  0C:%02X", nrf24_rdReg(0x0c));
-    xprintf("  0D:%02X", nrf24_rdReg(0x0d));
-    xprintf("  0E:%02X", nrf24_rdReg(0x0e));
-    xprintf("  0F:%02X\n", nrf24_rdReg(0x0f));
+    xprintf("  0C:%02X", nrfReadReg(0x0c));
+    xprintf("  0D:%02X", nrfReadReg(0x0d));
+    xprintf("  0E:%02X", nrfReadReg(0x0e));
+    xprintf("  0F:%02X\n", nrfReadReg(0x0f));
 	memset(ta, 0, 8);
-	nrf24_readRegister(0x10, ta, 5);
+	nrfReadRegs(0x10, ta, 5);
 	xprintf("10:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
-    xprintf("11:%02X", nrf24_rdReg(0x11));
-    xprintf("  12:%02X", nrf24_rdReg(0x12));
-    xprintf("  13:%02X", nrf24_rdReg(0x13));
-    xprintf("  14:%02X", nrf24_rdReg(0x14));
-    xprintf("  15:%02X", nrf24_rdReg(0x15));
-    xprintf("  16:%02X", nrf24_rdReg(0x16));
-    xprintf("  17:%02X\n", nrf24_rdReg(0x17));
+    xprintf("11:%02X", nrfReadReg(0x11));
+    xprintf("  12:%02X", nrfReadReg(0x12));
+    xprintf("  13:%02X", nrfReadReg(0x13));
+    xprintf("  14:%02X", nrfReadReg(0x14));
+    xprintf("  15:%02X", nrfReadReg(0x15));
+    xprintf("  16:%02X", nrfReadReg(0x16));
+    xprintf("  17:%02X\n", nrfReadReg(0x17));
 //	xprintf("              ?\n");
-    xprintf("1C:%02X", nrf24_rdReg(0x1c));
-    xprintf("  1D:%02X\n", nrf24_rdReg(0x1d));
+    xprintf("1C:%02X", nrfReadReg(0x1c));
+    xprintf("  1D:%02X\n", nrfReadReg(0x1d));
 }
 
 
