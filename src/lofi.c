@@ -96,6 +96,8 @@ uint16_t			ctrCnts;
 uint8_t				rfMsgBuf[RF_MSGBUF_SIZE][NRF24_PAYLOAD_LEN-1];
 uint8_t				rfMsgBufWr, rfMsgBufRd;
 
+void sw1_msg_build(void);
+
 //****************************************************************
 // setup_watchdog - configure watchdog timeout
 //
@@ -305,66 +307,53 @@ int main(void)
 			msgs_build(0);
 			FLAGS &= ~WD_FLAG;
 		} else {
-			// build messages to xmit
-			msgs_build(1);
+			// build sw1 msg to xmit
+			sw1_msg_build();
+			//msgs_build(1);
 		}
 
+		if (rfMsgBufRd != rfMsgBufWr) {
 
-		// Set Divide by 8 for 8MHz RC oscillator 
-		CORE_CLK_SETi(CORE_SLOW);
+			// Set Divide by 8 for 8MHz RC oscillator 
+			CORE_CLK_SETi(CORE_SLOW);
 
-		nrfPowerUpTx();
-		dlyMS(4);
-
-		while (rfMsgBufRd != rfMsgBufWr) {	// enable to send all pkts
-			int i;
-
-			nrfClearStatus();
-
-			nrfFlushTx();
-
-			/* Automatically goes to TX mode */
-			nrfFillTxFifo(&config, &rfMsgBuf[rfMsgBufRd][0], NRF24_PAYLOAD_LEN-1);        
-
-			// Bump the read index
-			rfMsgBufRd = (rfMsgBufRd + 1) & (RF_MSGBUF_SIZE - 1);
-
-			/* Start the transmission */
-			nrfPulseCE();
-
-			// spin waiting for xmit to complete with good or max retries set
-			i = 0;
-			while (nrfIsSending() && i < 100) {
-				i++;
-			}
-
-			if (config.en_led) {
-				if (config.en_aa) {
-					if (config.en_led_nack) {
-						if (gstatus &  (1<<MAX_RT)) {
-							led_assert();
-							_delay_loop_1(10); // ~100us at 1MHz F_CPU
-							led_deassert();
-						}
-					} else if (gstatus & (1<<TX_DS)) {
-						led_assert();
-						_delay_loop_1(10); // ~100us at 1MHz F_CPU
-						led_deassert();
-					}
-				}
-			} else if (config.en_led_nack) {
-				led_assert();
-				_delay_loop_1(10); // ~100us at 1MHz F_CPU
-				led_deassert();
-			}
-
+			nrfPowerUpTx();
 			dlyMS(4);
 
-        } //endof: while (txBufRd != TxBufWr) {
+			while (rfMsgBufRd != rfMsgBufWr) {	// enable to send all pkts
+				int i;
 
-		nrfPowerDown();            
+				nrfClearStatus();
 
-		CORE_CLK_SETi(CORE_FAST);
+				nrfFlushTx();
+
+				/* Automatically goes to TX mode */
+				nrfFillTxFifo(&config, &rfMsgBuf[rfMsgBufRd][0], NRF24_PAYLOAD_LEN-1);        
+
+				// Bump the read index
+				rfMsgBufRd = (rfMsgBufRd + 1) & (RF_MSGBUF_SIZE - 1);
+
+				/* Start the transmission */
+				nrfPulseCE();
+
+				// spin waiting for xmit to complete with good or max retries set
+				i = 0;
+				while (nrfIsSending() && i < 100) {
+					i++;
+				}
+
+				blinkLed(gstatus);
+
+				if (rfMsgBufRd != rfMsgBufWr) {
+					dlyMS(4);
+				}
+
+		    } //endof: while (rfMsgBufRd != rfMsgBufWr) {
+
+			nrfPowerDown();            
+	
+			CORE_CLK_SETi(CORE_FAST);
+		} //endof: if (rfMsgBufRd != rfMsgBufWr) {
 
 		// go to sleep and wait for interrupt (tpl5111 DRVn or switch pin change)
 //		if (FLAGS == 0) {
@@ -373,6 +362,29 @@ int main(void)
     } //endof: while (1) {
 
     return 0;
+}
+
+void blinkLed(uint8_t status)
+{
+	if (config.en_led) {
+		if (config.en_aa) {
+			if (config.en_led_nack) {
+				if (status & (1<<MAX_RT)) {
+					led_assert();
+					_delay_loop_1(10); // ~100us at 1MHz F_CPU
+					led_deassert();
+				}
+			} else if (status & (1<<TX_DS)) {
+				led_assert();
+				_delay_loop_1(10); // ~100us at 1MHz F_CPU
+				led_deassert();
+			}
+		}
+	} else if (config.en_led_nack) {
+		led_assert();
+		_delay_loop_1(10); // ~100us at 1MHz F_CPU
+		led_deassert();
+	}
 }
 
 //
@@ -641,6 +653,17 @@ uint8_t  getSw1(uint8_t pc_triggered)
 	sens_sw1.closed = config.sw1_rev ^ pin_debounce;
 	sens_sw1.seq++;
 	return (*(uint8_t *)&sens_sw1);
+}
+
+void sw1_msg_build(void)
+{
+	// build a Switch message if flag set
+	if (FLAGS & SW_FLAG) {
+		FLAGS &= ~SW_FLAG;
+		rfMsgBuf[rfMsgBufWr][0] = getSw1(1);
+		rfMsgBuf[rfMsgBufWr][1] = 0;
+		rfMsgBufWr = (rfMsgBufWr + 1) & (RF_MSGBUF_SIZE - 1);
+	}
 }
 
 //

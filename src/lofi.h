@@ -182,6 +182,7 @@ void led_deassert(void);
 void init_switch_PC(void);
 void init_switch(void);
 void init_unused_pins(void);
+void blinkLed(uint8_t status);
 
 #endif  /* __LOFI_H__ */
 
