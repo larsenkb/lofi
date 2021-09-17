@@ -256,6 +256,8 @@ int main(void)
 	// Initialize radio channel and payload length
 	nrfConfig(&config, NRF24_PAYLOAD_LEN);
 	nrfFlushTx();
+	// clear IRQ causes
+	nrfWriteReg(STATUS, ((1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT))); 
 
 	// Power off radio as we go into our first sleep
 	nrfPowerDown();            
@@ -326,12 +328,14 @@ int main(void)
 		CORE_CLK_SETi(CORE_SLOW);
 
 		nrfPowerUpTx();
-		dlyMS(4);
+		//dlyMS(1);
+		_delay_loop_1(120);
 
 		do {
 			int i;
 
-			nrfClearStatus();
+			// clear IRQ causes
+			//nrfWriteReg(STATUS, ((1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT))); 
 
 			nrfFlushTx();
 
@@ -346,9 +350,11 @@ int main(void)
 
 			// spin waiting for xmit to complete with good or max retries set
 			i = 0;
-			while (nrfIsSending() && i < 100) {
+			while (nrfIsSending() && i < 400) {
 				i++;
 			}
+			// clear IRQ causes
+			nrfWriteReg(STATUS, ((1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT))); 
 
 			blinkLed(gstatus);
 
@@ -901,8 +907,13 @@ void init_unused_pins(void)
 		DDRA |= (1<<7);
 		PORTA &= ~(1<<7);
 	} else if (PWB_REV == 3) {
+#if EN_IRQ_POLL
+		DDRB &= ~(1<<2);
+		//PORTB &= ~(1<<2);
+#else
 		DDRB |= (1<<2);
 		PORTB &= ~(1<<2);
+#endif
 		DDRA |= (1<<2);
 		PORTA &= ~(1<<2);
 	}

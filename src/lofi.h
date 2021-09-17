@@ -10,8 +10,7 @@
 #ifndef __LOFI_H__
 #define __LOFI_H__
 
-
-#define EN_TPL5111				1
+#define EN_IRQ_POLL				0
 #define EEPROM_NODEID_ADR		((uint8_t *)0)
 #define NRF24_PAYLOAD_LEN		3
 #define TXBUF_SIZE				8	// must be a power of 2!!!
@@ -27,7 +26,7 @@
 // define macros to slow clock even more than fuse setting
 #define CLK_DIV			3
 #define CORE_FAST		CLK_DIV
-#define CORE_SLOW		(CLK_DIV + 2)	
+#define CORE_SLOW		(CLK_DIV + 1)	
 #define CORE_CLK_SET(x)  do {	\
 		CLKPR = (1<<CLKPCE);	\
 		CLKPR = (x);			\

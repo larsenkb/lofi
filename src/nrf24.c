@@ -167,18 +167,17 @@ void nrfPulseCE(void)
 	DEASSERT_CE();
 }
 
-
+// returns 1 (true) if still sending; i.e. TX_DS nor MAX_RT has been asserted
+// or IRQn has not been asserted, if polling
 uint8_t nrfIsSending()
 {
+#if EN_IRQ_POLL
+	return ((1<<2) == (PINB & (1<<2)));
+#else
 	// read the current status
 	gstatus = nrfGetStatus();
- 
-	// if sending successful (TX_DS) or max retries exceded (MAX_RT).
-	if (gstatus & ((1 << TX_DS) | (1 << MAX_RT))) {        
-		return 0; // false
-	}
-
-	return 1; // true
+	return (0 == (gstatus & ((1 << TX_DS) | (1 << MAX_RT))));        
+#endif
 }
 
 
@@ -188,11 +187,6 @@ uint8_t nrfGetStatus(void)
 	gstatus = spi_transfer(NOP);
 	DEASSERT_CSN();
 	return gstatus;
-}
-
-void nrfClearStatus(void)
-{
-	nrfWriteReg(STATUS, (1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT)); 
 }
 
 void nrfPowerUpTx(void)

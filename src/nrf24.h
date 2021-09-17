@@ -33,15 +33,13 @@
 #define ASSERT_CSN()    (PORTA &= ~(1<<CSN))
 
 #define nrf24_ADDR_LEN 5
-#define nrf24_CONFIG ((1<<MASK_RX_DR) | (1<<MASK_TX_DS) | (1<<MASK_MAX_RT) | (1<<EN_CRC) | (1<<CRCO))
-
+#define nrf24_CONFIG ((1<<MASK_RX_DR) | (0<<MASK_TX_DS) | (0<<MASK_MAX_RT) | (1<<EN_CRC) | (1<<CRCO))
 
 void    nrfInit(void);
 void    nrfConfig(config_t *config, uint8_t pay_length);
 uint8_t nrfIsSending(void);
 uint8_t nrfGetStatus(void);
 void	nrfFlushTx(void);
-void	nrfClearStatus(void);
 void    nrfFillTxFifo(config_t *config, uint8_t *buf, uint8_t buf_length);
 void    nrfPulseCE(void);
 void    nrfPowerUpTx(void);
