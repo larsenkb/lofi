@@ -294,6 +294,11 @@ int main(void)
 	//
 	while (1) {
 
+		if (FLAGS == 0) {
+			// go to sleep and wait for interrupt (watchdog, tpl5111 DRVn or switch pin change)
+			sleep_mode();
+		}
+
 		// initialize RF msg buf indices
 		rfMsgBufRd = 0;
 		rfMsgBufWr = 0;
@@ -312,53 +317,52 @@ int main(void)
 			//msgs_build(1);
 		}
 
-		if (rfMsgBufRd != rfMsgBufWr) {
+		// it is possible that there are no msgs to xmit...
+		if (rfMsgBufRd == rfMsgBufWr) {
+			continue;
+		}
 
-			// Set Divide by 8 for 8MHz RC oscillator 
-			CORE_CLK_SETi(CORE_SLOW);
+		// Set Divide by 8 for 8MHz RC oscillator 
+		CORE_CLK_SETi(CORE_SLOW);
 
-			nrfPowerUpTx();
-			dlyMS(4);
+		nrfPowerUpTx();
+		dlyMS(4);
 
-			while (rfMsgBufRd != rfMsgBufWr) {	// enable to send all pkts
-				int i;
+		do {
+			int i;
 
-				nrfClearStatus();
+			nrfClearStatus();
 
-				nrfFlushTx();
+			nrfFlushTx();
 
-				/* Automatically goes to TX mode */
-				nrfFillTxFifo(&config, &rfMsgBuf[rfMsgBufRd][0], NRF24_PAYLOAD_LEN-1);        
+	 		/* Automatically goes to TX mode */
+			nrfFillTxFifo(&config, &rfMsgBuf[rfMsgBufRd][0], NRF24_PAYLOAD_LEN-1);        
 
-				// Bump the read index
-				rfMsgBufRd = (rfMsgBufRd + 1) & (RF_MSGBUF_SIZE - 1);
+			// Bump the read index
+			rfMsgBufRd = (rfMsgBufRd + 1) & (RF_MSGBUF_SIZE - 1);
 
-				/* Start the transmission */
-				nrfPulseCE();
+			/* Start the transmission */
+			nrfPulseCE();
 
-				// spin waiting for xmit to complete with good or max retries set
-				i = 0;
-				while (nrfIsSending() && i < 100) {
-					i++;
-				}
+			// spin waiting for xmit to complete with good or max retries set
+			i = 0;
+			while (nrfIsSending() && i < 100) {
+				i++;
+			}
 
-				blinkLed(gstatus);
+			blinkLed(gstatus);
 
-				if (rfMsgBufRd != rfMsgBufWr) {
-					dlyMS(4);
-				}
+			// do I really need a delay here?
+//			if (rfMsgBufRd != rfMsgBufWr) {
+//				dlyMS(4);
+//			}
 
-		    } //endof: while (rfMsgBufRd != rfMsgBufWr) {
+		} while (rfMsgBufRd != rfMsgBufWr);
 
-			nrfPowerDown();            
+		nrfPowerDown();            
 	
-			CORE_CLK_SETi(CORE_FAST);
-		} //endof: if (rfMsgBufRd != rfMsgBufWr) {
+		CORE_CLK_SETi(CORE_FAST);
 
-		// go to sleep and wait for interrupt (tpl5111 DRVn or switch pin change)
-//		if (FLAGS == 0) {
-			sleep_mode();                // System sleeps here
-//		}
     } //endof: while (1) {
 
     return 0;
