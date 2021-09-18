@@ -33,7 +33,12 @@
 #define ASSERT_CSN()    (PORTA &= ~(1<<CSN))
 
 #define nrf24_ADDR_LEN 5
+
+#if EN_IRQ_POLL
 #define nrf24_CONFIG ((1<<MASK_RX_DR) | (0<<MASK_TX_DS) | (0<<MASK_MAX_RT) | (1<<EN_CRC) | (1<<CRCO))
+#else
+#define nrf24_CONFIG ((1<<MASK_RX_DR) | (1<<MASK_TX_DS) | (1<<MASK_MAX_RT) | (1<<EN_CRC) | (1<<CRCO))
+#endif
 
 void    nrfInit(void);
 void    nrfConfig(config_t *config, uint8_t pay_length);
