@@ -26,7 +26,7 @@
 // define macros to slow clock even more than fuse setting
 #define CLK_DIV			3
 #define CORE_FAST		CLK_DIV
-#define CORE_SLOW		(CLK_DIV + 1)	
+#define CORE_SLOW		(CLK_DIV + 0)	
 #define CORE_CLK_SET(x)  do {	\
 		CLKPR = (1<<CLKPCE);	\
 		CLKPR = (x);			\
