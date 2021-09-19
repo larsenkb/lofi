@@ -94,7 +94,12 @@ void nrfConfig(config_t *config, uint8_t pay_length)
     // Auto Acknowledgment
 	if (config->en_aa) {
 		nrfWriteReg(EN_AA,(1<<ENAA_P0)|(0<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
-		nrfWriteReg(SETUP_RETR,config->setup_retr);
+		tval = config->nodeId & 0x0F;
+		if (tval == 0) tval = 3;
+		tval <<= 4;
+		tval |= config->setup_retr & 0x0F;
+		nrfWriteReg(SETUP_RETR, tval);
+		//nrfWriteReg(SETUP_RETR,config->setup_retr);
 	} else {
 		nrfWriteReg(EN_AA, 0);
 		nrfWriteReg(SETUP_RETR, 0);
