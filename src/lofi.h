@@ -114,7 +114,7 @@ typedef struct {	// fills up bit fields LSB to MSB
     uint8_t     en_vcc			:1;
 	uint8_t		en_temp			:1;
 	uint8_t		en_txDbg		:1;
-	uint8_t		en_led			:1;
+	uint8_t		en_led_ack		:1;
 	uint8_t		en_led_nack		:1;
 	uint8_t		rsvd_2			:2;
 

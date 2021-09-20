@@ -295,6 +295,7 @@ int main(void)
 	// Start of main loop
 	//
 	while (1) {
+		uint8_t ledStatus;
 
 		if (FLAGS == 0) {
 			// go to sleep and wait for interrupt (watchdog, tpl5111 DRVn or switch pin change)
@@ -328,8 +329,8 @@ int main(void)
 		CORE_CLK_SETi(CORE_SLOW);
 
 		nrfPowerUpTx();
-		//dlyMS(1);
-		_delay_loop_1(120);
+		dlyMS(2);
+		//_delay_loop_1(120);
 
 		do {
 			int i;
@@ -355,8 +356,7 @@ int main(void)
 			}
 			// clear IRQ causes
 			nrfWriteReg(STATUS, ((1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT))); 
-
-			blinkLed(gstatus);
+			ledStatus = gstatus;
 
 			// do I really need a delay here?
 //			if (rfMsgBufRd != rfMsgBufWr) {
@@ -368,6 +368,7 @@ int main(void)
 		nrfPowerDown();            
 	
 		CORE_CLK_SETi(CORE_FAST);
+		blinkLed(ledStatus);
 
     } //endof: while (1) {
 
@@ -376,24 +377,19 @@ int main(void)
 
 void blinkLed(uint8_t status)
 {
-	if (config.en_led) {
-		if (config.en_aa) {
-			if (config.en_led_nack) {
-				if (status & (1<<MAX_RT)) {
-					led_assert();
-					_delay_loop_1(10); // ~100us at 1MHz F_CPU
-					led_deassert();
-				}
-			} else if (status & (1<<TX_DS)) {
-				led_assert();
-				_delay_loop_1(10); // ~100us at 1MHz F_CPU
-				led_deassert();
-			}
+	if (config.en_led_nack) {
+		if (status & (1<<MAX_RT)) {
+			led_assert();
+			_delay_loop_1(5); // ~100us at 1MHz F_CPU
+			led_deassert();
 		}
-	} else if (config.en_led_nack) {
-		led_assert();
-		_delay_loop_1(10); // ~100us at 1MHz F_CPU
-		led_deassert();
+	}
+	if (config.en_led_ack) {
+		if (status & (1<<TX_DS)) {
+			led_assert();
+			_delay_loop_1(5); // ~100us at 1MHz F_CPU
+			led_deassert();
+		}
 	}
 }
 
