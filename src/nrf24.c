@@ -98,8 +98,8 @@ void nrfConfig(config_t *config, uint8_t pay_length)
 		if (tval == 0) tval = 3;
 		tval <<= 4;
 		tval |= config->setup_retr & 0x0F;
-		nrfWriteReg(SETUP_RETR, tval);
-		//nrfWriteReg(SETUP_RETR,config->setup_retr);
+		//nrfWriteReg(SETUP_RETR, tval);
+		nrfWriteReg(SETUP_RETR,config->setup_retr);
 	} else {
 		nrfWriteReg(EN_AA, 0);
 		nrfWriteReg(SETUP_RETR, 0);
