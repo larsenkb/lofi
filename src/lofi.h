@@ -10,7 +10,7 @@
 #ifndef __LOFI_H__
 #define __LOFI_H__
 
-#define EN_IRQ_POLL				0
+#define EN_IRQ_POLL				1
 #define EEPROM_NODEID_ADR		((uint8_t *)0)
 #define NRF24_PAYLOAD_LEN		3
 #define TXBUF_SIZE				8	// must be a power of 2!!!
@@ -27,6 +27,7 @@
 #define CLK_DIV			3
 #define CORE_FAST		CLK_DIV
 #define CORE_SLOW		(CLK_DIV + 0)	
+#if 0
 #define CORE_CLK_SET(x)  do {	\
 		CLKPR = (1<<CLKPCE);	\
 		CLKPR = (x);			\
@@ -38,10 +39,49 @@
 		sei();					\
 	} while(0)
 
+#define FAST_CLOCK() do {		\
+		uint8_t jj = SREG;		\
+		cli();					\
+		CLKPR = (1<<CLKPCE);	\
+		CLKPR = CORE_FAST;		\
+		clk_div = CORE_FAST;	\
+		SREG = jj;				\
+	} while (0);
+
+#define SLOW_CLOCK() do {		\
+		uint8_t jj = SREG;		\
+		cli();					\
+		CLKPR = (1<<CLKPCE);	\
+		CLKPR = CORE_SLOW;		\
+		clk_div = CORE_SLOW;	\
+		SREG = jj;				\
+	} while (0);
+#endif
+
+#define FAST_CLOCK() do {		\
+		uint8_t jj = SREG;		\
+		cli();					\
+		CLKPR = (1<<CLKPCE);	\
+		CLKPR = CORE_FAST;		\
+		clk_div = CORE_FAST;	\
+		PRR |= (1<<PRUSI);		\
+		SREG = jj;				\
+	} while (0);
+
+#define SLOW_CLOCK() do {		\
+		uint8_t jj = SREG;		\
+		cli();					\
+		CLKPR = (1<<CLKPCE);	\
+		CLKPR = CORE_SLOW;		\
+		clk_div = CORE_SLOW;	\
+		PRR &= ~(1<<PRUSI);		\
+		SREG = jj;				\
+	} while (0);
+
 #define PWB_REV       GPIOR1
 
 // use one of the unused internal I/O registers as a 1-clock access register
-#define FLAGS       GPIOR0
+#define FLAGS        GPIOR0
 #define WD_FLAG      (1<<0)
 #define SW_FLAG      (1<<1)
 #define CTR_FLAG     (1<<2)

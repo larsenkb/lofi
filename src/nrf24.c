@@ -22,43 +22,74 @@ extern uint8_t gstatus;
 
 void spi_init(void)
 {
-	DDRA |= (1<<CSN);	// OUTPUT
-    DDRA |= (1<<SCK);	// OUTPUT
-    DDRA |= (1<<MOSI);	// OUTPUT
-    DDRA &= ~(1<<MISO);	// INPUT
-    DDRA |= (1<<CE);	// OUTPUT
+	DDRA |= CSN;		// OUTPUT
+    DDRA |= SCK;		// OUTPUT
+    DDRA |= MOSI;		// OUTPUT
+    DDRA |= CE;			// OUTPUT
+    DDRA &= ~MISO;		// INPUT
 	DEASSERT_CE();
 	DEASSERT_CSN();
-	PORTA &= ~(1<<SCK);
-
+	DEASSERT_SCK();
+#if EN_USI_SPI
+	USICR = 0x10;
+#endif
 }
 
 /* software spi routine */
+#if EN_USI_SPI
 uint8_t spi_transfer(uint8_t tx)
 {
-	register uint8_t i = 0;
-    register uint8_t rx = 0;    
+	register uint8_t i = (uint8_t)0x11;
+    register uint8_t o = (uint8_t)0x13;    
 
-    for (i=0x80; i; i>>=1) {
+	USIDR = (uint8_t)tx;
+
+	USICR = i;
+	USICR = o;
+	USICR = i;
+	USICR = o;
+	USICR = i;
+	USICR = o;
+	USICR = i;
+	USICR = o;
+	USICR = i;
+	USICR = o;
+	USICR = i;
+	USICR = o;
+	USICR = i;
+	USICR = o;
+	USICR = i;
+	USICR = o;
+	return USIDR;
+
+}
+#else
+uint8_t spi_transfer(uint8_t tx)
+{
+	register uint8_t i;
+    register uint8_t rx = tx;    
+
+	//USIDR = (uint8_t)tx;
+    for (i = 0x80; i; i >>= 1) {
 
         if (tx & i) {
-			PORTA |= (1<<MOSI);
+			ASSERT_MOSI();
         } else {
-			PORTA &= ~(1<<MOSI);
+			DEASSERT_MOSI();
         }
 
-	    PORTA |= (1<<SCK);
+		ASSERT_SCK();
 
-		if (PINA & (1<<MISO)) {
+		if (PINA & MISO) {
             rx |= i;
         }
 
-	    PORTA &= ~(1<<SCK);
+		DEASSERT_SCK();
 
     }
     return rx;
 }
-
+#endif
 
 void nrfInit(void) 
 {
@@ -117,12 +148,13 @@ void nrfConfig(config_t *config, uint8_t pay_length)
 }
 
 /* Clocks only one byte into the given nrf24 register */
-void nrfWriteReg(uint8_t reg, uint8_t value)
+uint8_t nrfWriteReg(uint8_t reg, uint8_t value)
 {
 	ASSERT_CSN();
 	gstatus = spi_transfer(W_REGISTER | (REGISTER_MASK & reg));
 	spi_transfer(value);
 	DEASSERT_CSN();
+	return gstatus;
 }
 
 void nrfFlushTx(void)

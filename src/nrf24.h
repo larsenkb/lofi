@@ -22,15 +22,36 @@
 #define LOW 0
 #define HIGH 1
 
-#define CE				0		/* PORTA */
-#define CSN				1		/* PORTA */
-#define SCK				4		/* PORTA */
-#define MOSI			6		/* PORTA */
-#define MISO			5		/* PORTA */
-#define ASSERT_CE()     (PORTA |= (1<<CE))
-#define DEASSERT_CE()   (PORTA &= ~(1<<CE))
-#define DEASSERT_CSN()  (PORTA |= (1<<CSN))
-#define ASSERT_CSN()    (PORTA &= ~(1<<CSN))
+#define EN_USI_SPI		0
+
+#undef MOSI_PIN
+#undef MISO_PIN
+
+#define CE_PIN			0
+#define CSN_PIN			1
+#define SCK_PIN			4
+#if EN_USI_SPI
+#define MOSI_PIN		5
+#define MISO_PIN		6
+#else
+#define MOSI_PIN		6
+#define MISO_PIN		5
+#endif
+
+#define CE				(1<<CE_PIN)		/* PORTA */
+#define CSN				(1<<CSN_PIN)	/* PORTA */
+#define SCK				(1<<SCK_PIN)	/* PORTA */
+#define MOSI			(1<<MOSI_PIN)	/* PORTA */
+#define MISO			(1<<MISO_PIN)	/* PORTA */
+#define ASSERT_CE()     (PORTA |= CE)
+#define DEASSERT_CE()   (PORTA &= ~CE)
+#define DEASSERT_CSN()  (PORTA |= CSN)
+#define ASSERT_CSN()    (PORTA &= ~CSN)
+#define ASSERT_SCK()	(PORTA |= SCK)
+#define DEASSERT_SCK()	(PORTA &= ~SCK)
+#define ASSERT_MOSI()	(PORTA |= MOSI)
+#define DEASSERT_MOSI()	(PORTA &= ~MOSI)
+
 
 #define nrf24_ADDR_LEN 5
 
@@ -52,7 +73,7 @@ void    nrfPowerDown(void);
 void    spi_init(void);
 uint8_t spi_transfer(uint8_t tx);
 void    nrfReadRegs(uint8_t reg, uint8_t* value, uint8_t len);
-void    nrfWriteReg(uint8_t reg, uint8_t value);
+uint8_t nrfWriteReg(uint8_t reg, uint8_t value);
 uint8_t nrfReadReg(uint8_t reg);
 
 #endif /* __NRF24_H__ */

@@ -91,8 +91,6 @@ uint16_t			tempCnts;
 uint16_t			ctrCnts;
 
 #define	RF_MSGBUF_SIZE	8
-//uint8_t				txBuf[TXBUF_SIZE][NRF24_PAYLOAD_LEN-1];
-//uint8_t				txBufWr, txBufRd;
 uint8_t				rfMsgBuf[RF_MSGBUF_SIZE][NRF24_PAYLOAD_LEN-1];
 uint8_t				rfMsgBufWr, rfMsgBufRd;
 
@@ -186,7 +184,8 @@ int main(void)
 
 	// Set Divide by 8 for 8MHz RC oscillator 
 	// to get a 1MHz F_CPU
-	CORE_CLK_SET(CORE_FAST);
+	FAST_CLOCK();
+	//CORE_CLK_SET(CORE_FAST);
 
 	// disable Pullups
 	MCUCR &= ~(1<<PUD);
@@ -199,9 +198,6 @@ int main(void)
 
 	// reduce power on TIMER1
 	PRR |= (1<<PRTIM1);
-
-	// reduce power of USI peripheral
-	PRR |= (1<<PRUSI);
 
 	// read the config params from eeprom
 	eeprom_read_block(&config, 0, sizeof(config));
@@ -251,7 +247,7 @@ int main(void)
 
 	// switch to a lower clock rate while reading/writing NRF. For some
 	// reason I can't get anywhere near 10MHz SPI CLK rate.
-	CORE_CLK_SET(CORE_SLOW);
+	SLOW_CLOCK();
 
 	// Initialize radio channel and payload length
 	nrfConfig(&config, NRF24_PAYLOAD_LEN);
@@ -262,7 +258,7 @@ int main(void)
 	// Power off radio as we go into our first sleep
 	nrfPowerDown();            
 
-	CORE_CLK_SET(CORE_FAST);
+	FAST_CLOCK();
 
     // initialize delay counts so that first time through loop
 	// all enabled messages will be transmitted
@@ -326,11 +322,10 @@ int main(void)
 		}
 
 		// Set Divide by 8 for 8MHz RC oscillator 
-		CORE_CLK_SETi(CORE_SLOW);
+		SLOW_CLOCK();
 
 		nrfPowerUpTx();
 		dlyMS(2);
-		//_delay_loop_1(120);
 
 		do {
 			int i;
@@ -355,8 +350,7 @@ int main(void)
 				i++;
 			}
 			// clear IRQ causes
-			nrfWriteReg(STATUS, ((1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT))); 
-			ledStatus = gstatus;
+			ledStatus = nrfWriteReg(STATUS, ((1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT))); 
 
 			// do I really need a delay here?
 //			if (rfMsgBufRd != rfMsgBufWr) {
@@ -367,7 +361,8 @@ int main(void)
 
 		nrfPowerDown();            
 	
-		CORE_CLK_SETi(CORE_FAST);
+		FAST_CLOCK();
+
 		blinkLed(ledStatus);
 
     } //endof: while (1) {
