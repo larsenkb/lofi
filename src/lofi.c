@@ -94,7 +94,6 @@ uint16_t			ctrCnts;
 uint8_t				rfMsgBuf[RF_MSGBUF_SIZE][NRF24_PAYLOAD_LEN-1];
 uint8_t				rfMsgBufWr, rfMsgBufRd;
 
-void sw1_msg_build(void);
 
 //****************************************************************
 // setup_watchdog - configure watchdog timeout
@@ -142,7 +141,7 @@ ISR(PCINT0_vect)
 {
 	if (PWB_REV == 1 || PWB_REV == 2) {
 		FLAGS |= WD_FLAG;
-	} else if (PWB_REV == 3) {
+	} else { // PWB_REV 3+
 		FLAGS |= SW_FLAG;
 	}
 }
@@ -158,7 +157,7 @@ ISR(PCINT1_vect)
 		FLAGS |= SW_FLAG;
 	} else if (PWB_REV == 1 || PWB_REV == 2) {
 		FLAGS |= SW_FLAG;
-	} else if (PWB_REV == 3) {
+	} else { // PWB_REV 3+
 		FLAGS |= WD_FLAG;
 	}
 }
@@ -370,6 +369,9 @@ int main(void)
     return 0;
 }
 
+//
+// Blink LED(s) after a msg transmission to report status (ACK/NACK)
+//
 void blinkLed(uint8_t status)
 {
 	if (config.en_led_nack) {
@@ -381,9 +383,15 @@ void blinkLed(uint8_t status)
 	}
 	if (config.en_led_ack) {
 		if (status & (1<<TX_DS)) {
-			led_assert();
-			_delay_loop_1(5); // ~100us at 1MHz F_CPU
-			led_deassert();
+			if (PWB_REV == 5) {
+				ledg_assert();
+				_delay_loop_1(5); // ~100us at 1MHz F_CPU
+				ledg_deassert();
+			} else {
+				ledg_assert();
+				_delay_loop_1(5); // ~100us at 1MHz F_CPU
+				ledg_deassert();
+			}
 		}
 	}
 }
@@ -743,7 +751,7 @@ void tpl_done_init(void)
 	if (PWB_REV == 0)
 		return;
 
-	// PB1 for PWB_REVs 1-3
+	// PB1 for PWB_REVs 1+
 	DDRB |= (1<<1);
 	PORTB &= ~(1<<1);
 }
@@ -758,7 +766,7 @@ void tpl_done_pulse(void)
 	if (PWB_REV == 0)
 		return;
 
-	// PB1 for PWB_REVs 1-3
+	// PB1 for PWB_REVs 1+
 	PORTB |= (1<<1);
 	PORTB &= ~(1<<1);
 }
@@ -773,7 +781,7 @@ void tpl_drv_init(void)
 		DDRA &= ~(1<<2);
 		GIMSK |= (1<<4);
 		PCMSK0 |= (1<<2);
-	} else if (PWB_REV == 3) {
+	} else { // PWB_REV 3+
 		DDRB &= ~(1<<0);
 		GIMSK |= (1<<5);
 		PCMSK1 |= (1<<0);
@@ -788,9 +796,13 @@ void led_init(void)
 	if (PWB_REV == 0) {
 		DDRB |= (1<<0);
 		PORTB |= (1<<0);
-	} else if (PWB_REV == 1 || PWB_REV == 2 || PWB_REV == 3) {
+	} else { // PWB_REV 1+
 		DDRA |= (1<<3);
 		PORTA |= (1<<3);
+	}
+   	if (PWB_REV == 5) {
+		DDRB |= (1<<2);
+		PORTB |= (1<<2);
 	}
 }
 
@@ -801,7 +813,7 @@ void led_deassert(void)
 {
 	if (PWB_REV== 0) {
 		PORTB &= ~(1<<0);
-	} else if (PWB_REV == 1 || PWB_REV == 2 || PWB_REV == 3) {
+	} else { // PWB_REV 1+
 		PORTA |= (1<<3);
 	}
 }
@@ -813,8 +825,28 @@ void led_assert(void)
 {
 	if (PWB_REV == 0) {
 		PORTB |= (1<<0);
-	} else if (PWB_REV == 1 || PWB_REV == 2  || PWB_REV == 3) {
+	} else { // PWB_REV 1+
 		PORTA &= ~(1<<3);
+	}
+}
+
+//
+// Turn OFF LEDG
+//
+void ledg_deassert(void)
+{
+	if ( PWB_REV == 5) {
+		PORTB |= (1<<2);
+	}
+}
+
+//
+// Turn ON LEDG
+//
+void ledg_assert(void)
+{
+	if (PWB_REV == 5) {
+		PORTB &= ~(1<<2);
 	}
 }
 
@@ -827,7 +859,7 @@ uint8_t read_switch(void)
 		return ((PINB >> 2) & 1);
 	} else if (PWB_REV == 1 || PWB_REV == 2) {
 		return ((PINB >> 2) & 1);
-	} else if (PWB_REV == 3) {
+	} else { // PWB_REV 3+
 		return ((PINA >> 7) & 1);
 	}
 	return 0;
@@ -845,7 +877,7 @@ void safe_switch(void)
 	} else if (PWB_REV == 1 || PWB_REV == 2) {
 		DDRB |= (1<<2);
 		PORTB &= ~(1<<2);
-	} else if (PWB_REV == 3) {
+	} else { // PWB_REV 3+
 		DDRA |= (1<<7);
 		PORTA &= ~(1<<7);
 	}
@@ -860,7 +892,7 @@ void init_switch(void)
 		DDRB &= ~(1<<2);
 	} else if (PWB_REV == 1 || PWB_REV == 2) {
 		DDRB &= ~(1<<2);
-	} else if (PWB_REV == 3) {
+	} else { // PWB_REV 3+
 		DDRA &= ~(1<<7);
 	}
 }
@@ -876,7 +908,7 @@ void init_switch_PC(void)
 	} else if (PWB_REV == 1 || PWB_REV == 2) {
 		GIMSK |= (1<<5);
 		PCMSK1 |= (1<<2);
-	} else if (PWB_REV == 3) {
+	} else { // PWB_REV 3+
 		GIMSK |= (1<<4);
 		PCMSK0 |= (1<<7);
 	}
@@ -898,13 +930,8 @@ void init_unused_pins(void)
 		DDRA |= (1<<7);
 		PORTA &= ~(1<<7);
 	} else if (PWB_REV == 3) {
-#if EN_IRQ_POLL
-		DDRB &= ~(1<<2);
-		//PORTB &= ~(1<<2);
-#else
 		DDRB |= (1<<2);
 		PORTB &= ~(1<<2);
-#endif
 		DDRA |= (1<<2);
 		PORTA &= ~(1<<2);
 	}

@@ -10,53 +10,15 @@
 #ifndef __LOFI_H__
 #define __LOFI_H__
 
-#define EN_IRQ_POLL				1
 #define EEPROM_NODEID_ADR		((uint8_t *)0)
 #define NRF24_PAYLOAD_LEN		3
 #define TXBUF_SIZE				8	// must be a power of 2!!!
 
 
-// --------- BITDBG ---------
-#define BITDBG					(1<<7)	// PORTA bit7
-#define BITDBG_INIT()			do {DDRA |= (BITDBG); PORTA &= ~(BITDBG);} while(0)
-#define BITDBG_ASSERT()			do {PORTA |= BITDBG;} while(0)
-#define BITDBG_DEASSERT()		do {PORTA &= ~BITDBG;} while(0)
-
-	
 // define macros to slow clock even more than fuse setting
 #define CLK_DIV			3
 #define CORE_FAST		CLK_DIV
-#define CORE_SLOW		(CLK_DIV + 0)	
-#if 0
-#define CORE_CLK_SET(x)  do {	\
-		CLKPR = (1<<CLKPCE);	\
-		CLKPR = (x);			\
-		clk_div = (x);			\
-	} while(0)
-#define CORE_CLK_SETi(x)  do {	\
-		cli();					\
-		CORE_CLK_SET(x);		\
-		sei();					\
-	} while(0)
-
-#define FAST_CLOCK() do {		\
-		uint8_t jj = SREG;		\
-		cli();					\
-		CLKPR = (1<<CLKPCE);	\
-		CLKPR = CORE_FAST;		\
-		clk_div = CORE_FAST;	\
-		SREG = jj;				\
-	} while (0);
-
-#define SLOW_CLOCK() do {		\
-		uint8_t jj = SREG;		\
-		cli();					\
-		CLKPR = (1<<CLKPCE);	\
-		CLKPR = CORE_SLOW;		\
-		clk_div = CORE_SLOW;	\
-		SREG = jj;				\
-	} while (0);
-#endif
+#define CORE_SLOW		(CLK_DIV + 2)	
 
 #define FAST_CLOCK() do {		\
 		uint8_t jj = SREG;		\
@@ -218,10 +180,12 @@ void tpl_done_pulse(void);
 void led_init(void);
 void led_assert(void);
 void led_deassert(void);
+void ledg_assert(void);
+void ledg_deassert(void);
 void init_switch_PC(void);
 void init_switch(void);
 void init_unused_pins(void);
 void blinkLed(uint8_t status);
+void sw1_msg_build(void);
 
 #endif  /* __LOFI_H__ */
-

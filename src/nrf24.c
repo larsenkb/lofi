@@ -17,27 +17,14 @@
 #include <util/delay_basic.h>
 #include "nrf24.h"
 
+static uint8_t nrf24_CONFIG;
+
 extern uint8_t gstatus;
 
-
-void spi_init(void)
-{
-	DDRA |= CSN;		// OUTPUT
-    DDRA |= SCK;		// OUTPUT
-    DDRA |= MOSI;		// OUTPUT
-    DDRA |= CE;			// OUTPUT
-    DDRA &= ~MISO;		// INPUT
-	DEASSERT_CE();
-	DEASSERT_CSN();
-	DEASSERT_SCK();
-#if EN_USI_SPI
-	USICR = 0x10;
-#endif
-}
+static uint8_t (*spi_xfer)(uint8_t tx);
 
 /* software spi routine */
-#if EN_USI_SPI
-uint8_t spi_transfer(uint8_t tx)
+uint8_t spi_transfer_USI(uint8_t tx)
 {
 	register uint8_t i = (uint8_t)0x11;
     register uint8_t o = (uint8_t)0x13;    
@@ -63,8 +50,8 @@ uint8_t spi_transfer(uint8_t tx)
 	return USIDR;
 
 }
-#else
-uint8_t spi_transfer(uint8_t tx)
+
+uint8_t spi_transfer_BB(uint8_t tx)
 {
 	register uint8_t i;
     register uint8_t rx = tx;    
@@ -89,11 +76,37 @@ uint8_t spi_transfer(uint8_t tx)
     }
     return rx;
 }
-#endif
+
+void spi_init(void)
+{
+	DDRA |= CSN;		// OUTPUT
+    DDRA |= SCK;		// OUTPUT
+    DDRA |= CE;			// OUTPUT
+	DEASSERT_CE();
+	DEASSERT_CSN();
+	DEASSERT_SCK();
+	if (PWB_REV == 5) {
+		spi_xfer = spi_transfer_USI;
+		DDRA |= (1<<5);		// OUTPUT
+		DDRA &= ~(1<<6);		// INPUT
+		USICR = 0x10;
+		DDRA &= ~(1<<2);
+	} else {
+		spi_xfer = spi_transfer_BB;
+		DDRA |= MOSI;		// OUTPUT
+		DDRA &= ~MISO;		// INPUT
+	}
+}
 
 void nrfInit(void) 
 {
     spi_init();
+
+	if (PWB_REV == 5) {
+		nrf24_CONFIG = ((1<<MASK_RX_DR) | (0<<MASK_TX_DS) | (0<<MASK_MAX_RT) | (1<<EN_CRC) | (1<<CRCO));
+	} else {
+		nrf24_CONFIG = ((1<<MASK_RX_DR) | (1<<MASK_TX_DS) | (1<<MASK_MAX_RT) | (1<<EN_CRC) | (1<<CRCO));
+	}
 }
 
 
@@ -151,8 +164,8 @@ void nrfConfig(config_t *config, uint8_t pay_length)
 uint8_t nrfWriteReg(uint8_t reg, uint8_t value)
 {
 	ASSERT_CSN();
-	gstatus = spi_transfer(W_REGISTER | (REGISTER_MASK & reg));
-	spi_transfer(value);
+	gstatus = (*spi_xfer)(W_REGISTER | (REGISTER_MASK & reg));
+	(*spi_xfer)(value);
 	DEASSERT_CSN();
 	return gstatus;
 }
@@ -161,7 +174,7 @@ void nrfFlushTx(void)
 {
 	// Write cmd to flush transmit FIFO
 	ASSERT_CSN();
-	gstatus = spi_transfer(FLUSH_TX);     
+	gstatus = (*spi_xfer)(FLUSH_TX);     
 	DEASSERT_CSN();
 }
 
@@ -174,13 +187,13 @@ void nrfFillTxFifo(config_t *config, uint8_t *buf, uint8_t buf_length)
 	// Write payload cmd and write payload
 	ASSERT_CSN();
 	if (config->en_aa && config->en_dyn_ack) {
-	    gstatus = spi_transfer(W_TX_PAYLOAD_NOACK);
+	    gstatus = (*spi_xfer)(W_TX_PAYLOAD_NOACK);
 	} else {
-		gstatus = spi_transfer(W_TX_PAYLOAD);
+		gstatus = (*spi_xfer)(W_TX_PAYLOAD);
 	}
-	spi_transfer(config->nodeId);
+	(*spi_xfer)(config->nodeId);
 	for (i=0; i<buf_length; i++) {
-		spi_transfer(buf[i]);
+		(*spi_xfer)(buf[i]);
 	}
 	DEASSERT_CSN();
 }
@@ -208,20 +221,20 @@ void nrfPulseCE(void)
 // or IRQn has not been asserted, if polling
 uint8_t nrfIsSending()
 {
-#if EN_IRQ_POLL
-	return ((1<<2) == (PINB & (1<<2)));
-#else
-	// read the current status
-	gstatus = nrfGetStatus();
-	return (0 == (gstatus & ((1 << TX_DS) | (1 << MAX_RT))));        
-#endif
+	if (PWB_REV == 5) {
+		return ((1<<2) == (PINA & (1<<2)));
+	} else {
+		// read the current status
+		gstatus = nrfGetStatus();
+		return (0 == (gstatus & ((1 << TX_DS) | (1 << MAX_RT))));        
+	}
 }
 
 
 uint8_t nrfGetStatus(void)
 {
 	ASSERT_CSN();
-	gstatus = spi_transfer(NOP);
+	gstatus = (*spi_xfer)(NOP);
 	DEASSERT_CSN();
 	return gstatus;
 }
@@ -237,8 +250,8 @@ uint8_t nrfReadReg(uint8_t reg)
 	uint8_t rv = 0;
 
 	ASSERT_CSN();
-	gstatus = spi_transfer(reg & REGISTER_MASK);
-	rv = spi_transfer(rv);
+	gstatus = (*spi_xfer)(reg & REGISTER_MASK);
+	rv = (*spi_xfer)(rv);
 	DEASSERT_CSN();
 	return rv;
 }
@@ -249,9 +262,9 @@ void nrfReadRegs(uint8_t reg, uint8_t *value, uint8_t len)
 	uint8_t i;
 
 	ASSERT_CSN();
-	gstatus = spi_transfer(R_REGISTER | (REGISTER_MASK & reg));
+	gstatus = (*spi_xfer)(R_REGISTER | (REGISTER_MASK & reg));
 	for (i=0; i<len; i++) {
-		value[i] = spi_transfer(value[i]);
+		value[i] = (*spi_xfer)(value[i]);
 	}
 	DEASSERT_CSN();
 }

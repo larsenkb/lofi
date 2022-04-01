@@ -22,21 +22,14 @@
 #define LOW 0
 #define HIGH 1
 
-#define EN_USI_SPI		0
-
 #undef MOSI_PIN
 #undef MISO_PIN
 
 #define CE_PIN			0
 #define CSN_PIN			1
 #define SCK_PIN			4
-#if EN_USI_SPI
-#define MOSI_PIN		5
-#define MISO_PIN		6
-#else
 #define MOSI_PIN		6
 #define MISO_PIN		5
-#endif
 
 #define CE				(1<<CE_PIN)		/* PORTA */
 #define CSN				(1<<CSN_PIN)	/* PORTA */
@@ -55,12 +48,6 @@
 
 #define nrf24_ADDR_LEN 5
 
-#if EN_IRQ_POLL
-#define nrf24_CONFIG ((1<<MASK_RX_DR) | (0<<MASK_TX_DS) | (0<<MASK_MAX_RT) | (1<<EN_CRC) | (1<<CRCO))
-#else
-#define nrf24_CONFIG ((1<<MASK_RX_DR) | (1<<MASK_TX_DS) | (1<<MASK_MAX_RT) | (1<<EN_CRC) | (1<<CRCO))
-#endif
-
 void    nrfInit(void);
 void    nrfConfig(config_t *config, uint8_t pay_length);
 uint8_t nrfIsSending(void);
@@ -71,7 +58,6 @@ void    nrfPulseCE(void);
 void    nrfPowerUpTx(void);
 void    nrfPowerDown(void);
 void    spi_init(void);
-uint8_t spi_transfer(uint8_t tx);
 void    nrfReadRegs(uint8_t reg, uint8_t* value, uint8_t len);
 uint8_t nrfWriteReg(uint8_t reg, uint8_t value);
 uint8_t nrfReadReg(uint8_t reg);
