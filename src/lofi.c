@@ -63,13 +63,14 @@
 
 #include "lofi.h"
 #include "nrf24.h"
+#include "i2c.h"
 #include "uartbb.h"
 #include "xprintf.h"
 
 #undef F_CPU
 #define F_CPU 1000000UL
 
-const uint16_t revision = 7;	// increment this for each release
+const uint16_t revision = 8;	// increment this for each release
 
 int clk_div = 3;
 
@@ -77,18 +78,22 @@ int clk_div = 3;
 // GLOBAL VARIABLES --------------------------------------------
 uint8_t				gstatus;
 
-sensor_switch_t		sens_sw1;
-sensor_ctr_t		sens_ctr;
-sensor_ctr_t		sens_rev;
-sensor_vcc_t		sens_vcc;
-sensor_temp_t		sens_temp;
-config_t			config;
+sensor_t		sens_sw1;
+sensor_t		sens_ctr;
+sensor_t		sens_rev;
+sensor_t		sens_vcc;
+sensor_t		sens_temp;
+sensor_t		sens_atemp;
+sensor_t		sens_ahumd;
+config_t		config;
 
 // these hold how many TPL5111 periods to bypass before xmitting
 uint16_t			swCnts;
 uint16_t			vccCnts;
 uint16_t			tempCnts;
 uint16_t			ctrCnts;
+uint16_t			atempCnts;
+uint16_t			ahumdCnts;
 
 #define	RF_MSGBUF_SIZE	8
 uint8_t				rfMsgBuf[RF_MSGBUF_SIZE][NRF24_PAYLOAD_LEN-1];
@@ -177,6 +182,10 @@ int main(void)
 	mcusr = MCUSR;
 	MCUSR = 0;		// clear all reasons for reset
 
+	// read the config params from eeprom
+	eeprom_read_block(&config, 0, sizeof(config));
+	PWB_REV = config.pwbRev;
+
 	// initialize RF msg buf indices
 	rfMsgBufRd = 0;
 	rfMsgBufWr = 0;
@@ -197,10 +206,6 @@ int main(void)
 
 	// reduce power on TIMER1
 	PRR |= (1<<PRTIM1);
-
-	// read the config params from eeprom
-	eeprom_read_block(&config, 0, sizeof(config));
-	PWB_REV = config.pwbRev;
 
 	// initialze pin to reset TPL5111
 	tpl_done_init();
@@ -236,6 +241,12 @@ int main(void)
 	// Initialize switch 1 message structure
 	sw1_msg_init();
 
+	// Initialize AHT10 temp message structure
+	atemp_msg_init();
+
+	// Initialize AHT10 humidity message structure
+	ahumd_msg_init();
+
 	// Enable TPL5111 DVRn pin change
 	tpl_drv_init();
 
@@ -265,8 +276,17 @@ int main(void)
 	ctrCnts = config.ctrCntsMax - 1;
 	vccCnts = config.vccCntsMax - 1;
 	tempCnts = config.tempCntsMax - 1;
+	atempCnts = config.atempCntsMax - 1;
+	ahumdCnts = config.ahumdCntsMax = 1;
+
 	if (PWB_REV == 0) {
 		setup_watchdog();
+	}
+
+	if (PWB_REV == 6) {
+		if (config.en_atemp  || config.en_ahumd) {
+			I2C_Init();
+		}
 	}
 
 	// set sleep mode one time here
@@ -374,7 +394,7 @@ int main(void)
 //
 void blinkLed(uint8_t status)
 {
-	if (config.en_led_nack) {
+	if (PWB_REV != 6 && config.en_led_nack) {
 		if (status & (1<<MAX_RT)) {
 			led_assert();
 			_delay_loop_1(5); // ~100us at 1MHz F_CPU
@@ -537,10 +557,11 @@ uint16_t readVccTemp(uint8_t mux_select)
 void rev_msg_init(void)
 {
 	// Initialize counter capability/structure if eeprom configured
+	memset((void*)&sens_rev, 0, sizeof(sensor_t));
     sens_rev.sensorId = SENID_REV;
-    sens_rev.ctr_lo = (revision & 0xff);
-    sens_rev.ctr_hi = ((revision >> 8) & 0x3);
-	sens_rev.seq = 0;
+    sens_rev.low = (revision & 0xff);
+    sens_rev.hi = ((revision >> 8) & 0xf);
+//	sens_rev.seq = 0;
 }
 
 //
@@ -550,10 +571,11 @@ void ctr_msg_init(void)
 {
 	// Initialize counter capability/structure if eeprom configured
     if (config.en_ctr) {
+		memset((void*)&sens_ctr, 0, sizeof(sensor_t));
         sens_ctr.sensorId = SENID_CTR;
-        sens_ctr.ctr_lo = 0;
-        sens_ctr.ctr_hi = 0;
-		sens_ctr.seq = 0;
+//        sens_ctr.low = 0;
+//        sens_ctr.hi = 0;
+//		sens_ctr.seq = 0;
     }
 }
 
@@ -564,10 +586,11 @@ void temp_msg_init(void)
 {
 	// Initialize Temp capability/structure if eeprom configured
 	if (config.en_temp) {
+		memset((void*)&sens_ctr, 0, sizeof(sensor_t));
         sens_temp.sensorId = SENID_TEMP;
-        sens_temp.temp_lo = 0;
-        sens_temp.temp_hi = 0;
-		sens_temp.seq = 0;
+//        sens_temp.low = 0;
+//        sens_temp.hi = 0;
+//		sens_temp.seq = 0;
     }
 }
 
@@ -578,10 +601,35 @@ void vcc_msg_init(void)
 {
 	// Initialize Vcc capability/structure if eeprom configured
     if (config.en_vcc) {
+		memset((void*)&sens_ctr, 0, sizeof(sensor_t));
         sens_vcc.sensorId = SENID_VCC;
-        sens_vcc.vcc_lo = 0;
-        sens_vcc.vcc_hi = 0;
-		sens_vcc.seq = 0;
+//        sens_vcc.low = 0;
+//        sens_vcc.hi = 0;
+//		sens_vcc.seq = 0;
+    }
+}
+
+//
+// initialze AHT10 Temp message structure
+//
+void atemp_msg_init(void)
+{
+	// Initialize AHT10 Temp capability/structure if eeprom configured
+    if (config.en_atemp) {
+		memset((void*)&sens_atemp, 0, sizeof(sensor_t));
+        sens_atemp.sensorId = SENID_ATEMP;
+    }
+}
+
+//
+// initialze AHT10 Humditiy message structure
+//
+void ahumd_msg_init(void)
+{
+	// Initialize AHT10 humidity capability/structure if eeprom configured
+    if (config.en_ahumd) {
+		memset((void*)&sens_ahumd, 0, sizeof(sensor_t));
+        sens_ahumd.sensorId = SENID_AHUMD;
     }
 }
 
@@ -641,6 +689,20 @@ void flags_update(void)
 			FLAGS |= TEMP_FLAG;
 		}
 	}
+	// inc count and set flag if time to xmit a message
+	if (config.en_atemp) {
+		if (++atempCnts >= config.atempCntsMax) {
+			atempCnts = 0;
+			FLAGS |= ATEMP_FLAG;
+		}
+	}
+	// inc count and set flag if time to xmit a message
+	if (config.en_ahumd) {
+		if (++ahumdCnts >= config.ahumdCntsMax) {
+			ahumdCnts = 0;
+			FLAGS |= AHUMD_FLAG;
+		}
+	}
 }
 
 //
@@ -695,8 +757,8 @@ void msgs_build(int pc_triggered)
 
 		vcc += config.vccFudge;
 		FLAGS &= ~VCC_FLAG;
-		sens_vcc.vcc_lo = vcc & 0xFF;
-		sens_vcc.vcc_hi = (vcc>>8) & 0x3;
+		sens_vcc.low = vcc & 0xFF;
+		sens_vcc.hi = (vcc>>8) & 0xF;
 		memcpy(&rfMsgBuf[rfMsgBufWr][0], &sens_vcc, sizeof(sens_vcc));
 		rfMsgBufWr = (rfMsgBufWr + 1) & (RF_MSGBUF_SIZE - 1);
 		sens_vcc.seq++;
@@ -711,8 +773,8 @@ void msgs_build(int pc_triggered)
 		int16_t temp = readVccTemp(TEMP_MUX);
 		temp += config.tempFudge;
 		FLAGS &= ~TEMP_FLAG;
-		sens_temp.temp_lo = temp & 0xFF;
-		sens_temp.temp_hi = (temp>>8) & 0x3;
+		sens_temp.low = temp & 0xFF;
+		sens_temp.hi = (temp>>8) & 0x3;
 		memcpy(&rfMsgBuf[rfMsgBufWr][0], &sens_temp, sizeof(sens_temp));
 		rfMsgBufWr = (rfMsgBufWr + 1) & (RF_MSGBUF_SIZE - 1);
 		sens_temp.seq++;
@@ -723,10 +785,40 @@ void msgs_build(int pc_triggered)
 		FLAGS &= ~CTR_FLAG;
 		memcpy(&rfMsgBuf[rfMsgBufWr][0], &sens_ctr, sizeof(sens_ctr));
 		rfMsgBufWr = (rfMsgBufWr + 1) & (RF_MSGBUF_SIZE - 1);
-		if (++sens_ctr.ctr_lo == 0)
-			sens_ctr.ctr_hi++;
+		if (++sens_ctr.low == 0)
+			sens_ctr.hi++;
 		sens_ctr.seq++;
 	}
+	
+	bool humdDone = false;
+
+	// build an AHT10 Temperature message if flag set
+	if (FLAGS & ATEMP_FLAG) {
+		uint32_t atemp = readAHT10Temp();
+		humdDone = true;
+		atemp += config.atempFudge;
+		FLAGS &= ~ATEMP_FLAG;
+		sens_atemp.low = atemp & 0xFF;
+		sens_atemp.mid = (atemp>>8) & 0xff;
+		sens_atemp.hi = (atemp>>16) & 0xf;
+		memcpy(&rfMsgBuf[rfMsgBufWr][0], &sens_atemp, sizeof(sensor_t));
+		rfMsgBufWr = (rfMsgBufWr + 1) & (RF_MSGBUF_SIZE - 1);
+		sens_atemp.seq++;
+	}
+
+	// build an AHT10 Humidity message if flag set
+	if (FLAGS & AHUMD_FLAG) {
+		uint32_t ahumd = readAHT10Humd(humdDone);
+		ahumd += config.ahumdFudge;
+		FLAGS &= ~AHUMD_FLAG;
+		sens_ahumd.low = ahumd & 0xFF;
+		sens_ahumd.mid = (ahumd>>8) & 0xff;
+		sens_ahumd.hi = (ahumd>>16) & 0xf;
+		memcpy(&rfMsgBuf[rfMsgBufWr][0], &sens_ahumd, sizeof(sensor_t));
+		rfMsgBufWr = (rfMsgBufWr + 1) & (RF_MSGBUF_SIZE - 1);
+		sens_ahumd.seq++;
+	}
+
 }
 
 //
@@ -796,11 +888,11 @@ void led_init(void)
 	if (PWB_REV == 0) {
 		DDRB |= (1<<0);
 		PORTB |= (1<<0);
-	} else { // PWB_REV 1+
+	} else if (PWB_REV != 6) { // PWB_REV 1+
 		DDRA |= (1<<3);
 		PORTA |= (1<<3);
 	}
-   	if (PWB_REV == 5) {
+   	if (PWB_REV == 5 || PWB_REV == 6) {
 		DDRB |= (1<<2);
 		PORTB |= (1<<2);
 	}
@@ -813,7 +905,7 @@ void led_deassert(void)
 {
 	if (PWB_REV== 0) {
 		PORTB &= ~(1<<0);
-	} else { // PWB_REV 1+
+	} else if (PWB_REV != 6) { // PWB_REV 1+
 		PORTA |= (1<<3);
 	}
 }
@@ -825,7 +917,7 @@ void led_assert(void)
 {
 	if (PWB_REV == 0) {
 		PORTB |= (1<<0);
-	} else { // PWB_REV 1+
+	} else if (PWB_REV != 6) { // PWB_REV 1+
 		PORTA &= ~(1<<3);
 	}
 }
@@ -855,9 +947,7 @@ void ledg_assert(void)
 //
 uint8_t read_switch(void)
 {
-	if (PWB_REV == 0) {
-		return ((PINB >> 2) & 1);
-	} else if (PWB_REV == 1 || PWB_REV == 2) {
+	if (PWB_REV == 0 || PWB_REV == 1 || PWB_REV == 2) {
 		return ((PINB >> 2) & 1);
 	} else { // PWB_REV 3+
 		return ((PINA >> 7) & 1);
@@ -871,10 +961,7 @@ uint8_t read_switch(void)
 //
 void safe_switch(void)
 {
-	if (PWB_REV == 0) {
-		DDRB |= (1<<2);
-		PORTB &= ~(1<<2);
-	} else if (PWB_REV == 1 || PWB_REV == 2) {
+	if (PWB_REV == 0 || PWB_REV == 1 || PWB_REV == 2) {
 		DDRB |= (1<<2);
 		PORTB &= ~(1<<2);
 	} else { // PWB_REV 3+
@@ -888,9 +975,7 @@ void safe_switch(void)
 //
 void init_switch(void)
 {
-	if (PWB_REV == 0) {
-		DDRB &= ~(1<<2);
-	} else if (PWB_REV == 1 || PWB_REV == 2) {
+	if (PWB_REV == 0 || PWB_REV == 1 || PWB_REV == 2) {
 		DDRB &= ~(1<<2);
 	} else { // PWB_REV 3+
 		DDRA &= ~(1<<7);
@@ -929,10 +1014,12 @@ void init_unused_pins(void)
 		PORTB &= ~(1<<0);
 		DDRA |= (1<<7);
 		PORTA &= ~(1<<7);
-	} else if (PWB_REV == 3) {
+	} else if ((PWB_REV == 3) || (PWB_REV == 4)) {
 		DDRB |= (1<<2);
 		PORTB &= ~(1<<2);
 		DDRA |= (1<<2);
 		PORTA &= ~(1<<2);
+	} else if (PWB_REV == 5) {
+		// all pins are used...
 	}
 }

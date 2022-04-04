@@ -11,7 +11,7 @@
 #define __LOFI_H__
 
 #define EEPROM_NODEID_ADR		((uint8_t *)0)
-#define NRF24_PAYLOAD_LEN		3
+#define NRF24_PAYLOAD_LEN		(sizeof(sensor_t) + 1)
 #define TXBUF_SIZE				8	// must be a power of 2!!!
 
 
@@ -49,6 +49,8 @@
 #define CTR_FLAG     (1<<2)
 #define VCC_FLAG     (1<<3)
 #define TEMP_FLAG    (1<<4)
+#define ATEMP_FLAG   (1<<5)
+#define AHUMD_FLAG   (1<<6)
 
 #define VCC_MUX		0b00100001
 #define TEMP_MUX	0b10100010
@@ -61,41 +63,72 @@ typedef enum {
 	SENID_VCC,
 	SENID_TEMP,
 	SENID_CTR,
-	SENID_REV
+	SENID_REV,
+	SENID_ATEMP,
+	SENID_AHUMD
 } senId_t;
 
-
+#if 0
 // define switch message format
 typedef struct {
     uint8_t     lastState       :1;
     uint8_t     closed          :1;
     uint8_t     seq             :2;
     uint8_t     sensorId        :4;
+	uint8_t		rsvd1;
+	uint8_t		rsvd2;
+	uint8_t		rsvd3;
 } sensor_switch_t;
 
 // define Vcc message format
 typedef struct {
-    uint8_t     vcc_hi          :2;
+    uint8_t     lastState       :1;
+    uint8_t     closed          :1;
     uint8_t     seq             :2;
     uint8_t     sensorId        :4;
-    uint8_t     vcc_lo;
+	uint8_t		hi				:4;
+	uint8_t		rsvd			:4;
+    uint8_t     low;
+	uint8_t		rsvd2;
 } sensor_vcc_t;
 
 // define temperature message format
 typedef struct {
-    uint8_t     temp_hi			:2;
+    uint8_t     lastState       :1;
+    uint8_t     closed          :1;
     uint8_t     seq             :2;
     uint8_t     sensorId		:4;
-    uint8_t     temp_lo;
+	uint8_t		hi				:4;
+	uint8_t		rsvd			:4;
+    uint8_t     low;
+	uint8_t		rsvd2;
 } sensor_temp_t;
 
 // define counter message format
 typedef struct {
-    uint8_t     ctr_hi          :2;
+    uint8_t     lastState       :1;
+    uint8_t     closed          :1;
     uint8_t     seq             :2;
     uint8_t     sensorId        :4;
-    uint8_t     ctr_lo;
+	uint8_t		hi				:4;
+	uint8_t		rsvd			:4;
+    uint8_t     low;
+	uint8_t		rsvd2;
 } sensor_ctr_t;
+#endif
+
+// define message format; used by all sensor types
+typedef struct {
+    uint8_t     lastState       :1;
+    uint8_t     closed          :1;
+    uint8_t     seq             :2;
+    uint8_t     sensorId        :4;
+	uint8_t		hi				:4;
+	uint8_t		rsvd			:4;
+    uint8_t     mid;
+    uint8_t     low;
+} sensor_t;
+
 
 
 // define eeprom configuration format
@@ -118,7 +151,8 @@ typedef struct {	// fills up bit fields LSB to MSB
 	uint8_t		en_txDbg		:1;
 	uint8_t		en_led_ack		:1;
 	uint8_t		en_led_nack		:1;
-	uint8_t		rsvd_2			:2;
+	uint8_t		en_atemp		:1;
+	uint8_t		en_ahumd		:1;
 
 	// byte 3
 	uint8_t		rf_chan			:7;		// use only even chan #s at 2Mbps
@@ -136,6 +170,7 @@ typedef struct {	// fills up bit fields LSB to MSB
 
 	// bytes 6 & 7
 	uint8_t		pwbRev;					// 0=original PWB; 1=0.1 PWB; 2=0.2 PWB; 3 = 0.3/0.4 PWB
+										// 5 = 0.5 PWB; 6 = I2C
 	uint8_t		rsvd_6;
 
 	// bytes 8 & 9
@@ -156,6 +191,18 @@ typedef struct {	// fills up bit fields LSB to MSB
 	// bytes 18 & 19
 	int16_t		tempFudge;				// signed little-endian
 
+	// bytes 20 & 21					// LE xmit atemp every n watchdog interrupts
+	uint16_t	atempCntsMax;
+
+	// bytes 22 & 23					// LE xmit ahumd every m watchdog interrupts
+	uint16_t	ahumdCntsMax;
+
+	// bytes 24 & 25
+	int16_t		atempFudge;				// signed little-endian
+
+	// bytes 26 & 27
+	int16_t		ahumdFudge;				// signed little-endian
+
 } config_t;
 
 // FORWARD DECLARATIONS ----------------------------------------
@@ -171,6 +218,8 @@ void temp_msg_init(void);
 void vcc_msg_init(void);
 void sw1_msg_init(void);
 void sw2_msg_init(void);
+void atemp_msg_init(void);
+void ahumd_msg_init(void);
 void flags_update(void);
 void msgs_build(int pc_triggered);
 void dlyMS(uint16_t ms);

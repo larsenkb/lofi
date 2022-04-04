@@ -26,7 +26,7 @@ OBJDIR = .
 
 
 # List C source files here. (C dependencies are automatically generated.)
-SRC = $(TARGET).c uartbb.c nrf24.c xprintf.c
+SRC = $(TARGET).c uartbb.c nrf24.c xprintf.c i2c.c
 
 
 

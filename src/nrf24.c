@@ -85,12 +85,12 @@ void spi_init(void)
 	DEASSERT_CE();
 	DEASSERT_CSN();
 	DEASSERT_SCK();
-	if (PWB_REV == 5) {
+	if (PWB_REV == 5 || PWB_REV == 6) {
 		spi_xfer = spi_transfer_USI;
 		DDRA |= (1<<5);		// OUTPUT
 		DDRA &= ~(1<<6);		// INPUT
 		USICR = 0x10;
-		DDRA &= ~(1<<2);
+		DDRA &= ~(1<<2);	// IRQ
 	} else {
 		spi_xfer = spi_transfer_BB;
 		DDRA |= MOSI;		// OUTPUT
