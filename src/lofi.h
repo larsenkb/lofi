@@ -68,55 +68,6 @@ typedef enum {
 	SENID_AHUMD
 } senId_t;
 
-#if 0
-// define switch message format
-typedef struct {
-    uint8_t     lastState       :1;
-    uint8_t     closed          :1;
-    uint8_t     seq             :2;
-    uint8_t     sensorId        :4;
-	uint8_t		rsvd1;
-	uint8_t		rsvd2;
-	uint8_t		rsvd3;
-} sensor_switch_t;
-
-// define Vcc message format
-typedef struct {
-    uint8_t     lastState       :1;
-    uint8_t     closed          :1;
-    uint8_t     seq             :2;
-    uint8_t     sensorId        :4;
-	uint8_t		hi				:4;
-	uint8_t		rsvd			:4;
-    uint8_t     low;
-	uint8_t		rsvd2;
-} sensor_vcc_t;
-
-// define temperature message format
-typedef struct {
-    uint8_t     lastState       :1;
-    uint8_t     closed          :1;
-    uint8_t     seq             :2;
-    uint8_t     sensorId		:4;
-	uint8_t		hi				:4;
-	uint8_t		rsvd			:4;
-    uint8_t     low;
-	uint8_t		rsvd2;
-} sensor_temp_t;
-
-// define counter message format
-typedef struct {
-    uint8_t     lastState       :1;
-    uint8_t     closed          :1;
-    uint8_t     seq             :2;
-    uint8_t     sensorId        :4;
-	uint8_t		hi				:4;
-	uint8_t		rsvd			:4;
-    uint8_t     low;
-	uint8_t		rsvd2;
-} sensor_ctr_t;
-#endif
-
 // define message format; used by all sensor types
 typedef struct {
     uint8_t     trig	        :1;

@@ -561,7 +561,6 @@ void rev_msg_init(void)
     sens_rev.sensorId = SENID_REV;
     sens_rev.low = (revision & 0xff);
     sens_rev.hi = ((revision >> 8) & 0xf);
-//	sens_rev.seq = 0;
 }
 
 //
@@ -573,9 +572,6 @@ void ctr_msg_init(void)
     if (config.en_ctr) {
 		memset((void*)&sens_ctr, 0, sizeof(sensor_t));
         sens_ctr.sensorId = SENID_CTR;
-//        sens_ctr.low = 0;
-//        sens_ctr.hi = 0;
-//		sens_ctr.seq = 0;
     }
 }
 
@@ -588,9 +584,6 @@ void temp_msg_init(void)
 	if (config.en_temp) {
 		memset((void*)&sens_ctr, 0, sizeof(sensor_t));
         sens_temp.sensorId = SENID_TEMP;
-//        sens_temp.low = 0;
-//        sens_temp.hi = 0;
-//		sens_temp.seq = 0;
     }
 }
 
@@ -603,9 +596,6 @@ void vcc_msg_init(void)
     if (config.en_vcc) {
 		memset((void*)&sens_ctr, 0, sizeof(sensor_t));
         sens_vcc.sensorId = SENID_VCC;
-//        sens_vcc.low = 0;
-//        sens_vcc.hi = 0;
-//		sens_vcc.seq = 0;
     }
 }
 
