@@ -293,7 +293,7 @@ ALL_ASFLAGS = -mmcu=$(MCU) -I. -x assembler-with-cpp $(ASFLAGS)
 # Default target.
 all: lofi.hex
 
-lofi.o: lofi.c uartbb.h nrf24.h lofi.h xprintf.h
+lofi.o: lofi.c uartbb.h nrf24.h lofi.h xprintf.h i2c.h
 
 uartbb.o: uartbb.c uartbb.h
 
@@ -301,7 +301,9 @@ nrf24.o: nrf24.c nrf24.h nRF24L01.h lofi.h
 
 xprintf.o: xprintf.c xprintf.h
 
-tags: lofi.c uartbb.c uartbb.h nrf24.c nrf24.h nRF24L01.h xprintf.c xprintf.h lofi.h
+i2c.o: i2c.c i2c.h
+
+tags: lofi.c uartbb.c uartbb.h nrf24.c nrf24.h nRF24L01.h xprintf.c xprintf.h lofi.h i2c.c i2c.h
 	ctags $^
 
 
