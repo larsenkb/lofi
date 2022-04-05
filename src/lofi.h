@@ -119,7 +119,7 @@ typedef struct {
 
 // define message format; used by all sensor types
 typedef struct {
-    uint8_t     lastState       :1;
+    uint8_t     trig	        :1;
     uint8_t     closed          :1;
     uint8_t     seq             :2;
     uint8_t     sensorId        :4;

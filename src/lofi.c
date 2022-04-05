@@ -720,7 +720,7 @@ uint8_t  getSw1(uint8_t pc_triggered)
 	} while ((pin_debounce != 0) && (pin_debounce != 0xff));
 
 	pin_debounce &= 1;
-	sens_sw1.lastState = pc_triggered;
+	sens_sw1.trig = pc_triggered;
 	sens_sw1.closed = config.sw1_rev ^ pin_debounce;
 	sens_sw1.seq++;
 	return (*(uint8_t *)&sens_sw1);
