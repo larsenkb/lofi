@@ -277,7 +277,7 @@ int main(void)
 	vccCnts = config.vccCntsMax - 1;
 	tempCnts = config.tempCntsMax - 1;
 	atempCnts = config.atempCntsMax - 1;
-	ahumdCnts = config.ahumdCntsMax = 1;
+	ahumdCnts = config.ahumdCntsMax - 1;
 
 	if (PWB_REV == 0) {
 		setup_watchdog();
@@ -286,6 +286,7 @@ int main(void)
 	if (PWB_REV == 6) {
 		if (config.en_atemp  || config.en_ahumd) {
 			I2C_Init();
+			initAHT10();
 		}
 	}
 
@@ -559,8 +560,9 @@ void rev_msg_init(void)
 	// Initialize counter capability/structure if eeprom configured
 	memset((void*)&sens_rev, 0, sizeof(sensor_t));
     sens_rev.sensorId = SENID_REV;
-    sens_rev.low = (revision & 0xff);
     sens_rev.hi = ((revision >> 8) & 0xf);
+    sens_rev.mid = (revision & 0xff);
+	sens_rev.low = PWB_REV;
 }
 
 //

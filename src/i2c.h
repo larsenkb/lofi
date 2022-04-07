@@ -14,6 +14,7 @@
 //extern void I2C_WriteBit(unsigned char c);
 //extern unsigned char I2C_ReadBit(void);
 extern void I2C_Init(void);
+extern void initAHT10(void);
 //extern void I2C_Start(void);
 //extern void I2C_Stop(void);
 //extern bool I2C_Write(unsigned char c);

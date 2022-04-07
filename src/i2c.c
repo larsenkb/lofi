@@ -158,6 +158,7 @@ static void readAHT10(void)
 	raw[5] = I2C_Read( 0 );
 	I2C_Stop();
 	
+#if 0
 	// go into low power mode
 	_delay_loop_2(5);
 	I2C_Start();
@@ -166,6 +167,7 @@ static void readAHT10(void)
 	I2C_Write( 0x08 );
 	I2C_Write( 0x00 );
 	I2C_Stop();
+#endif
 
 	rawHumd = raw[1];
 	rawHumd = (rawHumd<<8) + raw[2];
@@ -188,4 +190,14 @@ uint32_t readAHT10Humd(bool humdDone)
 		readAHT10();
 	}
 	return rawHumd;
+}
+
+void initAHT10(void)
+{
+	I2C_Start();
+	I2C_Write( 0x70 );
+	I2C_Write( 0xe1 );
+	I2C_Write( 0x08 );
+	I2C_Write( 0x00 );
+	I2C_Stop();
 }
