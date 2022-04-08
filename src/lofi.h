@@ -149,9 +149,12 @@ typedef struct {	// fills up bit fields LSB to MSB
 	uint16_t	ahumdCntsMax;
 
 	// bytes 24 & 25
-	int16_t		atempFudge;				// signed little-endian
+	int16_t		atempCalibCntsMax;		// LE, calibrate AHT10 every 'n' msgs
 
 	// bytes 26 & 27
+	int16_t		atempFudge;				// signed little-endian
+
+	// bytes 28 & 29
 	int16_t		ahumdFudge;				// signed little-endian
 
 } config_t;

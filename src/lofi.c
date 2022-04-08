@@ -94,6 +94,7 @@ uint16_t			tempCnts;
 uint16_t			ctrCnts;
 uint16_t			atempCnts;
 uint16_t			ahumdCnts;
+uint16_t			atempCalibCnts;
 
 #define	RF_MSGBUF_SIZE	8
 uint8_t				rfMsgBuf[RF_MSGBUF_SIZE][NRF24_PAYLOAD_LEN-1];
@@ -278,6 +279,7 @@ int main(void)
 	tempCnts = config.tempCntsMax - 1;
 	atempCnts = config.atempCntsMax - 1;
 	ahumdCnts = config.ahumdCntsMax - 1;
+	atempCalibCnts = 0;
 
 	if (PWB_REV == 0) {
 		setup_watchdog();
@@ -786,6 +788,11 @@ void msgs_build(int pc_triggered)
 
 	// build an AHT10 Temperature message if flag set
 	if (FLAGS & ATEMP_FLAG) {
+		if (++atempCalibCnts >= config.atempCalibCntsMax) {
+			atempCalibCnts = 0;
+			initAHT10();
+			dlyMS(100);
+		}
 		uint32_t atemp = readAHT10Temp();
 		humdDone = true;
 		atemp += config.atempFudge;
@@ -819,7 +826,7 @@ void msgs_build(int pc_triggered)
 void dlyMS(uint16_t ms)
 {
 	uint16_t val = 2000>>clk_div;
-	val -= ms;
+//	val -= ms;
 	while(ms--) {
 		_delay_loop_2(val);
 	}
