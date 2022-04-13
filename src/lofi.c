@@ -786,13 +786,17 @@ void msgs_build(int pc_triggered)
 	
 	bool humdDone = false;
 
-	// build an AHT10 Temperature message if flag set
-	if (FLAGS & ATEMP_FLAG) {
+	// calibrate AHT10 after n atemp or ahumd msgs
+	if (FLAGS & (ATEMP_FLAG | AHUMD_FLAG)) {
 		if (++atempCalibCnts >= config.atempCalibCntsMax) {
 			atempCalibCnts = 0;
 			initAHT10();
 			dlyMS(100);
 		}
+	}
+
+	// build an AHT10 Temperature message if flag set
+	if (FLAGS & ATEMP_FLAG) {
 		uint32_t atemp = readAHT10Temp();
 		humdDone = true;
 		atemp += config.atempFudge;
