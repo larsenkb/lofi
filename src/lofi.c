@@ -375,9 +375,9 @@ int main(void)
 			ledStatus = nrfWriteReg(STATUS, ((1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT))); 
 
 			// do I really need a delay here?
-//			if (rfMsgBufRd != rfMsgBufWr) {
-//				dlyMS(4);
-//			}
+			if (rfMsgBufRd != rfMsgBufWr) {
+				dlyMS(4);
+			}
 
 		} while (rfMsgBufRd != rfMsgBufWr);
 
