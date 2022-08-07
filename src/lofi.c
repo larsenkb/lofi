@@ -285,12 +285,12 @@ int main(void)
 		setup_watchdog();
 	}
 
-	if (PWB_REV == 6) {
+//	if (PWB_REV == 6) {
 		if (config.en_atemp  || config.en_ahumd) {
 			I2C_Init();
 			initAHT10();
 		}
-	}
+//	}
 
 	// set sleep mode one time here
     set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
@@ -890,7 +890,7 @@ void led_init(void)
 {
 	if (PWB_REV == 0) {
 		DDRB |= (1<<0);
-		PORTB |= (1<<0);
+		PORTB &= ~(1<<0);
 	} else if (PWB_REV != 6) { // PWB_REV 1+
 		DDRA |= (1<<3);
 		PORTA |= (1<<3);
