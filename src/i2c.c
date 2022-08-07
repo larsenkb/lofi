@@ -22,7 +22,7 @@ static void idly(void) { _NOP(); }
 
 void I2C_Init(void)
 {
-    I2C_PORT &= ~ ((1 << I2C_DAT) | (1 << I2C_CLK));
+    I2C_PORT &= ~((1 << I2C_DAT) | (1 << I2C_CLK));
     SCL_HI;
     SDA_HI;
     idly();
