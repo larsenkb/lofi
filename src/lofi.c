@@ -140,8 +140,8 @@ ISR(WATCHDOG_vect)
 //****************************************************************
 // pinChange_isr
 //   for PA0..PA7
-//   DRVn -> PA2	// for version 2
-//   SW1  -> PA7	// for version 3
+//   DRVn -> PA2	// for version 1 & 2
+//   SW1  -> PA7	// for version 3+
 //   not enabled for PWB_REV == 0
 ISR(PCINT0_vect)
 {
@@ -227,26 +227,14 @@ int main(void)
 		PRR |= (1<<PRTIM0);
 	}
 
-	// Initialize revision message structure
-	rev_msg_init();
-
-	// Initialize counter message structure
-	ctr_msg_init();
-
-	// Initialize Temperature message structure
-	temp_msg_init();
-
-	// Initialize Vcc message structure
-	vcc_msg_init();
-
-	// Initialize switch 1 message structure
-	sw1_msg_init();
-
-	// Initialize AHT10 temp message structure
-	atemp_msg_init();
-
-	// Initialize AHT10 humidity message structure
-	ahumd_msg_init();
+	// Initialize message structs
+	rev_msg_init();		// revision msg
+	ctr_msg_init();		// counter msg
+	temp_msg_init();	// Temp msg
+	vcc_msg_init();		// Vcc msg
+	sw1_msg_init();		// switch msg
+	atemp_msg_init();	// aht10 temp msg
+	ahumd_msg_init();	// aht10 humidity msg
 
 	// Enable TPL5111 DVRn pin change
 	tpl_drv_init();
@@ -271,7 +259,7 @@ int main(void)
 
 	FAST_CLOCK();
 
-    // initialize delay counts so that first time through loop
+    // initialize msg delay counts so that first time through loop
 	// all enabled messages will be transmitted
     swCnts = config.swCntsMax - 1;
 	ctrCnts = config.ctrCntsMax - 1;
@@ -285,12 +273,10 @@ int main(void)
 		setup_watchdog();
 	}
 
-//	if (PWB_REV == 6) {
-		if (config.en_atemp  || config.en_ahumd) {
-			I2C_Init();
-			initAHT10();
-		}
-//	}
+	if (config.en_atemp  || config.en_ahumd) {
+		I2C_Init();
+		initAHT10();
+	}
 
 	// set sleep mode one time here
     set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
@@ -397,24 +383,18 @@ int main(void)
 //
 void blinkLed(uint8_t status)
 {
-	if (PWB_REV != 6 && config.en_led_nack) {
+	if ((PWB_REV == 0 || PWB_REV == 5) && config.en_led_nack) {
 		if (status & (1<<MAX_RT)) {
-			led_assert();
+			ledr_assert();
 			_delay_loop_1(5); // ~100us at 1MHz F_CPU
-			led_deassert();
+			ledr_deassert();
 		}
 	}
 	if (config.en_led_ack) {
 		if (status & (1<<TX_DS)) {
-			if (PWB_REV == 5) {
-				ledg_assert();
-				_delay_loop_1(5); // ~100us at 1MHz F_CPU
-				ledg_deassert();
-			} else {
-				ledg_assert();
-				_delay_loop_1(5); // ~100us at 1MHz F_CPU
-				ledg_deassert();
-			}
+			ledg_assert();
+			_delay_loop_1(5); // ~100us at 1MHz F_CPU
+			ledg_deassert();
 		}
 	}
 }
@@ -427,18 +407,18 @@ void printConfig(void)
 	uint8_t  ta[8];
 
     xprintf("\nnrf config:\n");
-	xprintf("00:%02x", nrfReadReg(0));
-    xprintf(" %02x", nrfReadReg(1));
-    xprintf(" %02x", nrfReadReg(2));
-    xprintf(" %02X", nrfReadReg(3));
-	xprintf(" %02X", nrfReadReg(4));
-    xprintf(" %02X", nrfReadReg(5));
-    xprintf(" %02X", nrfReadReg(6));
-    xprintf(" %02X", nrfReadReg(7));
-    xprintf(" %02X\n", nrfReadReg(8));
-    xprintf("09:%02X\n", nrfReadReg(9));
+	xprintf("00:%02x", nrfReadReg(CONFIG));
+    xprintf(" %02x", nrfReadReg(EN_AA));
+    xprintf(" %02x", nrfReadReg(EN_RXADDR));
+    xprintf(" %02X", nrfReadReg(SETUP_AW));
+	xprintf(" %02X", nrfReadReg(SETUP_RETR));
+    xprintf(" %02X", nrfReadReg(RF_CH));
+    xprintf(" %02X", nrfReadReg(RF_SETUP));
+    xprintf(" %02X", nrfReadReg(STATUS));
+    xprintf(" %02X\n", nrfReadReg(OBSERVE_TX));
+    xprintf("09:%02X\n", nrfReadReg(CD));
 	memset(ta, 0, 8);
-	nrfReadRegs(0x0a, ta, 5);
+	nrfReadRegs(RX_ADDR_P0, ta, 5);
 	xprintf("0A:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
 	memset(ta, 0, 8);
 	nrfReadRegs(0x0b, ta, 5);
@@ -889,39 +869,21 @@ void tpl_drv_init(void)
 void led_init(void)
 {
 	if (PWB_REV == 0) {
-		DDRB |= (1<<0);
-		PORTB &= ~(1<<0);
-	} else if (PWB_REV != 6) { // PWB_REV 1+
-		DDRA |= (1<<3);
-		PORTA |= (1<<3);
-	}
-   	if (PWB_REV == 5 || PWB_REV == 6) {
+		DDRB |= (1<<0);		// ledr
+		PORTB &= ~(1<<0);	// ledr
+		DDRB |= (1<<1);		// ledg
+		PORTB &= ~(1<<1);	// ledg
+	} else if (PWB_REV == 1 || PWB_REV == 2 || PWB_REV == 3 || PWB_REV == 4) {
+		DDRA |= (1<<3);		// ledg no ledr
+		PORTA |= (1<<3);	// ledg no ledr
+	} else if (PWB_REV == 5) {
+		DDRB |= (1<<2);		// ledg
+		PORTB |= (1<<2);	// ledg
+		DDRA |= (1<<3);		// ledr
+		PORTA |= (1<<3);	// ledr
+	} else {	// pwb_rev 6+
 		DDRB |= (1<<2);
 		PORTB |= (1<<2);
-	}
-}
-
-//
-// Turn OFF LED
-//
-void led_deassert(void)
-{
-	if (PWB_REV== 0) {
-		PORTB &= ~(1<<0);
-	} else if (PWB_REV != 6) { // PWB_REV 1+
-		PORTA |= (1<<3);
-	}
-}
-
-//
-// Turn ON LED
-//
-void led_assert(void)
-{
-	if (PWB_REV == 0) {
-		PORTB |= (1<<0);
-	} else if (PWB_REV != 6) { // PWB_REV 1+
-		PORTA &= ~(1<<3);
 	}
 }
 
@@ -930,7 +892,11 @@ void led_assert(void)
 //
 void ledg_deassert(void)
 {
-	if ( PWB_REV == 5) {
+	if (PWB_REV == 0) {
+		PORTB &= ~(1<<1);
+	} else if (PWB_REV == 1 || PWB_REV == 2 || PWB_REV == 3 || PWB_REV == 4) {
+		PORTA |= (1<<3);
+	} else {
 		PORTB |= (1<<2);
 	}
 }
@@ -940,8 +906,36 @@ void ledg_deassert(void)
 //
 void ledg_assert(void)
 {
-	if (PWB_REV == 5) {
+	if (PWB_REV == 0) {
+		PORTB |= (1<<1);
+	} else if (PWB_REV == 1 || PWB_REV == 2 || PWB_REV == 3 || PWB_REV == 4) {
+		PORTA &= ~(1<<3);
+	} else {
 		PORTB &= ~(1<<2);
+	}
+}
+
+//
+// Turn OFF LEDR
+//
+void ledr_deassert(void)
+{
+	if ( PWB_REV == 0) {
+		PORTB &= ~(1<<0);
+	} else if (PWB_REV == 5) {
+		PORTA |= (1<<3);
+	}
+}
+
+//
+// Turn ON LEDR
+//
+void ledr_assert(void)
+{
+	if ( PWB_REV == 0) {
+		PORTB |= (1<<0);
+	} else if (PWB_REV == 5) {
+		PORTA &= ~(1<<3);
 	}
 }
 
