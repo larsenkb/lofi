@@ -19,7 +19,7 @@
 
 static uint8_t nrf24_CONFIG;
 
-extern uint8_t gstatus;
+static uint8_t gstatus;
 
 static uint8_t (*spi_xfer)(uint8_t tx);
 
@@ -226,7 +226,7 @@ uint8_t nrfIsSending()
 	} else {
 		// read the current status
 		gstatus = nrfGetStatus();
-		return (0 == (gstatus & ((1 << TX_DS) | (1 << MAX_RT))));        
+		return (0 == (gstatus & ((1<<TX_DS) | (1<<MAX_RT))));
 	}
 }
 
@@ -235,6 +235,14 @@ uint8_t nrfGetStatus(void)
 {
 	ASSERT_CSN();
 	gstatus = (*spi_xfer)(NOP);
+	DEASSERT_CSN();
+	return gstatus;
+}
+
+uint8_t nrfRetransmit(void)
+{
+	ASSERT_CSN();
+	gstatus = (*spi_xfer)(REUSE_TX_PL);
 	DEASSERT_CSN();
 	return gstatus;
 }

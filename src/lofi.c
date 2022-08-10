@@ -70,14 +70,12 @@
 #undef F_CPU
 #define F_CPU 1000000UL
 
-const uint16_t revision = 8;	// increment this for each release
+const uint16_t revision = 9;	// increment this for each release
 
 int clk_div = 3;
 
 
 // GLOBAL VARIABLES --------------------------------------------
-uint8_t				gstatus;
-
 sensor_t		sens_sw1;
 sensor_t		sens_ctr;
 sensor_t		sens_rev;
@@ -175,7 +173,6 @@ int main(void)
 {
 	uint8_t mcusr;
 
-	gstatus = 0;
     FLAGS = 0;
 	PWB_REV = 0xff;		// until it can get properly initialized from eeprom
 
@@ -228,13 +225,13 @@ int main(void)
 	}
 
 	// Initialize message structs
-	rev_msg_init();		// revision msg
-	ctr_msg_init();		// counter msg
-	temp_msg_init();	// Temp msg
-	vcc_msg_init();		// Vcc msg
-	sw1_msg_init();		// switch msg
-	atemp_msg_init();	// aht10 temp msg
-	ahumd_msg_init();	// aht10 humidity msg
+	msg_init(&sens_rev, SENID_REV);
+	msg_init(&sens_ctr, SENID_CTR);
+	msg_init(&sens_vcc, SENID_VCC);
+	msg_init(&sens_temp, SENID_TEMP);
+	msg_init(&sens_sw1, SENID_SW1);
+	msg_init(&sens_atemp, SENID_ATEMP);
+	msg_init(&sens_ahumd, SENID_AHUMD);
 
 	// Enable TPL5111 DVRn pin change
 	tpl_drv_init();
@@ -336,34 +333,55 @@ int main(void)
 		dlyMS(2);
 
 		do {
-			int i;
+			volatile int i;
+			uint8_t retry;
 
 			// clear IRQ causes
 			//nrfWriteReg(STATUS, ((1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT))); 
 
 			nrfFlushTx();
 
-	 		/* Automatically goes to TX mode */
+			// Automatically goes to TX mode
 			nrfFillTxFifo(&config, &rfMsgBuf[rfMsgBufRd][0], NRF24_PAYLOAD_LEN-1);        
+
+			retry = 1;
+
+			// Start the transmission
+retry_lbl:	nrfPulseCE();
+
+			// spin waiting for xmit to complete with good or max retries set
+			i = 0;
+			while (nrfIsSending() && (i < 400)) {
+//				_delay_loop_1(1);
+				i++;
+				_NOP(); _NOP(); _NOP(); _NOP();
+			}
+
+			// clear IRQ causes
+			ledStatus = nrfWriteReg(STATUS, ((1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT))); 
+
+			// if we fell out of the wait loop something is wrong - retransmit
+			if (i >= 400)
+				ledStatus |= (1<<MAX_RT);
+
+			// we tried to xmit the maximum nbr of times to no avail - try again...
+			if (retry && (ledStatus & (1<<MAX_RT))) {
+				nrfRetransmit();
+				retry = 0;
+				goto retry_lbl;
+			}
+
+			blinkLed(ledStatus);
 
 			// Bump the read index
 			rfMsgBufRd = (rfMsgBufRd + 1) & (RF_MSGBUF_SIZE - 1);
 
-			/* Start the transmission */
-			nrfPulseCE();
-
-			// spin waiting for xmit to complete with good or max retries set
-			i = 0;
-			while (nrfIsSending() && i < 400) {
-				i++;
-			}
-			// clear IRQ causes
-			ledStatus = nrfWriteReg(STATUS, ((1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT))); 
-
+#if 0
 			// do I really need a delay here?
 			if (rfMsgBufRd != rfMsgBufWr) {
 				dlyMS(4);
 			}
+#endif
 
 		} while (rfMsgBufRd != rfMsgBufWr);
 
@@ -371,7 +389,7 @@ int main(void)
 	
 		FAST_CLOCK();
 
-		blinkLed(ledStatus);
+//		blinkLed(ledStatus);
 
     } //endof: while (1) {
 
@@ -392,6 +410,13 @@ void blinkLed(uint8_t status)
 	}
 	if (config.en_led_ack) {
 		if (status & (1<<TX_DS)) {
+			ledg_assert();
+			_delay_loop_1(5); // ~100us at 1MHz F_CPU
+			ledg_deassert();
+		}
+	}
+	if (config.en_led_nack) {
+		if (status & (1<<MAX_RT)) {
 			ledg_assert();
 			_delay_loop_1(5); // ~100us at 1MHz F_CPU
 			ledg_deassert();
@@ -534,99 +559,34 @@ uint16_t readVccTemp(uint8_t mux_select)
 	
 }
 
-//
-// initialze counter message structure
-//
-void rev_msg_init(void)
+void msg_init(sensor_t *s, int id)
 {
-	// Initialize counter capability/structure if eeprom configured
-	memset((void*)&sens_rev, 0, sizeof(sensor_t));
-    sens_rev.sensorId = SENID_REV;
-    sens_rev.hi = ((revision >> 8) & 0xf);
-    sens_rev.mid = (revision & 0xff);
-	sens_rev.low = PWB_REV;
-}
+	memset((void*)s, 0, sizeof(sensor_t));
+    s->sensorId = id;
 
-//
-// initialze counter message structure
-//
-void ctr_msg_init(void)
-{
-	// Initialize counter capability/structure if eeprom configured
-    if (config.en_ctr) {
-		memset((void*)&sens_ctr, 0, sizeof(sensor_t));
-        sens_ctr.sensorId = SENID_CTR;
-    }
-}
-
-//
-// initialze Temperature message structure
-//
-void temp_msg_init(void)
-{
-	// Initialize Temp capability/structure if eeprom configured
-	if (config.en_temp) {
-		memset((void*)&sens_ctr, 0, sizeof(sensor_t));
-        sens_temp.sensorId = SENID_TEMP;
-    }
-}
-
-//
-// initialze Vcc message structure
-//
-void vcc_msg_init(void)
-{
-	// Initialize Vcc capability/structure if eeprom configured
-    if (config.en_vcc) {
-		memset((void*)&sens_ctr, 0, sizeof(sensor_t));
-        sens_vcc.sensorId = SENID_VCC;
-    }
-}
-
-//
-// initialze AHT10 Temp message structure
-//
-void atemp_msg_init(void)
-{
-	// Initialize AHT10 Temp capability/structure if eeprom configured
-    if (config.en_atemp) {
-		memset((void*)&sens_atemp, 0, sizeof(sensor_t));
-        sens_atemp.sensorId = SENID_ATEMP;
-    }
-}
-
-//
-// initialze AHT10 Humditiy message structure
-//
-void ahumd_msg_init(void)
-{
-	// Initialize AHT10 humidity capability/structure if eeprom configured
-    if (config.en_ahumd) {
-		memset((void*)&sens_ahumd, 0, sizeof(sensor_t));
-        sens_ahumd.sensorId = SENID_AHUMD;
-    }
-}
-
-//
-// initialze switch 1 message structure
-//
-void sw1_msg_init(void)
-{
-	// Initialize switch 1 capability/structure if eeprom configured
-    if (config.en_sw1) {
-		init_switch();
-		sens_sw1.sensorId = SENID_SW1;
-		sens_sw1.seq = 2; // init to 2 because it is called 2 times before first xmit
-		getSw1(0);
-		if (config.sw1_pc) {
-			init_switch_PC();
+	switch(id) {
+	case SENID_REV:
+		s->hi = ((revision >> 8) & 0xf);
+		s->mid = (revision & 0xff);
+		s->low = PWB_REV;
+		break;
+	case SENID_SW1:
+		// Initialize switch 1 capability/structure if eeprom configured
+		if (config.en_sw1) {
+			init_switch();
+			s->seq = 2; // init to 2 because it is called 2 times before first xmit
+			getSw1(0);
+			if (config.sw1_pc) {
+				init_switch_PC();
+			}
+		} else {
+			// if we leave pin as input, it will draw more current if it oscillates
+			// but if we pgm pin as output and there REALLY is a switch connected
+			// we are would do damage. That is why there is a series resistor on
+			// switch pin.
+			safe_switch();
 		}
-    } else {
-		// if we leave pin as input, it will draw more current if it oscillates
-		// but if we pgm pin as output and there REALLY is a switch connected
-		// we are would  do damage. That is why there is a series resistor on
-		// switch pin.
-		safe_switch();
+		break;
 	}
 }
 

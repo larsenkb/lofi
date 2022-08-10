@@ -166,6 +166,7 @@ uint8_t getSw1(uint8_t pc_triggered);
 uint8_t read_switch(void);
 void safe_switch(void);
 //uint8_t getSw2(void);
+void msg_init(sensor_t *s, int id);
 void ctr_msg_init(void);
 void rev_msg_init(void);
 void temp_msg_init(void);
