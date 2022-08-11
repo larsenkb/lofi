@@ -122,7 +122,7 @@ void nrfConfig(config_t *config, uint8_t pay_length)
     // Use static payload length ...
 	///KBL TODO: only write next reg if en_aa set???
 	nrfWriteReg(RX_PW_P0, pay_length); // Auto-ACK pipe ...
-    nrfWriteReg(RX_PW_P1, pay_length); // Data payload pipe
+    nrfWriteReg(RX_PW_P1, 0); //pay_length); // Data payload pipe
 
     // configure RF speed and power gain
 	tval = (config->rf_gain & 0x3) << 1;
@@ -137,6 +137,14 @@ void nrfConfig(config_t *config, uint8_t pay_length)
 
     // Auto Acknowledgment
 	if (config->en_aa) {
+#if 1
+		nrfWriteReg(EN_AA,(1<<ENAA_P0));
+		tval = (config->nodeId & 0xF);
+		tval ^= ((config->nodeId>>4) & 0x0F);
+		if (tval == 0) tval = 5;
+		tval |= (config->setup_retr & 0xF0);
+		nrfWriteReg(SETUP_RETR, tval);
+#else
 		nrfWriteReg(EN_AA,(1<<ENAA_P0)|(0<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
 		tval = config->nodeId & 0x0F;
 		if (tval == 0) tval = 3;
@@ -144,6 +152,7 @@ void nrfConfig(config_t *config, uint8_t pay_length)
 		tval |= config->setup_retr & 0x0F;
 		//nrfWriteReg(SETUP_RETR, tval);
 		nrfWriteReg(SETUP_RETR,config->setup_retr);
+#endif
 	} else {
 		nrfWriteReg(EN_AA, 0);
 		nrfWriteReg(SETUP_RETR, 0);

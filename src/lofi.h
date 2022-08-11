@@ -13,6 +13,7 @@
 #define EEPROM_NODEID_ADR		((uint8_t *)0)
 #define NRF24_PAYLOAD_LEN		(sizeof(sensor_t) + 1)
 #define TXBUF_SIZE				8	// must be a power of 2!!!
+#define WAIT_CNT				800
 
 
 // define macros to slow clock even more than fuse setting

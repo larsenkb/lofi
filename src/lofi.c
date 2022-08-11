@@ -43,9 +43,13 @@
 //
 // I'm using spin loop delays. See util/delay_basic.h.
 // _delay_loop_1 loop is three cycles and takes an 8-bit
-// loop counter. 3us * 256 is max delay.
+// loop counter:
+//		 3 * 1us * 256 is max delay at F_CPU = 1MHz
+//		 3 * 4us * 256 is max delay at F_CPU = 250KHz
 // _delay_loop_2 loop is four cycles and takes a 16-bit
-// loop counter. 4us * 65536 is max delay.
+// loop counter:
+//		 4 * 1us * 65536 is max delay at F_CPU = 1MHz
+//		 4 * 4us * 65536 is max delay at F_CPU = 250KHz
 //
 // Configuration is stored in the eeprom starting at addr 0.
 // See config_t structure for details.
@@ -350,24 +354,26 @@ int main(void)
 retry_lbl:	nrfPulseCE();
 
 			// spin waiting for xmit to complete with good or max retries set
+#undef WAIT_CNT
+#define WAIT_CNT 30
 			i = 0;
-			while (nrfIsSending() && (i < 400)) {
-//				_delay_loop_1(1);
+			while (nrfIsSending() && (i < WAIT_CNT)) {
+				_delay_loop_1(4); // 3 * 4us * 4
 				i++;
-				_NOP(); _NOP(); _NOP(); _NOP();
+//				_NOP(); _NOP(); _NOP(); _NOP();
 			}
 
 			// clear IRQ causes
 			ledStatus = nrfWriteReg(STATUS, ((1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT))); 
 
 			// if we fell out of the wait loop something is wrong - retransmit
-			if (i >= 400)
+			if (i >= WAIT_CNT)
 				ledStatus |= (1<<MAX_RT);
 
 			// we tried to xmit the maximum nbr of times to no avail - try again...
 			if (retry && (ledStatus & (1<<MAX_RT))) {
 				nrfRetransmit();
-				retry = 0;
+				retry--;
 				goto retry_lbl;
 			}
 
