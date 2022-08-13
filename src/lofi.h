@@ -13,7 +13,6 @@
 #define EEPROM_NODEID_ADR		((uint8_t *)0)
 #define NRF24_PAYLOAD_LEN		(sizeof(sensor_t) + 1)
 #define TXBUF_SIZE				8	// must be a power of 2!!!
-#define WAIT_CNT				800
 
 
 // define macros to slow clock even more than fuse setting
@@ -86,7 +85,7 @@ typedef struct {
 // define eeprom configuration format
 typedef struct {	// fills up bit fields LSB to MSB
 	// byte 0
-	uint8_t		nodeId;
+	uint8_t		nodeId;				// associated pipe nbr is (nodeId mod 6), i.e. 0-5
 
 	// byte 1
 	uint8_t		sw1_rev			:1;	// LSB
@@ -157,6 +156,18 @@ typedef struct {	// fills up bit fields LSB to MSB
 
 	// bytes 28 & 29
 	int16_t		ahumdFudge;				// signed little-endian
+
+	// bytes 30 & 31
+	int16_t		rsvd_7;
+
+	// bytes 32 to 36
+	uint8_t		p0Addr[5];
+
+	// bytes 37 to 41
+	uint8_t		p15Addr[5];
+
+	// bytes 42 to 45
+	uint8_t		pxAddr[4];
 
 } config_t;
 

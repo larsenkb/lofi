@@ -74,9 +74,10 @@
 #undef F_CPU
 #define F_CPU 1000000UL
 
-const uint16_t revision = 9;	// increment this for each release
+const uint16_t revision = 10;	// increment this for each release
 
 int clk_div = 3;
+int spin_cnt;
 
 
 // GLOBAL VARIABLES --------------------------------------------
@@ -279,6 +280,14 @@ int main(void)
 		initAHT10();
 	}
 
+	// calculate nbr of cycles to wait for nrf to receive ACK
+	// _delay_loop_1 takes 3clks/loop * 4us/clk * 4 loops (3*4*4)
+	spin_cnt = (config.setup_retr >> 4) & 0xF;
+	spin_cnt++;
+	spin_cnt *= 250;
+	spin_cnt /= (3 * 4 * 4);
+	spin_cnt += 2;
+
 	// set sleep mode one time here
     set_sleep_mode(SLEEP_MODE_PWR_DOWN); // sleep mode is set here
 
@@ -354,38 +363,38 @@ int main(void)
 retry_lbl:	nrfPulseCE();
 
 			// spin waiting for xmit to complete with good or max retries set
-#undef WAIT_CNT
-#define WAIT_CNT 30
+			// TBD calculate a proper wait time/count...
 			i = 0;
-			while (nrfIsSending() && (i < WAIT_CNT)) {
+			while (nrfIsSending() && (i++ < spin_cnt)) {
 				_delay_loop_1(4); // 3 * 4us * 4
-				i++;
-//				_NOP(); _NOP(); _NOP(); _NOP();
 			}
 
 			// clear IRQ causes
 			ledStatus = nrfWriteReg(STATUS, ((1<<RX_DR) | (1<<TX_DS) | (1<<MAX_RT))); 
 
+#if 1
 			// if we fell out of the wait loop something is wrong - retransmit
-			if (i >= WAIT_CNT)
+			if (i >= spin_cnt)
 				ledStatus |= (1<<MAX_RT);
-
+#endif
+#if 0
 			// we tried to xmit the maximum nbr of times to no avail - try again...
 			if (retry && (ledStatus & (1<<MAX_RT))) {
 				nrfRetransmit();
 				retry--;
 				goto retry_lbl;
 			}
+#endif
 
 			blinkLed(ledStatus);
 
 			// Bump the read index
 			rfMsgBufRd = (rfMsgBufRd + 1) & (RF_MSGBUF_SIZE - 1);
 
-#if 0
+#if 1
 			// do I really need a delay here?
 			if (rfMsgBufRd != rfMsgBufWr) {
-				dlyMS(4);
+				dlyMS(2);
 			}
 #endif
 
@@ -433,44 +442,80 @@ void blinkLed(uint8_t status)
 //
 // print nrf24l01+ configuration out serial port
 //
+uint8_t  ta[10];
 void printConfig(void)
 {
-	uint8_t  ta[8];
-
+#if 0
+	SLOW_CLOCK();
+	ta[0] = nrfReadReg(CONFIG);
+    ta[1] = nrfReadReg(EN_AA);
+    ta[2] = nrfReadReg(EN_RXADDR);
+    ta[3] = nrfReadReg(SETUP_AW);
+	ta[4] = nrfReadReg(SETUP_RETR);
+    ta[5] = nrfReadReg(RF_CH);
+    ta[6] = nrfReadReg(RF_SETUP);
+    ta[7] = nrfReadReg(STATUS);
+    ta[8] = nrfReadReg(OBSERVE_TX);
+    ta[9] = nrfReadReg(CD);
+	FAST_CLOCK();
     xprintf("\nnrf config:\n");
-	xprintf("00:%02x", nrfReadReg(CONFIG));
-    xprintf(" %02x", nrfReadReg(EN_AA));
-    xprintf(" %02x", nrfReadReg(EN_RXADDR));
-    xprintf(" %02X", nrfReadReg(SETUP_AW));
-	xprintf(" %02X", nrfReadReg(SETUP_RETR));
-    xprintf(" %02X", nrfReadReg(RF_CH));
-    xprintf(" %02X", nrfReadReg(RF_SETUP));
-    xprintf(" %02X", nrfReadReg(STATUS));
-    xprintf(" %02X\n", nrfReadReg(OBSERVE_TX));
-    xprintf("09:%02X\n", nrfReadReg(CD));
-	memset(ta, 0, 8);
+	xprintf("00:%02x\n", ta[0]);
+    xprintf(" %02x", ta[1]);
+    xprintf(" %02x", ta[2]);
+    xprintf(" %02X", ta[3]);
+	xprintf(" %02X", ta[4]);
+    xprintf(" %02X", ta[5]);
+    xprintf(" %02X", ta[6]);
+    xprintf(" %02X", ta[7]);
+    xprintf(" %02X\n", ta[8]);
+    xprintf("09:%02X\n", ta[9]);
+	_delay_loop_2(8000);
+	SLOW_CLOCK();
 	nrfReadRegs(RX_ADDR_P0, ta, 5);
-	xprintf("0A:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
-	memset(ta, 0, 8);
+	FAST_CLOCK();
+	xprintf("0A:%02X%02X%02X%02X%02X\n", ta[0], ta[1], ta[2], ta[3], ta[4]);
+	_delay_loop_2(8000);
+	SLOW_CLOCK();
 	nrfReadRegs(0x0b, ta, 5);
-	xprintf("0B:%02X %02X %02X %02X %02X", ta[4], ta[3], ta[2], ta[1], ta[0]);
-    xprintf("  0C:%02X", nrfReadReg(0x0c));
-    xprintf("  0D:%02X", nrfReadReg(0x0d));
-    xprintf("  0E:%02X", nrfReadReg(0x0e));
-    xprintf("  0F:%02X\n", nrfReadReg(0x0f));
-	memset(ta, 0, 8);
+    ta[5] = nrfReadReg(0x0c);
+    ta[6] = nrfReadReg(0x0d);
+    ta[7] = nrfReadReg(0x0e);
+    ta[8] = nrfReadReg(0x0f);
+	FAST_CLOCK();
+	xprintf("0B:%02X%02X%02X%02X%02X\n", ta[0], ta[1], ta[2], ta[3], ta[4]);
+    xprintf("  0C:%02X", ta[5]);
+    xprintf("  0D:%02X", ta[6]);
+    xprintf("  0E:%02X", ta[7]);
+    xprintf("  0F:%02X\n", ta[8]);
+	_delay_loop_2(8000);
+	SLOW_CLOCK();
 	nrfReadRegs(0x10, ta, 5);
-	xprintf("10:%02X %02X %02X %02X %02X\n", ta[4], ta[3], ta[2], ta[1], ta[0]);
-    xprintf("11:%02X", nrfReadReg(0x11));
-    xprintf("  12:%02X", nrfReadReg(0x12));
-    xprintf("  13:%02X", nrfReadReg(0x13));
-    xprintf("  14:%02X", nrfReadReg(0x14));
-    xprintf("  15:%02X", nrfReadReg(0x15));
-    xprintf("  16:%02X", nrfReadReg(0x16));
-    xprintf("  17:%02X\n", nrfReadReg(0x17));
-//	xprintf("              ?\n");
-    xprintf("1C:%02X", nrfReadReg(0x1c));
-    xprintf("  1D:%02X\n", nrfReadReg(0x1d));
+	FAST_CLOCK();
+	xprintf("10:%02X%02X%02X%02X%02X\n", ta[0], ta[1], ta[2], ta[3], ta[4]);
+	_delay_loop_2(8000);
+	SLOW_CLOCK();
+    ta[0] = nrfReadReg(0x11);
+    ta[1] = nrfReadReg(0x12);
+    ta[2] = nrfReadReg(0x13);
+    ta[3] = nrfReadReg(0x14);
+    ta[4] = nrfReadReg(0x15);
+    ta[5] = nrfReadReg(0x16);
+    ta[6] = nrfReadReg(0x17);
+    ta[7] = nrfReadReg(0x1c);
+    ta[8] = nrfReadReg(0x1d);
+	FAST_CLOCK();
+    xprintf("11:%02X", ta[0]);
+    xprintf("  12:%02X", ta[1]);
+    xprintf("  13:%02X", ta[2]);
+    xprintf("  14:%02X", ta[3]);
+    xprintf("  15:%02X", ta[4]);
+    xprintf("  16:%02X", ta[5]);
+    xprintf("  17:%02X\n", ta[6]);
+    xprintf("1C:%02X", ta[7]);
+    xprintf("  1D:%02X\n", ta[8]);
+	_delay_loop_2(4000);
+	return;
+#endif
 }
 
 

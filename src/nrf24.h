@@ -59,6 +59,7 @@ void    nrfPowerUpTx(void);
 void    nrfPowerDown(void);
 void    spi_init(void);
 void    nrfReadRegs(uint8_t reg, uint8_t* value, uint8_t len);
+uint8_t nrfWriteRegs(uint8_t reg, uint8_t* value, uint8_t len);
 uint8_t nrfWriteReg(uint8_t reg, uint8_t value);
 uint8_t nrfReadReg(uint8_t reg);
 uint8_t nrfRetransmit(void);

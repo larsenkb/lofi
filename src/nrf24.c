@@ -114,6 +114,47 @@ void nrfInit(void)
 void nrfConfig(config_t *config, uint8_t pay_length)
 {
 	uint8_t tval;
+	uint8_t pipe;
+
+	// calculate pipe number this node is...
+	pipe = config->nodeId % 6;  // remainder 0-5
+#if 1
+	// initialize pipe addresses in config if not done already
+	if (config->p0Addr[0] == 0xFF) {
+		config->p0Addr[0] = 0xE7;
+		config->p0Addr[1] = 0xE7;
+		config->p0Addr[2] = 0xE7;
+		config->p0Addr[3] = 0xE7;
+		config->p0Addr[4] = 0xE7;
+	}
+	if (config->p15Addr[0] == 0xFF) {
+		config->p15Addr[0] = 0xC2;
+		config->p15Addr[1] = 0xC2;
+		config->p15Addr[2] = 0xC2;
+		config->p15Addr[3] = 0xC2;
+		config->p15Addr[4] = 0xC2;
+		config->pxAddr[0] = 0xC3;
+		config->pxAddr[1] = 0xC4;
+		config->pxAddr[2] = 0xC5;
+		config->pxAddr[3] = 0xC6;
+	}
+#endif
+	nrfWriteRegs(RX_ADDR_P1, config->p15Addr, 5); 
+    nrfWriteReg(RX_ADDR_P2, config->pxAddr[0]);
+    nrfWriteReg(RX_ADDR_P3, config->pxAddr[1]);
+    nrfWriteReg(RX_ADDR_P4, config->pxAddr[2]);
+    nrfWriteReg(RX_ADDR_P5, config->pxAddr[3]);
+
+	if (pipe > 1)
+		config->p15Addr[4] = config->pxAddr[pipe-2];
+
+	if (pipe == 0) {
+		nrfWriteRegs(TX_ADDR, config->p0Addr, 5); 
+		nrfWriteRegs(RX_ADDR_P0, config->p0Addr, 5); 
+	} else {
+		nrfWriteRegs(TX_ADDR, config->p15Addr, 5); 
+		nrfWriteRegs(RX_ADDR_P0, config->p15Addr, 5); 
+	}
 
     // Set RF channel
     nrfWriteReg(RF_CH, config->rf_chan);
@@ -122,7 +163,12 @@ void nrfConfig(config_t *config, uint8_t pay_length)
     // Use static payload length ...
 	///KBL TODO: only write next reg if en_aa set???
 	nrfWriteReg(RX_PW_P0, pay_length); // Auto-ACK pipe ...
-    nrfWriteReg(RX_PW_P1, 0); //pay_length); // Data payload pipe
+	nrfWriteReg(RX_PW_P1, 0); // Auto-ACK pipe ...
+	nrfWriteReg(RX_PW_P2, 0); // Auto-ACK pipe ...
+	nrfWriteReg(RX_PW_P3, 0); // Auto-ACK pipe ...
+	nrfWriteReg(RX_PW_P4, 0); // Auto-ACK pipe ...
+	nrfWriteReg(RX_PW_P5, 0); // Auto-ACK pipe ...
+//    nrfWriteReg(RX_PW_P1, 0); //pay_length); // Data payload pipe
 
     // configure RF speed and power gain
 	tval = (config->rf_gain & 0x3) << 1;
@@ -138,12 +184,14 @@ void nrfConfig(config_t *config, uint8_t pay_length)
     // Auto Acknowledgment
 	if (config->en_aa) {
 #if 1
-		nrfWriteReg(EN_AA,(1<<ENAA_P0));
+//		nrfWriteReg(EN_AA,(1<<ENAA_P0));
+		nrfWriteReg(EN_AA, 1);
 		tval = (config->nodeId & 0xF);
 		tval ^= ((config->nodeId>>4) & 0x0F);
 		if (tval == 0) tval = 5;
 		tval |= (config->setup_retr & 0xF0);
-		nrfWriteReg(SETUP_RETR, tval);
+		//nrfWriteReg(SETUP_RETR, tval);
+		nrfWriteReg(SETUP_RETR,config->setup_retr);
 #else
 		nrfWriteReg(EN_AA,(1<<ENAA_P0)|(0<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
 		tval = config->nodeId & 0x0F;
@@ -159,7 +207,8 @@ void nrfConfig(config_t *config, uint8_t pay_length)
 	}
 
     // Enable RX addresses
-    nrfWriteReg(EN_RXADDR,(1<<ERX_P0)|(1<<ERX_P1)|(0<<ERX_P2)|(0<<ERX_P3)|(0<<ERX_P4)|(0<<ERX_P5));
+//    nrfWriteReg(EN_RXADDR,(1<<ERX_P0)|(1<<ERX_P1)|(0<<ERX_P2)|(0<<ERX_P3)|(0<<ERX_P4)|(0<<ERX_P5));
+    nrfWriteReg(EN_RXADDR, 1);
 
 	// Dynamic NO ACK feature
 	if (config->en_aa && config->en_dyn_ack) {
@@ -175,6 +224,19 @@ uint8_t nrfWriteReg(uint8_t reg, uint8_t value)
 	ASSERT_CSN();
 	gstatus = (*spi_xfer)(W_REGISTER | (REGISTER_MASK & reg));
 	(*spi_xfer)(value);
+	DEASSERT_CSN();
+	return gstatus;
+}
+
+// Write to a multi-byte register
+uint8_t nrfWriteRegs(uint8_t reg, uint8_t *buf, uint8_t buf_length)
+{
+	int8_t i;
+
+	ASSERT_CSN();
+	gstatus = (*spi_xfer)(W_REGISTER | (REGISTER_MASK & reg));
+	for (i=4; i >= 0; i--) 
+		(*spi_xfer)(buf[i]);
 	DEASSERT_CSN();
 	return gstatus;
 }
