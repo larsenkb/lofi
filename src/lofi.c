@@ -377,7 +377,7 @@ retry_lbl:	nrfPulseCE();
 			if (i >= spin_cnt)
 				ledStatus |= (1<<MAX_RT);
 #endif
-#if 0
+#if 1
 			// we tried to xmit the maximum nbr of times to no avail - try again...
 			if (retry && (ledStatus & (1<<MAX_RT))) {
 				nrfRetransmit();
