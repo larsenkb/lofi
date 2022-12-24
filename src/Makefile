@@ -111,6 +111,8 @@ CFLAGS += -Wstrict-prototypes
 CFLAGS += -Wa,-adhlns=$(<:%.c=$(OBJDIR)/%.lst)
 CFLAGS += $(patsubst %,-I%,$(EXTRAINCDIRS))
 CFLAGS += $(CSTANDARD)
+#CFLAGS += -Wno-array-bounds
+#CFLAGS += --param=min-pagesize=0
 
 
 #---------------- Compiler Options C++ ----------------
