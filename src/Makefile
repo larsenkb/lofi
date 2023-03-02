@@ -69,7 +69,8 @@ EXTRAINCDIRS =
 #     gnu89 = c89 plus GCC extensions
 #     c99   = ISO C99 standard (not yet fully implemented)
 #     gnu99 = c99 plus GCC extensions
-CSTANDARD = -std=gnu99
+#CSTANDARD = -std=gnu99
+CSTANDARD = -std=gnu11
 
 
 # Place -D or -U options here for C sources
@@ -255,16 +256,16 @@ AVRDUDE_FLAGS += $(AVRDUDE_ERASE_COUNTER)
 
 
 #============================================================================
-
+TOOLSPATH = /home/larsenkb/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin
 
 # Define programs and commands.
 SHELL = sh
-CC = avr-gcc
-OBJCOPY = avr-objcopy
-OBJDUMP = avr-objdump
-SIZE = avr-size
-AR = avr-ar rcs
-NM = avr-nm
+CC = $(TOOLSPATH)/avr-gcc
+OBJCOPY = $(TOOLSPATH)/avr-objcopy
+OBJDUMP = $(TOOLSPATH)/avr-objdump
+SIZE = $(TOOLSPATH)/avr-size
+AR = $(TOOLSPATH)/avr-ar rcs
+NM = $(TOOLSPATH)/avr-nm
 AVRDUDE = avrdude
 REMOVE = rm -f
 REMOVEDIR = rm -rf
