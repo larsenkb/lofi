@@ -127,6 +127,17 @@ static uint8_t raw[6];
 static uint32_t rawTemp;
 static uint32_t rawHumd;
 
+static bool isAHT10_Busy(void)
+{
+	uint8_t stat;
+
+	I2C_Start();
+	I2C_Write( 0x71 );
+	stat = I2C_Read( 0 );
+	I2C_Stop();
+	return ((stat & 0x80) == 0x80);
+}
+
 static void readAHT10(void)
 {
 	// initiate a sensor reading
@@ -138,6 +149,11 @@ static void readAHT10(void)
 	I2C_Stop();
 
 	// loop/wait until reading done
+#if 1
+	do {
+		_delay_loop_2(1000);
+	} while (isAHT10_Busy());
+#else
 	uint8_t stat;
 	do {
 		_delay_loop_2(1000);
@@ -146,6 +162,7 @@ static void readAHT10(void)
 		stat = I2C_Read( 0 );
 		I2C_Stop();
 	} while ((stat & 0x80) == 0x80);
+#endif
 
 	// read Temperature and Humidity
 	I2C_Start();
@@ -200,4 +217,7 @@ void initAHT10(void)
 	I2C_Write( 0x08 );
 	I2C_Write( 0x00 );
 	I2C_Stop();
+	do {
+		_delay_loop_2(1000);
+	} while (isAHT10_Busy());
 }

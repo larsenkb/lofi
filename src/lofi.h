@@ -114,7 +114,8 @@ typedef struct {	// fills up bit fields LSB to MSB
 	uint8_t		rsvd_4			:2;
 	uint8_t		en_dyn_ack		:1;		// 0: tell receiver to NOT send an ACK
 	uint8_t		en_aa			:1;
-	uint8_t		rsvd_5			:2;
+	uint8_t		en_aht10_cal	:1;		// enable AHT10 calibration
+	uint8_t		rsvd_5			:1;
 
 	// byte 5
 	uint8_t		setup_retr;				// nrf SETUP_RETR register contents
@@ -124,38 +125,41 @@ typedef struct {	// fills up bit fields LSB to MSB
 										// 5 = 0.5 PWB; 6 = I2C
 	uint8_t		rsvd_6;
 
-	// bytes 8 & 9
-	uint16_t	swCntsMax;				// LE 0x01c2 for ~1 hr 
+	// using tpl5111 set at ~5 minute trigger; there are ~288 triggers per day
+	// All these 2-byte values are little endian
+
+	// bytes 8 & 9 	 LE 0x01c2(WD) for ~1 hr; TPL5111: set to 1 for every ~5 minutes
+	uint16_t	swCntsMax;
 	
-	// bytes 10 & 11
-	uint16_t	ctrCntsMax;				// little-endian
+	// bytes 10 & 11  
+	uint16_t	ctrCntsMax;
 
-	// bytes 12 & 13
-	uint16_t	vccCntsMax;				// LE 0x2a30 for ~1 day
+	// bytes 12 & 13  0x2a30(WD) for ~1 day; TPL5111 set to 0x120 for once per day
+	uint16_t	vccCntsMax;
 
-	// bytes 14 & 15
-	uint16_t	tempCntsMax;			// LE 0x00e1 for ~0.5 hr
+	// bytes 14 & 15  0x00e1(WD) for ~0.5 hr; TPL5111 set to 6 for ~0.5 hr
+	uint16_t	tempCntsMax;
 
 	// bytes 16 & 17
-	int16_t		vccFudge;				// signed little-endian
+	int16_t		vccFudge;
 
 	// bytes 18 & 19
-	int16_t		tempFudge;				// signed little-endian
+	int16_t		tempFudge;
 
-	// bytes 20 & 21					// LE xmit atemp every n watchdog interrupts
+	// bytes 20 & 21			// LE xmit atemp every n watchdog interrupts
 	uint16_t	atempCntsMax;
 
-	// bytes 22 & 23					// LE xmit ahumd every m watchdog interrupts
+	// bytes 22 & 23			// LE xmit ahumd every m watchdog interrupts
 	uint16_t	ahumdCntsMax;
 
-	// bytes 24 & 25
-	int16_t		atempCalibCntsMax;		// LE, calibrate AHT10 every 'n' msgs
+	// bytes 24 & 25	calibrate AHT10 every 'n' msgs
+	int16_t		aht10CalibCntsMax;
 
 	// bytes 26 & 27
-	int16_t		atempFudge;				// signed little-endian
+	int16_t		atempFudge;
 
 	// bytes 28 & 29
-	int16_t		ahumdFudge;				// signed little-endian
+	int16_t		ahumdFudge;
 
 	// bytes 30 & 31
 	int16_t		rsvd_7;

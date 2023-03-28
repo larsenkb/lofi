@@ -97,7 +97,7 @@ uint16_t			tempCnts;
 uint16_t			ctrCnts;
 uint16_t			atempCnts;
 uint16_t			ahumdCnts;
-uint16_t			atempCalibCnts;
+uint16_t			aht10CalibCnts;
 
 #define	RF_MSGBUF_SIZE	8
 uint8_t				rfMsgBuf[RF_MSGBUF_SIZE][NRF24_PAYLOAD_LEN-1];
@@ -269,7 +269,7 @@ int main(void)
 	tempCnts = config.tempCntsMax - 1;
 	atempCnts = config.atempCntsMax - 1;
 	ahumdCnts = config.ahumdCntsMax - 1;
-	atempCalibCnts = 0;
+	aht10CalibCnts = 0;
 
 	if (PWB_REV == 0) {
 		setup_watchdog();
@@ -777,15 +777,6 @@ void msgs_build(int pc_triggered)
 	
 	bool humdDone = false;
 
-	// calibrate AHT10 after n atemp or ahumd msgs
-	if (FLAGS & (ATEMP_FLAG | AHUMD_FLAG)) {
-		if (++atempCalibCnts >= config.atempCalibCntsMax) {
-			atempCalibCnts = 0;
-			initAHT10();
-			dlyMS(100);
-		}
-	}
-
 	// build an AHT10 Temperature message if flag set
 	if (FLAGS & ATEMP_FLAG) {
 		uint32_t atemp = readAHT10Temp();
@@ -811,6 +802,16 @@ void msgs_build(int pc_triggered)
 		memcpy(&rfMsgBuf[rfMsgBufWr][0], &sens_ahumd, sizeof(sensor_t));
 		rfMsgBufWr = (rfMsgBufWr + 1) & (RF_MSGBUF_SIZE - 1);
 		sens_ahumd.seq++;
+	}
+
+	// calibrate AHT10 after 'aht10CalibCntsMax' tpl triggers
+	if (config.en_aht10_cal && (config.en_atemp || config.en_ahumd)) {
+//	if (FLAGS & (ATEMP_FLAG | AHUMD_FLAG)) {
+		if (++aht10CalibCnts >= config.aht10CalibCntsMax) {
+			aht10CalibCnts = 0;
+			initAHT10();
+//			dlyMS(100);
+		}
 	}
 
 }
