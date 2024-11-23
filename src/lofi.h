@@ -87,7 +87,7 @@ typedef struct {	// fills up bit fields LSB to MSB
 	// byte 0
 	uint8_t		nodeId;				// associated pipe nbr is (nodeId mod 6), i.e. 0-5
 
-	// byte 1
+	// byte 1						// default: 0x86
 	uint8_t		sw1_rev			:1;	// LSB
 	uint8_t		sw1_pc			:1;
 	uint8_t		en_sw1			:1;
@@ -95,7 +95,7 @@ typedef struct {	// fills up bit fields LSB to MSB
 	uint8_t		spd_1M			:1;
 	uint8_t		spd_250K		:1;	// MSB
 
-	// byte 2
+	// byte 2						// default: 0xe2
     uint8_t     en_ctr			:1;
     uint8_t     en_vcc			:1;
 	uint8_t		en_temp			:1;
@@ -105,11 +105,11 @@ typedef struct {	// fills up bit fields LSB to MSB
 	uint8_t		en_atemp		:1;
 	uint8_t		en_ahumd		:1;
 
-	// byte 3
+	// byte 3						// default: 0x54
 	uint8_t		rf_chan			:7;		// use only even chan #s at 2Mbps
 	uint8_t		rsvd_3			:1;
 
-	// byte 4
+	// byte 4						// default: 0x23
 	uint8_t		rf_gain			:2;
 	uint8_t		rsvd_4			:2;
 	uint8_t		en_dyn_ack		:1;		// 0: tell receiver to NOT send an ACK
@@ -117,27 +117,28 @@ typedef struct {	// fills up bit fields LSB to MSB
 	uint8_t		en_aht10_cal	:1;		// enable AHT10 calibration
 	uint8_t		rsvd_5			:1;
 
-	// byte 5
+	// byte 5						// default: 0x33
 	uint8_t		setup_retr;				// nrf SETUP_RETR register contents
 
-	// bytes 6 & 7
+	// byte 6
 	uint8_t		pwbRev;					// 0=original PWB; 1=0.1 PWB; 2=0.2 PWB; 3 = 0.3/0.4 PWB
 										// 5 = 0.5 PWB; 6 = I2C
+	// byte 7
 	uint8_t		rsvd_6;
 
 	// using tpl5111 set at ~5 minute trigger; there are ~288 triggers per day
 	// All these 2-byte values are little endian
 
-	// bytes 8 & 9 	 LE 0x01c2(WD) for ~1 hr; TPL5111: set to 1 for every ~5 minutes
+	// bytes 8 & 9 	 LE 0x01c2(WD) for ~1 hr; TPL5111: set to 0x0001 for every ~5 minutes
 	uint16_t	swCntsMax;
 	
 	// bytes 10 & 11  
 	uint16_t	ctrCntsMax;
 
-	// bytes 12 & 13  0x2a30(WD) for ~1 day; TPL5111 set to 0x120 for once per day
+	// bytes 12 & 13  0x2a30(WD) for ~1 day; TPL5111 set to 0x0120 for once per day
 	uint16_t	vccCntsMax;
 
-	// bytes 14 & 15  0x00e1(WD) for ~0.5 hr; TPL5111 set to 6 for ~0.5 hr
+	// bytes 14 & 15  0x00e1(WD) for ~0.5 hr; TPL5111 set to 0x0006 for ~0.5 hr
 	uint16_t	tempCntsMax;
 
 	// bytes 16 & 17
@@ -146,14 +147,14 @@ typedef struct {	// fills up bit fields LSB to MSB
 	// bytes 18 & 19
 	int16_t		tempFudge;
 
-	// bytes 20 & 21			// LE xmit atemp every n watchdog interrupts
-	uint16_t	atempCntsMax;
+	// bytes 20 & 21			// default: 0x0001
+	uint16_t	atempCntsMax;	// LE xmit atemp every n watchdog interrupt
 
-	// bytes 22 & 23			// LE xmit ahumd every m watchdog interrupts
-	uint16_t	ahumdCntsMax;
+	// bytes 22 & 23			// default: 0x0001
+	uint16_t	ahumdCntsMax;	// LE xmit ahumd every m watchdog interrupt
 
-	// bytes 24 & 25	calibrate AHT10 every 'n' msgs
-	int16_t		aht10CalibCntsMax;
+	// bytes 24 & 25			// default: 0x0240
+	int16_t		aht10CalibCntsMax;	// calibrate AHT10 every 'n' msg
 
 	// bytes 26 & 27
 	int16_t		atempFudge;
@@ -164,13 +165,13 @@ typedef struct {	// fills up bit fields LSB to MSB
 	// bytes 30 & 31
 	int16_t		rsvd_7;
 
-	// bytes 32 to 36
+	// bytes 32 to 36		// default: 0xe7 0xe7 0xe7 0xe7 0xe7
 	uint8_t		p0Addr[5];
 
-	// bytes 37 to 41
+	// bytes 37 to 41		// default: 0xc2 0xc2 0xc2 0xc2 0xc2
 	uint8_t		p15Addr[5];
 
-	// bytes 42 to 45
+	// bytes 42 to 45		// default: 0xc3 0xc4 0xc5 0xc6
 	uint8_t		pxAddr[4];
 
 } config_t;
