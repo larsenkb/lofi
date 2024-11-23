@@ -218,6 +218,8 @@ LDFLAGS += $(PRINTF_LIB) $(SCANF_LIB) $(MATH_LIB)
 
 
 #---------------- Programming Options (avrdude) ----------------
+DUDEPATH = /home/kent/.arduino15/packages/arduino/tools/avrdude/6.3.0-arduino17/bin
+DUDECONFPATH = /home/kent/.arduino15/packages/arduino/tools/avrdude/6.3.0-arduino17/etc
 
 # Programming hardware
 # Type: avrdude -c ?
@@ -249,14 +251,15 @@ AVRDUDE_WRITE_FUSES = -U lfuse:w:0x62:m -U hfuse:w:0xD7:m
 #AVRDUDE_VERBOSE = -v -v
 
 #AVRDUDE_FLAGS = -p $(MCU) -P $(AVRDUDE_PORT) -c $(AVRDUDE_PROGRAMMER)
-AVRDUDE_FLAGS = -p $(ARVDUDE_MCU) -c $(AVRDUDE_PROGRAMMER)
+#AVRDUDE_FLAGS = -p $(ARVDUDE_MCU) -c $(AVRDUDE_PROGRAMMER)
+AVRDUDE_FLAGS = -p $(ARVDUDE_MCU) -c $(AVRDUDE_PROGRAMMER) -C $(DUDECONFPATH)/avrdude.conf
 AVRDUDE_FLAGS += $(AVRDUDE_NO_VERIFY)
 AVRDUDE_FLAGS += $(AVRDUDE_VERBOSE)
 AVRDUDE_FLAGS += $(AVRDUDE_ERASE_COUNTER)
 
 
 #============================================================================
-TOOLSPATH = /home/larsenkb/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin
+TOOLSPATH = /home/kent/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin
 
 # Define programs and commands.
 SHELL = sh
@@ -266,7 +269,7 @@ OBJDUMP = $(TOOLSPATH)/avr-objdump
 SIZE = $(TOOLSPATH)/avr-size
 AR = $(TOOLSPATH)/avr-ar rcs
 NM = $(TOOLSPATH)/avr-nm
-AVRDUDE = avrdude
+AVRDUDE = $(DUDEPATH)/avrdude
 REMOVE = rm -f
 REMOVEDIR = rm -rf
 COPY = cp
